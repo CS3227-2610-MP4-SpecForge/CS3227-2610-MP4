@@ -1,6 +1,6 @@
 # SpecForge development workflow design
 
-Status: proposed; awaiting user approval of this document.
+Status: approved by the user on 2026-11-07; implementation not started.
 
 ## Purpose and scope
 
