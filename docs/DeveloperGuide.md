@@ -127,6 +127,11 @@ so output after removal is neither stored nor returned. Conversation rows cap
 at1MiB with completion capacity reserved at admission and a final exact check.
 
 `src/server/soc.ts` is the bounded SoC adapter; `chat.ts` owns HTTP orchestration.
+Requests explicitly set `response_format: {type: "json_object"}` as well as the
+JSON prompt; prompt-only formatting was observed returning HTTP200/stop with
+non-JSON content in a synthetic first-draft reproduction. The paired JSON-mode
+check returned a valid chat-only reply. These are compatibility observations,
+not a reliability/latency benchmark or diagnosis of historical discarded output.
 Only the verified configured `qwen3.5:9b` runtime model is currently enabled.
 Authenticated discovery reported65,536context tokens. One authorized2048-output-
 token check failed or timed out under a45-second deadline; a second600-token check returned valid JSON
@@ -136,13 +141,20 @@ compatibility, not production reliability or provider-wide quotas. The official
 URL/chat interface and model discovery; detailed provider limits remain restricted.
 
 Application policy: full serialized messages (system, complete private history,
-current editor and message) <=48,000UTF-8bytes;600output tokens;60-second deadline;
-64KiB response bytes;4,000-character message/reply. No context trimming, tools,
+current editor and message) <=48,000UTF-8bytes;2,000output tokens;60-second deadline;
+64KiB response bytes;4,000-character user messages and no separate AI reply
+character ceiling. No context trimming, tools,
 automatic retry or fallback. Invalid/truncated/provider responses become durable
 failed turns without raw provider diagnostics. Context-full failures preserve history
 and allow manual editing. These are app caps, not claims about SoC quotas.
 
 Failure diagnostics use `local_timeout`, `upstream_http` and `network_error`.
+`invalid_output` now has a fixed source/reason pair: truncated, invalid_json,
+invalid_schema, invalid_envelope, missing_content, tool_calls, unexpected_finish,
+body_limit or unsafe_section. TypeScript and storage reject unknown reasons and
+extra keys. Parse exceptions, schema paths, raw provider content and hidden
+reasoning are never persisted. Historical invalid-output rows retain null metadata
+and remain readable. Empty tool-call lists are harmless; actual tool calls fail.
 Only the adapter's own aborted60-second signal establishes local_timeout, during
 fetch or body read. Upstream errors retain numericHTTPstatus and monotonic
 app-observed elapsed milliseconds; transport errors carry no raw exception.
@@ -152,11 +164,28 @@ unavailable rows retain null diagnostics. Browser waiting timeouts use a separat
 client error and are not provider diagnostics. No additional content logging or
 live provider calls are needed to distinguish these states.
 
-`ChatPanel` reconciles unknown sends before replay, preserving message text and
-using a fresh task snapshot explicitly if an absent send's task changed. Pending
-AI does not block manual editing. Apply checks exact local content and revision
-again after an authorized current-task read, then replaces both fields locally
-and clears acknowledgement. Draft autosave/published explicit Save follows.
+The [ticket-first AI spec](../workflow/specs/2026-11-08-ticket-first-ai.md)
+supersedes the fixed two-column proposal-in-chat interaction. `ChatPanel` owns
+private turn sending/recovery, the rough-idea starter, writing actions and a
+collapsible discussion, composing the editor as its child. `RequestEditor` owns
+all task replacement, exact local/revision freshness and authorized remote
+rechecks, plus inline review and conditional first-draft Undo. Draft autosave and
+explicit published saves are unchanged. Only a direct, newly requested first-draft
+completion may fill the private editor automatically. Reconciled/polled/history
+results require review. `SuggestionReview` renders a literal text diff, never HTML.
+
+`src/assistance.ts` shares the user-visible action messages; these are persisted
+as ordinary immutable turn messages, so retries retain their action. No new
+client actor/history fields or worker privileges are introduced.
+`src/server/task-suggestions.ts` suppresses proposals for the exact missing-details
+action and merges only the Acceptance criteria section for that action. Supported
+ATX/colon headings are parsed outside backtick/tilde fences. Ambiguous sections,
+unsupported bold/setext section styles, missing generated criteria, unclosed
+fences and over-limit merges fail safely;
+all original title/outside-section bytes remain intact. Other AI edits retain
+whole-ticket review. Prompt guidance improves writing behaviour but authorization
+and edit scoping are runtime controls. No live-provider reliability claim follows
+from deterministic fake-model journeys.
 Markdown uses a small React text-only renderer for headings/lists/paragraphs/code;
 HTML, URLs and images are never executed or fetched.
 

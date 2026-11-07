@@ -33,17 +33,52 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "Chat HTTP" })).data;
     const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     let calls = 0;
-    const dependencies = { worker: () => fixture.admin, provider: async () => { calls++; return { reply: "Here is a proposal.", proposal: { title: "Search", description: "## Desired behaviour\n\n- Search tasks" } }; } };
+    const dependencies = { worker: () => fixture.admin, provider: async () => { calls++; return { reply: "x".repeat(8001), proposal: { title: "Search", description: "## Desired behaviour\n\n- Search tasks" } }; } };
     const app = (actor: typeof pm) => createApplication({ origin: "http://localhost:3000", client: () => actor.client, chat: dependencies });
     const path = `http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`;
     const body = { key: randomUUID(), revision: 1, fields: { title: "", description: "" }, message: "Please propose a task", retry: false };
     const post = () => new Request(path, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify(body) });
     expect((await app(other)(post())).status).toBe(403); expect(calls).toBe(0);
     const first = await app(pm)(post()); expect(first.status).toBe(200);
-    expect((await first.json()).turn).toMatchObject({ status: "completed", proposal: { title: "Search" }, base_revision: 1 });
+    expect((await first.json()).turn).toMatchObject({ status: "completed", reply: "x".repeat(8001), proposal: { title: "Search" }, base_revision: 1 });
     expect((await app(pm)(post())).status).toBe(200); expect(calls).toBe(1);
-    expect((await (await app(pm)(new Request(path))).json()).turns).toHaveLength(1);
+    const reloaded = (await (await app(pm)(new Request(path))).json()).turns;
+    expect(reloaded).toHaveLength(1); expect(reloaded[0].reply).toBe("x".repeat(8001));
     expect((await pm.client.rpc("read_request", { target_org: org, request_id: task.id })).data.fields).toEqual({ title: "", description: "" });
+  });
+
+  it("limits acceptance suggestions to that section and keeps gap analysis conversational", async () => {
+    fixture = localFixture(); const pm = await fixture.actor("PM");
+    const org = (await pm.client.rpc("create_organisation", { organisation_name: "Targeted writing" })).data;
+    const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    const fields = { title: "Keep my title", description: "## Problem description\n\nKeep my wording.\n\n## Acceptance criteria\n\n- Old criterion.\n\n## Out of scope\n\nKeep this too." };
+    const app = createApplication({ origin: "http://localhost:3000", client: () => pm.client, chat: { worker: () => fixture.admin, provider: async () => ({ reply: "Suggested changes.", proposal: { title: "Unwanted title", description: "## Problem description\n\nUnwanted rewrite.\n\n## Acceptance criteria\n\n- New criterion.\n\n## Out of scope\n\nUnwanted scope." } }) } });
+    const post = async (message: string) => {
+      const response = await app(new Request(`http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), revision: 1, fields, message }) }));
+      expect(response.status).toBe(200); return (await response.json()).turn;
+    };
+    const acceptance = await post("Add acceptance criteria to this ticket. Only change the Acceptance criteria section; preserve its title and all other content.");
+    expect(acceptance.proposal).toEqual({ title: "Keep my title", description: "## Problem description\n\nKeep my wording.\n\n## Acceptance criteria\n\n- New criterion.\n\n## Out of scope\n\nKeep this too." });
+    const gaps = await post("Find missing details that materially affect this ticket. Ask focused questions with useful answer options; do not suggest ticket changes yet.");
+    expect(gaps).toMatchObject({ status: "completed", reply: "Suggested changes.", proposal: null });
+    expect((await pm.client.rpc("read_request", { target_org: org, request_id: task.id })).data.fields).toEqual({ title: "", description: "" });
+  });
+
+  it("preserves code fences and plain sections, and rejects ambiguous or oversized acceptance edits", async () => {
+    fixture = localFixture(); const pm = await fixture.actor("PM");
+    const org = (await pm.client.rpc("create_organisation", { organisation_name: "Section safety" })).data;
+    const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    let proposed = "## Acceptance criteria\n\n- New criterion.";
+    const app = createApplication({ origin: "http://localhost:3000", client: () => pm.client, chat: { worker: () => fixture.admin, provider: async () => ({ reply: "Review criteria.", proposal: { title: "Unwanted title", description: proposed } }) } });
+    const post = async (description: string) => (await (await app(new Request(`http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), revision: 1, fields: { title: "Keep", description }, message: "Add acceptance criteria to this ticket. Only change the Acceptance criteria section; preserve its title and all other content." }) }))).json()).turn;
+    const code = "## Problem description\n\n```md\n## Acceptance criteria\nThis is code.\n```\n\n";
+    expect((await post(code + "Acceptance criteria:\n\n- Old.\n\nOut of scope:\n\nDo not touch.")).proposal).toEqual({ title: "Keep", description: code + "## Acceptance criteria\n\n- New criterion.\n\nOut of scope:\n\nDo not touch." });
+    expect((await post("Keep every original byte.")).proposal.description).toBe("Keep every original byte.\n\n## Acceptance criteria\n\n- New criterion.");
+    for (const description of ["## Acceptance criteria\nA\n## Acceptance criteria\nB", "Acceptance criteria\n---\nOld", "## Acceptance criteria\n\n- Old.\n\nOut of scope\n------------\n\nKeep this too.", "## Acceptance criteria\n\n- Old.\n\n**Out of scope**\n\nKeep this too.", "x".repeat(24000)]) {
+      expect(await post(description)).toMatchObject({ status: "failed", error_code: "invalid_output", proposal: null });
+    }
+    proposed = "```md\n## Acceptance criteria\nNot a real section\n```";
+    expect(await post("Keep original")).toMatchObject({ status: "failed", error_code: "invalid_output", proposal: null });
   });
 
   it("persists a failed message and retries explicitly without duplicating the conversation", async () => {
@@ -117,6 +152,18 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     expect((await pm.client.rpc("read_chat", { target_org: org, request_id: task.id })).data).toHaveLength(16);
   });
 
+  it("rejects blank replies and completions exceeding aggregate conversation capacity", async () => {
+    fixture = localFixture(); const pm = await fixture.actor("PM");
+    const org = (await pm.client.rpc("create_organisation", { organisation_name: "Reply capacity" })).data;
+    const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    const turn = (await fixture.admin.rpc("begin_chat_turn", { target_org: org, request_id: task.id, actor_id: pm.id, turn_key: randomUUID(), base_revision: 1, input_fields: { title: "", description: "" }, user_message: "Clarify" })).data.turn;
+    const complete = (reply: string) => fixture.admin.rpc("finish_chat_turn", { target_org: org, request_id: task.id, actor_id: pm.id, turn_id: turn.id, worker_generation: 1, human_reply: reply, task_proposal: null, failure_code: null });
+    expect((await complete("   ")).error?.code).toBe("22023");
+    expect((await complete("x".repeat(1048576))).error?.code).toBe("PT429");
+    expect((await complete("x".repeat(8001))).error).toBeNull();
+    expect((await pm.client.rpc("read_chat", { target_org: org, request_id: task.id })).data[0].reply.length).toBe(8001);
+  });
+
   it("persists safe failure diagnostics through HTTP and private reloads", async () => {
     fixture = localFixture(); const pm = await fixture.actor("PM");
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "AI diagnostics" })).data;
@@ -127,6 +174,35 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     expect(response.status).toBe(200);
     expect((await response.json()).turn).toMatchObject({ status: "failed", error_code: "upstream_http", diagnostic: { source: "upstream_http", http_status: 502, elapsed_ms: 1234 } });
     expect((await (await app(new Request(path))).json()).turns[0].diagnostic).toEqual({ source: "upstream_http", http_status: 502, elapsed_ms: 1234 });
+  });
+
+  it("persists invalid-output reasons privately, rejects arbitrary metadata and preserves legacy nulls", async () => {
+    fixture = localFixture(); const pm = await fixture.actor("PM");
+    const org = (await pm.client.rpc("create_organisation", { organisation_name: "Output diagnostics" })).data;
+    const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    const args = { target_org: org, request_id: task.id, actor_id: pm.id, turn_key: randomUUID(), base_revision: 1, input_fields: { title: "", description: "" }, user_message: "Draft a ticket" };
+    const turn = (await fixture.admin.rpc("begin_chat_turn", args)).data.turn;
+    const complete = (code: string, diagnostic: unknown) => fixture.admin.rpc("finish_chat_turn", { target_org: org, request_id: task.id, actor_id: pm.id, turn_id: turn.id, worker_generation: 1, human_reply: null, task_proposal: null, failure_code: code, failure_diagnostic: diagnostic });
+    for (const diagnostic of [
+      { source: "invalid_output" },
+      { source: "invalid_output", reason: "PRIVATE_REASON" },
+      { source: "invalid_output", reason: "invalid_json", body: "PRIVATE_BODY" },
+      { source: "invalid_output", reason: null },
+      { source: "invalid_output", reason: "invalid_json", elapsed_ms: 1 },
+    ]) expect((await complete("invalid_output", diagnostic)).error?.code).toBe("22023");
+    expect((await complete("network_error", { source: "invalid_output", reason: "invalid_json" })).error?.code).toBe("22023");
+    expect((await complete("invalid_output", null)).error).toBeNull(); // Existing rows stay readable.
+    expect((await pm.client.rpc("read_chat", { target_org: org, request_id: task.id })).data[0].diagnostic).toBeNull();
+    const app = createApplication({ origin: "http://localhost:3000", client: () => pm.client, chat: { worker: () => fixture.admin, provider: async () => { throw new AiFailure("invalid_output", { source: "invalid_output", reason: "invalid_json" }); } } });
+    const path = `http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`;
+    const response = await app(new Request(path, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), revision: 1, fields: args.input_fields, message: "Draft again" }) }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).turn).toMatchObject({ status: "failed", error_code: "invalid_output", diagnostic: { source: "invalid_output", reason: "invalid_json" } });
+    const reload = (await (await app(new Request(path))).json()).turns;
+    expect(reload).toHaveLength(2); expect(reload[0].diagnostic).toBeNull();
+    expect(reload[1].diagnostic).toEqual({ source: "invalid_output", reason: "invalid_json" });
+    const retry = await fixture.admin.rpc("begin_chat_turn", { ...args, turn_key: reload[1].turn_key, user_message: "Draft again", retry_failed: true });
+    expect(retry.error).toBeNull(); expect(retry.data.turn.diagnostic).toBeNull();
   });
 
   it("rejects arbitrary or incompatible diagnostic metadata and clears it on explicit retry", async () => {

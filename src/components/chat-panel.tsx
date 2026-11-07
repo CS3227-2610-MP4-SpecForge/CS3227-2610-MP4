@@ -1,25 +1,26 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { describeAiFailure } from "@/ai-diagnostics";
+import { assistanceMessages } from "@/assistance";
 import type { ChatTurn } from "@/chat";
 import { sameFields, type RequestFields } from "@/requests";
 import { api, failureMessage } from "./http";
 import { Button, Notice, TextareaField } from "./ui";
 import { Markdown } from "./markdown";
 type SendInput = { key: string; revision: number; fields: RequestFields; message: string; retry: boolean };
-export function ChatPanel({ path, fields, revision, canSend, canApply, onApply }: {
-  path: string; fields: RequestFields; revision: number; canSend: boolean; canApply: boolean; onApply(turn: ChatTurn): Promise<boolean>;
+export function ChatPanel({ path, fields, revision, canSend, starting, onManual, onRoughIdea, onSuggestion, children }: {
+  path: string; fields: RequestFields; revision: number; canSend: boolean; starting: boolean;
+  onManual(): void; onRoughIdea(value: string): void; onSuggestion(turn: ChatTurn, firstDraft: boolean): Promise<void>; children: ReactNode;
 }) {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [message, setMessage] = useState("");
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [replay, setReplay] = useState(false);
   const [replayInput, setReplayInput] = useState<SendInput | null>(null);
   const [unresolved, setUnresolved] = useState(false);
-  const [stale, setStale] = useState<Set<string>>(new Set());
-  const [applied, setApplied] = useState<Set<string>>(new Set());
   const operation = useRef(false);
   const pending = useRef<SendInput | null>(null);
   const load = useCallback(async () => {
@@ -41,7 +42,7 @@ export function ChatPanel({ path, fields, revision, canSend, canApply, onApply }
     return () => window.clearTimeout(timer);
   }, [turns, load]);
   const running = turns.some(turn => turn.status === "running");
-  async function send(input: SendInput, clearMessage = false) {
+  async function send(input: SendInput, clearMessage = false, firstDraft = false) {
     if (operation.current || !canSend || running || unresolved && pending.current?.key !== input.key) return;
     operation.current = true; setBusy(true); setError(""); setReplay(false); setReplayInput(null); setUnresolved(true); pending.current = input;
     try {
@@ -50,45 +51,55 @@ export function ChatPanel({ path, fields, revision, canSend, canApply, onApply }
       setTurns(previous => [...previous.filter(item => item.id !== turn.id), turn].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)));
       pending.current = null; setUnresolved(false);
       if (clearMessage) setMessage(current => current.trim() === input.message ? "" : current);
-    } catch (failure) { setError(failureMessage(failure) + " Refresh chat to reconcile before retrying this send."); }
-    finally { operation.current = false; setBusy(false); }
-  }
-  async function apply(turn: ChatTurn) {
-    if (operation.current || !canApply) return;
-    operation.current = true; setBusy(true); setError("");
-    try {
-      if (await onApply(turn)) setApplied(previous => new Set(previous).add(turn.id));
-      else setStale(previous => new Set(previous).add(turn.id));
-    } catch (failure) { setError(failureMessage(failure)); }
+      if (turn.proposal) await onSuggestion(turn, firstDraft);
+      else setOpen(true);
+    } catch (failure) { setError(failureMessage(failure) + " Refresh chat to reconcile before retrying this send."); setOpen(true); }
     finally { operation.current = false; setBusy(false); }
   }
   const disabled = busy || running || loading || !canSend || unresolved;
-  return <div className="card stack chat-panel" aria-label="AI chat" aria-busy={busy || running}>
-    <div className="section-title"><h2>AI chat</h2><Button className="secondary" disabled={busy || loading} onClick={() => { setLoading(true); void load(); }}>Refresh chat</Button></div>
-    <p className="muted">Private to you. Discuss this task, then review and apply any proposed update.</p>
-    {error && <Notice danger>{error}</Notice>}
-    {replay && replayInput && <Button disabled={busy || running || loading || !canSend} onClick={() => send({ ...replayInput, revision, fields: { ...fields } }, true)}>{replayInput.revision === revision && sameFields(replayInput.fields, fields) ? "Retry reconciled send" : "Send reconciled message with current task"}</Button>}
-    {loading && turns.length === 0 ? <Notice>Loading chat…</Notice> : turns.length === 0 && <p className="muted">No messages yet. Describe your idea or ask a question.</p>}
-    <div className="chat-transcript" aria-label="Conversation">
-      {turns.map(turn => {
-        const current = turn.base_revision === revision && sameFields(turn.input_fields, fields) && !stale.has(turn.id);
-        return <article className="chat-turn" key={turn.id}>
-          <div className="chat-bubble user-message"><strong>You</strong><p className="request-text">{turn.message}</p></div>
-          {turn.reply && <div className="chat-bubble assistant-message"><strong>AI</strong><Markdown text={turn.reply} /></div>}
-          {turn.status === "failed" && <div><Notice danger>{describeAiFailure(turn.error_code, turn.diagnostic)}</Notice><Button className="secondary" disabled={disabled || !current || turn.error_code === "context_limit"} onClick={() => send({ key: turn.turn_key, revision: turn.base_revision, fields: turn.input_fields, message: turn.message, retry: true })}>Retry AI turn</Button>{!current && <p className="hint">The task changed. Send a new message using the current task.</p>}</div>}
-          {turn.proposal && <div className="task-proposal"><h3>Task proposal</h3><h4>{turn.proposal.title}</h4><Markdown text={turn.proposal.description} />
-            <Button disabled={busy || !canApply || !current || applied.has(turn.id)} onClick={() => apply(turn)}>Apply update</Button>
-            <p className="hint">{applied.has(turn.id) ? "Applied to your editor." : current ? "Not applied. Review this proposal before replacing both task fields." : "Outdated proposal. Your task is unchanged; request a fresh proposal explicitly."}</p>
-          </div>}
-        </article>;
-      })}
+  function ask(instruction: string, firstDraft = false) { void send({ key: crypto.randomUUID(), revision, fields: { ...fields }, message: instruction, retry: false }, false, firstDraft); }
+  function focusDiscussion() { setOpen(true); window.requestAnimationFrame(() => document.getElementById("chat-message")?.focus()); }
+  return <div className="stack ticket-assistance">
+    {starting && <section className="card stack idea-starter" aria-label="Start a ticket">
+      <div><p className="eyebrow">Start with a rough idea</p><h2>What needs to change?</h2><p className="muted">A sentence is enough to get started. AI will draft a ticket you can edit.</p></div>
+      <TextareaField id="rough-idea" label="What needs to change?" rows={5} maxLength={48000} placeholder="Users lose their filters when they return to the requests page…" value={fields.description} onChange={event => onRoughIdea(event.target.value)} />
+      <div className="actions"><Button disabled={disabled || !fields.description.trim()} onClick={() => ask(assistanceMessages.draft, true)}>Draft ticket</Button><Button className="secondary" onClick={onManual}>Start manually</Button></div>
+      <p className="hint">Your rough idea is saved privately. You can keep writing if AI is unavailable.</p>
+    </section>}
+    {!starting && <div className="actions assistance-toolbar" role="group" aria-label="AI writing tools">
+      <Button className="secondary" disabled={disabled || !fields.title.trim() || !fields.description.trim()} onClick={() => ask(assistanceMessages.clarity)}>Improve clarity</Button>
+      <Button className="secondary" disabled={disabled || !fields.title.trim() || !fields.description.trim()} onClick={() => ask(assistanceMessages.acceptance)}>Add acceptance criteria</Button>
+      <Button className="secondary" disabled={disabled || !fields.description.trim()} onClick={() => { focusDiscussion(); ask(assistanceMessages.gaps); }}>Find missing details</Button>
+    </div>}
+    <div className="actions"><Button className="secondary" aria-expanded={open} aria-controls="ticket-discussion" onClick={() => { if (open) setOpen(false); else focusDiscussion(); }}>Discuss with AI</Button>
+      {(busy || running) && <span role="status">AI is responding… You can keep editing.</span>}
+      {!canSend && <span className="hint">Wait for autosave or resolve save errors before asking AI.</span>}
     </div>
-    {(busy && !turns.some(turn => turn.status === "running") || running) && <Notice>AI is responding…</Notice>}
-    <form className="stack" onSubmit={event => { event.preventDefault(); if (message.trim()) void send({ key: crypto.randomUUID(), revision, fields: { ...fields }, message: message.trim(), retry: false }, true); }}>
-      <TextareaField id="chat-message" label="Chat message" rows={3} maxLength={8000} value={message} disabled={busy} onChange={event => setMessage(event.target.value)} />
-      {[...message].length > 4000 && <Notice danger>Chat messages are limited to 4,000 characters.</Notice>}
-      <div className="actions"><Button disabled={disabled || !message.trim() || [...message].length > 4000}>Send message</Button><Button type="button" className="secondary" disabled={disabled} onClick={() => send({ key: crypto.randomUUID(), revision, fields: { ...fields }, message: "Please generate a task proposal now using my current task and our conversation. Make unresolved assumptions explicit.", retry: false })}>Request task proposal</Button></div>
-      {!canSend && <p className="hint">Resolve task save/conflict errors and wait for draft autosave before sending. Manual task editing remains available.</p>}
-    </form>
+    <div className={`ticket-workspace ${open ? "discussion-open" : ""}`}>
+      <div className="task-panel">{children}</div>
+      <aside id="ticket-discussion" className="card stack chat-panel" aria-label="AI discussion" hidden={!open} aria-busy={busy || running}>
+        <div className="section-title"><h2>Discuss this ticket</h2><Button className="secondary" disabled={busy || loading} onClick={() => { setLoading(true); void load(); }}>Refresh chat</Button></div>
+        <p className="muted">Private to you. Ask questions or describe a change. Ticket suggestions appear in the editor for review.</p>
+        {error && <Notice danger>{error}</Notice>}
+        {replay && replayInput && <Button disabled={busy || running || loading || !canSend} onClick={() => send({ ...replayInput, revision, fields: { ...fields } }, true)}>{replayInput.revision === revision && sameFields(replayInput.fields, fields) ? "Retry reconciled send" : "Send reconciled message with current task"}</Button>}
+        {loading && turns.length === 0 ? <Notice>Loading chat…</Notice> : turns.length === 0 && <p className="muted">Ask a question or tell AI how to improve your ticket.</p>}
+        <div className="chat-transcript" aria-label="Conversation">
+          {turns.map(turn => {
+            const current = turn.base_revision === revision && sameFields(turn.input_fields, fields);
+            return <article className="chat-turn" key={turn.id}>
+              <div className="chat-bubble user-message"><strong>You</strong><p className="request-text">{turn.message}</p></div>
+              {turn.reply && <div className="chat-bubble assistant-message"><strong>AI</strong><Markdown text={turn.reply} /></div>}
+              {turn.status === "failed" && <div><Notice danger>{describeAiFailure(turn.error_code, turn.diagnostic)}</Notice><Button className="secondary" disabled={disabled || !current || turn.error_code === "context_limit"} onClick={() => send({ key: turn.turn_key, revision: turn.base_revision, fields: turn.input_fields, message: turn.message, retry: true })}>Retry AI turn</Button>{!current && <p className="hint">The ticket changed. Send a new message using the current ticket.</p>}</div>}
+              {turn.proposal && <div><Button className="secondary" disabled={busy} onClick={() => { void onSuggestion(turn, false); }}>Review ticket changes</Button>{!current && <p className="hint">This suggestion is outdated. Your ticket is unchanged.</p>}</div>}
+            </article>;
+          })}
+        </div>
+        <form className="stack" onSubmit={event => { event.preventDefault(); if (message.trim() && [...message.trim()].length <= 4000) void send({ key: crypto.randomUUID(), revision, fields: { ...fields }, message: message.trim(), retry: false }, true); }}>
+          <TextareaField id="chat-message" label="AI instruction or question" rows={3} maxLength={8000} placeholder="Make this shorter, or help me think through the edge cases…" value={message} disabled={busy} onChange={event => setMessage(event.target.value)} />
+          {[...message].length > 4000 && <Notice danger>Chat messages are limited to 4,000 characters.</Notice>}
+          <div className="actions"><Button disabled={disabled || !message.trim() || [...message].length > 4000}>Ask AI</Button>{turns.at(-1)?.status === "completed" && turns.at(-1)?.reply && !turns.at(-1)?.proposal && <Button type="button" className="secondary" disabled={disabled} onClick={() => ask(assistanceMessages.undecided)}>Leave undecided</Button>}</div>
+        </form>
+      </aside>
+    </div>
   </div>;
 }

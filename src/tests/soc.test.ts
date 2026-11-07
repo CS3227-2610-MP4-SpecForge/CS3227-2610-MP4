@@ -8,17 +8,33 @@ describe("SoC provider interface", () => {
     let wire: Record<string, unknown> = {};
     const provider = createSocProvider(configuration, async (_url, init) => { wire = JSON.parse(String(init?.body)); return envelope(JSON.stringify({ reply: "Here is a draft.", proposal: { title: "Search requests", description: "## Desired behaviour\n\n- Search titles" } })); });
     expect(await provider(input)).toEqual({ reply: "Here is a draft.", proposal: { title: "Search requests", description: "## Desired behaviour\n\n- Search titles" } });
-    expect(wire).toMatchObject({ max_tokens: 600, reasoning_effort: "none", model: "fixture-model" });
+    expect(wire).toMatchObject({ max_tokens: 2000, reasoning_effort: "none", response_format: { type: "json_object" }, model: "fixture-model" });
     expect(await createSocProvider(configuration, async () => envelope('{"reply":"Who is the user?","proposal":null}'))(input)).toEqual({ reply: "Who is the user?", proposal: null });
   });
+  it("accepts valid JSON replies when the provider includes an empty tool-call list", async () => {
+    const provider = createSocProvider(configuration, async () => Response.json({ choices: [{ finish_reason: "stop", message: { content: '{"reply":"Draft ready.","proposal":null}', tool_calls: [] } }] }));
+    expect(await provider(input)).toEqual({ reply: "Draft ready.", proposal: null });
+  });
+  it("accepts replies longer than 4,000 characters within the bounded response body", async () => {
+    const reply = "x".repeat(8001);
+    expect(await createSocProvider(configuration, async () => envelope(JSON.stringify({ reply, proposal: null })))(input)).toEqual({ reply, proposal: null });
+  });
   it.each([
-    () => envelope('{"reply":"Partial","proposal":null}', "length"),
-    () => envelope('not JSON'),
-    () => envelope('{"reply":"Hi","proposal":{"title":"Only title"}}'),
-    () => envelope('{"reply":"Hi","proposal":null,"publish":true}'),
-    () => envelope(JSON.stringify({ reply: "x".repeat(4001), proposal: null })),
-  ])("rejects truncated or invalid output without exposing provider text", async response => {
-    await expect(createSocProvider(configuration, async () => response())(input)).rejects.toMatchObject({ code: "invalid_output" });
+    [() => envelope('{"reply":"Partial","proposal":null}', "length"), "truncated"],
+    [() => envelope('not JSON'), "invalid_json"],
+    [() => envelope(JSON.stringify({ reply: "x".repeat(65536), proposal: null })), "body_limit"],
+    [() => envelope('{"reply":"Hi","proposal":{"title":"Only title"}}'), "invalid_schema"],
+    [() => envelope('{"reply":"Hi","proposal":null,"publish":true}'), "invalid_schema"],
+    [() => envelope(JSON.stringify({ reply: "   ", proposal: null })), "invalid_schema"],
+    [() => Response.json({ choices: [] }), "invalid_envelope"],
+    [() => new Response("not a provider envelope"), "invalid_envelope"],
+    [() => Response.json({ choices: [{ finish_reason: "stop", message: { content: null } }] }), "missing_content"],
+    [() => Response.json({ choices: [{ finish_reason: "stop", message: { content: "{}", tool_calls: [{ type: "function" }] } }] }), "tool_calls"],
+    [() => envelope('{}', "PRIVATE_FINISH_REASON"), "unexpected_finish"],
+  ] as const)("records a safe invalid-output reason without exposing provider text", async (response, reason) => {
+    const failure = await createSocProvider(configuration, async () => response())(input).catch(error => error);
+    expect(failure).toMatchObject({ code: "invalid_output", diagnostic: { source: "invalid_output", reason } });
+    expect(JSON.stringify(failure)).not.toContain("PRIVATE_FINISH_REASON");
   });
   it("rejects oversized context without dropping history or contacting SoC", async () => {
     let calls = 0;

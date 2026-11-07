@@ -69,20 +69,36 @@ private drafts; current members read submitted tasks. There are two task fields:
 Description is free-form Markdown; headings are optional. Existing requests keep
 their title and all old section contents under description headings.
 
-Desktop places the task on the left and private AI chat on the right. On phones,
-use **Task / Chat** tabs; switching retains both panels. Chat is private to the
-original PM author, including from admins and after task publication.
+New drafts start with **What needs to change?** Write a rough idea and choose
+**Draft ticket**, or choose **Start manually** to write the title and description
+yourself. Rough ideas autosave privately. A fresh AI draft fills the editor and
+has **Undo AI draft** during the current editing session while its generated
+content is unchanged. AI never publishes
+for you; failed, stale or recovered generations require review instead.
 
-Describe your idea with **Send message**, or choose **Request task proposal**
-whenever you want a draft. AI can ask questions without changing the task. When
-it offers a title/description proposal, review it and choose **Apply update**.
-Both fields are replaced locally; review acknowledgement resets. If you edited
-while AI was responding or another editor saved a newer revision, the proposal
-is marked outdated and cannot apply. Request a fresh one explicitly.
+The ticket occupies the main workspace. **Discuss with AI** opens or collapses a
+private discussion panel; on phones it appears below the editor. Collapsing keeps
+your conversation and typed instruction. Chat is private to the original PM
+author, including from admins and after publication.
 
-Drafts autosave750ms after a pause. Applying a proposal to a draft follows that
+Use **Improve clarity**, **Add acceptance criteria**, or **Find missing details**
+for focused help. Acceptance suggestions preserve your title and other sections;
+unrecognized/ambiguous section structures may need manual editing. Finding missing
+details asks questions without modifying the ticket. Answer using the single
+**AI instruction or question** box and **Ask AI**, or choose **Leave undecided** to
+ask AI to record an open question rather than assume its answer. Useful answer
+options may appear as chat text; they are not separate selection controls.
+
+AI edits appear as **Suggested ticket changes** in the editor, with removed/added
+text. Choose **Accept changes** or **Discard**. Conversational proposals have a
+**Review ticket changes** action to open the same review. Acceptance replaces the
+reviewed fields locally and clears acknowledgement. Editing during generation or
+another saved revision makes suggestions outdated; your writing is preserved.
+Recovered or historical AI drafts never automatically replace the editor.
+
+Drafts autosave750ms after a pause. Accepting AI changes in a draft follows that
 same autosave. Submission requires a nonempty title/description, acknowledgement
-and **Submit request**. Published edits, including applied proposals, remain local
+and **Submit request**. Published edits, including accepted AI changes, remain local
 until acknowledged **Save changes**. Readers see only the last saved task.
 Only the original PM author can edit; Developers cannot edit even when admins.
 
@@ -99,6 +115,11 @@ Use **Refresh chat** after a lost response. A completed send is not duplicated;
 an absent send can be explicitly retried, using the current task if it changed.
 Failed turns have **Retry AI turn**; changed task snapshots need a new message.
 Failure notices distinguish:
+
+- **Invalid AI output:** new failures explain whether the response was cut short,
+  was not valid JSON, had the wrong ticket structure, or could not be safely used.
+  Earlier failures keep the generic message because their exact reason was not
+  recorded. JSON response mode improves formatting; ticket validation remains.
 
 - **Local deadline:** SpecForge stopped waiting at its60-second provider deadline;
   SoC may still be processing. No upstream status is inferred.
@@ -120,7 +141,7 @@ is not stored in browser persistent storage.
 
 App limits (not SoC quotas): one active AI turn per request/account,20attempts
 per account/hour,4,000-character messages,60-second provider deadline and
-600output tokens per response. The full serialized task/conversation/system
+2,000output tokens per response (debugging policy; no separate AI reply character ceiling). The full serialized task/conversation/system
 context is capped at48,000UTF-8bytes; older messages are never silently removed.
 When context or conversation storage is full, continue editing manually. Chat
 storage is bounded to1MiB, reserving completion space before admission. Long or

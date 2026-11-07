@@ -1,3 +1,4 @@
+import { constrainSuggestion } from "./task-suggestions";
 import { aiDiagnostic, diagnosticSources } from "./ai-diagnostics";
 import type { AiDiagnostic } from "../ai-diagnostics";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -44,10 +45,10 @@ export async function handleChat(request: Request, client: SupabaseClient, actor
   let diagnostic: AiDiagnostic | null = null;
   try {
     const context = z.array(z.object({ message: z.string(), reply: z.string().nullable(), proposal: taskFields.nullable() })).parse(admission.history);
-    result = validateAiReply(await dependencies.provider({ fields: turn.input_fields, message: turn.message, history: context }));
+    result = constrainSuggestion(turn.message, turn.input_fields, validateAiReply(await dependencies.provider({ fields: turn.input_fields, message: turn.message, history: context })));
   } catch (failure) {
     code = failure instanceof AiFailure ? failure.code : "unavailable";
-    if (diagnosticSources[code]) {
+    if (diagnosticSources[code] && !(code === "invalid_output" && failure instanceof AiFailure && failure.diagnostic == null)) {
       const safe = aiDiagnostic.safeParse(failure instanceof AiFailure ? failure.diagnostic : null);
       if (safe.success && safe.data.source === diagnosticSources[code]) diagnostic = safe.data;
       else code = "unavailable";

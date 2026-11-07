@@ -23,7 +23,7 @@ Current state: approved initial product specification under `workflow/specs/`;
 Next.js/React and Supabase scaffold with verified accounts and initial
 organisation workflow, including invitations and membership/admin management, plus the manual request
 lifecycle (private drafts, publication and author-only editing), a two-field
-Markdown task editor and private SoC AI clarification/proposals.
+Markdown task editor, ticket-first AI drafting/inline suggestions and collapsible private SoC discussion.
 Read `docs/DeveloperGuide.md` for setup/check commands.
 PM AI reliability/provider-wide quotas and hosted deployment remain unverified;
 the partner-owned Developer AI remains unfinished.

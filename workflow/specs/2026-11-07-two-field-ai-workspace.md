@@ -127,8 +127,8 @@ compatibility observations, not a reliability guarantee or verified provider-wid
 quota. Public reference: https://soclaas.comp.nus.edu.sg/guides/api.html.
 
 App policy: title160/description24,000 Unicode code points; task bodies192KiB;
-chat bodies256KiB; messages/replies4,000characters; full serialized context
-48,000UTF-8bytes including system instructions/history;600output tokens;
+chat bodies256KiB; user messages4,000characters; no separate AI reply character ceiling; full serialized context
+48,000UTF-8bytes including system instructions/history;2,000output tokens;
 60-second provider deadline;64KiBprovider response; no automatic retries,
 fallback or silent context trimming. Full context/storage produces a clear
 failure with manual editing available. One active turn/request/account,
@@ -151,3 +151,20 @@ legacy fields, preserving all content and record metadata. Guides describe the
 server-only worker configuration and remaining hosted/provider reliability gates.
 
 Timeout amendment: user explicitly increased the local provider deadline to60seconds; browser wait remains75seconds and worker lease120seconds. Historical probe deadlines above remain unchanged.
+
+
+## Approved debugging limits amendment — 2026-11-08
+
+User explicitly requested removing the 4,000-character AI reply limit and raising
+the output budget from 600 to 2,000 tokens. Apply this to the SoC request, system
+prompt and reply validation/storage. Replies must still be nonblank strings;
+strict output shape and proposal limits remain. Outgoing user messages retain
+their separate 4,000-character limit. Keep the 64KiB provider response body cap,
+48,000-byte full context limit, 1MiB conversation cap, existing authorization,
+rate limits and deadlines. Reserve adequate completion storage before admission.
+No live provider calls are needed or authorized by this amendment.
+
+Use the previously approved provider and authenticated HTTP/local Supabase RPC
+test seams: accept/persist/reload replies exceeding 4,000 characters, assert the
+2,000-token request, reject blank/malformed/truncated output, and retain capacity
+and access controls. This is a debugging policy, not a verified SoC quota.
