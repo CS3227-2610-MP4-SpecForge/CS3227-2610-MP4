@@ -11,6 +11,49 @@ describe("SoC provider interface", () => {
     expect(wire).toMatchObject({ max_tokens: 2000, reasoning_effort: "none", response_format: { type: "json_object" }, model: "fixture-model" });
     expect(await createSocProvider(configuration, async () => envelope('{"reply":"Who is the user?","proposal":null}'))(input)).toEqual({ reply: "Who is the user?", proposal: null });
   });
+  it("sends scope and uncertainty rules separately from untrusted ticket content", async () => {
+    let messages: { role: string; content: string }[] = [];
+    const fields = { title: "", description: "Synthetic request: remember a filter on reload." };
+    await createSocProvider(configuration, async (_url, init) => {
+      messages = JSON.parse(String(init?.body)).messages;
+      return envelope('{"reply":"Draft ready.","proposal":{"title":"Remember filter","description":"Preserve on reload."}}');
+    })({ fields, message: "Draft ticket", history: [] });
+    expect(messages[0].role).toBe("system");
+    expect(messages[0].content).toContain("Do not add storage technologies, retention periods, cross-session guarantees, roles, or extra workflows unless supplied");
+    expect(messages[0].content).toContain("Keep material unknowns in an explicit Assumptions / unresolved questions section");
+    expect(messages[0].content).toContain("Improve clarity is an editing instruction: reword the supplied ticket and return a complete proposal");
+    expect(messages[0].content).toContain("Use ATX Markdown headings");
+    expect(JSON.parse(messages.at(-1)!.content)).toEqual({ currentTask: fields, message: "Draft ticket" });
+  });
+  it("discards extra response and proposal fields before returning ticket changes", async () => {
+    const provider = createSocProvider(configuration, async () => envelope(JSON.stringify({
+      reply: "Review this draft.", publish: true, diagnostic: { private: "discard me" },
+      proposal: { title: "Remember filter", description: "Keep the selected filter on reload.", status: "published", permission: "admin" },
+    })));
+    expect(await provider(input)).toEqual({ reply: "Review this draft.", proposal: { title: "Remember filter", description: "Keep the selected filter on reload." } });
+  });
+  it.each([undefined, null, "", " \n "])('uses a neutral reply for a complete proposal without usable reply text (%j)', async reply => {
+    const proposal = { title: "Remember filter", description: "Keep the selected filter on reload." };
+    const provider = createSocProvider(configuration, async () => envelope(JSON.stringify({ reply, proposal })));
+    expect(await provider(input)).toEqual({ reply: "Review these suggested ticket changes.", proposal });
+  });
+  it("accepts clarification with an omitted proposal and discards unrelated keys", async () => {
+    expect(await createSocProvider(configuration, async () => envelope('{"reply":" Which columns? ","publish":true}'))(input)).toEqual({ reply: "Which columns?", proposal: null });
+  });
+  it.each([
+    null, [], {}, { reply: null }, { reply: "", proposal: null },
+    ...[0, false, [], {}].map(reply => ({ reply, proposal: { title: "Valid title", description: "Valid description" } })),
+    ...[{}, [], false, "text", { title: "Only title" }, { title: null, description: "Text" },
+      { title: "Text", description: 2 }, { title: " ", description: "Text" },
+      { title: "Text", description: "\n " }, { title: "😀".repeat(161), description: "Text" },
+      { title: "Text", description: "x".repeat(24001) }].map(proposal => ({ reply: "A valid reply cannot rescue a malformed proposal.", proposal })),
+  ])("rejects malformed known fields instead of repairing or downgrading them (case %#)", async value => {
+    await expect(createSocProvider(configuration, async () => envelope(JSON.stringify(value)))(input)).rejects.toMatchObject({ code: "invalid_output", diagnostic: { source: "invalid_output", reason: "invalid_schema" } });
+  });
+  it("preserves title and description whitespace and Unicode limits when discarding extras", async () => {
+    const proposal = { title: "😀".repeat(160), description: " \n" + "x".repeat(23997) + " " };
+    expect(await createSocProvider(configuration, async () => envelope(JSON.stringify({ proposal: { ...proposal, extra: true } })))(input)).toEqual({ reply: "Review these suggested ticket changes.", proposal });
+  });
   it("accepts valid JSON replies when the provider includes an empty tool-call list", async () => {
     const provider = createSocProvider(configuration, async () => Response.json({ choices: [{ finish_reason: "stop", message: { content: '{"reply":"Draft ready.","proposal":null}', tool_calls: [] } }] }));
     expect(await provider(input)).toEqual({ reply: "Draft ready.", proposal: null });
@@ -24,7 +67,7 @@ describe("SoC provider interface", () => {
     [() => envelope('not JSON'), "invalid_json"],
     [() => envelope(JSON.stringify({ reply: "x".repeat(65536), proposal: null })), "body_limit"],
     [() => envelope('{"reply":"Hi","proposal":{"title":"Only title"}}'), "invalid_schema"],
-    [() => envelope('{"reply":"Hi","proposal":null,"publish":true}'), "invalid_schema"],
+    [() => envelope('{"publish":true}'), "invalid_schema"],
     [() => envelope(JSON.stringify({ reply: "   ", proposal: null })), "invalid_schema"],
     [() => Response.json({ choices: [] }), "invalid_envelope"],
     [() => new Response("not a provider envelope"), "invalid_envelope"],

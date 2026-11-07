@@ -140,6 +140,32 @@ compatibility, not production reliability or provider-wide quotas. The official
 [SoC API guide](https://soclaas.comp.nus.edu.sg/guides/api.html) confirms the base
 URL/chat interface and model discovery; detailed provider limits remain restricted.
 
+The bounded [2026-11-08 writing check](../logs/2026-11-08-soc-writing-stabilization.md)
+made nine synthetic live calls plus one sandbox-blocked attempt, with no automatic
+retries. Complete draft and clarity proposals were observed, but scope invention,
+contradictory unknowns, chat-only clarity, invalid schema/sections and a local timeout
+also occurred. Prompt guidance now explicitly forbids added implementation/lifetime
+requirements, keeps unknowns consistent, identifies clarity as an edit, and shows
+ATX headings/JSON shape. These are guidance changes, not semantic enforcement.
+Live acceptance generation and consistently useful, scope-preserving drafting
+remain unverified. The live checks exercised the provider and section constraint;
+authenticated HTTP/persistence/browser evidence is deterministic with a fake provider.
+Do not interpret passing local tests as live-provider reliability evidence.
+
+The [tolerant response contract](../workflow/specs/2026-11-08-tolerant-ai-response.md)
+normalizes AI output in `validateAiReply`: unknown response/proposal keys are
+stripped, and a complete nonblank bounded title/description proposal may omit its
+reply (including null/blank string). It receives “Review these suggested ticket
+changes.” as neutral review text. Human-only replies still require nonblank text.
+Wrong-type known fields, partial/blank/over-limit proposals and empty replies
+without a valid proposal fail as invalid_schema; they are not repaired or silently
+converted to clarification. Field whitespace is preserved. No prose extraction or
+alternate ticket shape is accepted. Internal reply/proposal, client request and
+storage contracts stay canonical; acceptance-section merging runs after
+normalization. Extra publish/tool/diagnostic-like content keys are discarded,
+while actual envelope tool calls remain rejected. No new live-provider evidence
+was obtained for this relaxation.
+
 Application policy: full serialized messages (system, complete private history,
 current editor and message) <=48,000UTF-8bytes;2,000output tokens;60-second deadline;
 64KiB response bytes;4,000-character user messages and no separate AI reply

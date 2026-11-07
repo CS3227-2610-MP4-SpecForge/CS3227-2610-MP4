@@ -89,6 +89,17 @@ details asks questions without modifying the ticket. Answer using the single
 ask AI to record an open question rather than assume its answer. Useful answer
 options may appear as chat text; they are not separate selection controls.
 
+SoC writing remains experimental: a valid response can add unsupported requirements,
+omit supplied details, or contradict an unresolved question. Check the entire draft
+and every suggestion before accepting or publishing. If a writing action returns
+only discussion, no ticket changes are available to review; continue manually or
+send a more specific instruction. Invalid responses preserve your existing work.
+
+A complete title/description suggestion can still be reviewed if SoC omits its
+accompanying message; the app displays “Review these suggested ticket changes.”
+Extra response fields are ignored. Incomplete ticket suggestions still fail safely
+rather than replacing either field with partial content.
+
 AI edits appear as **Suggested ticket changes** in the editor, with removed/added
 text. Choose **Accept changes** or **Discard**. Conversational proposals have a
 **Review ticket changes** action to open the same review. Acceptance replaces the

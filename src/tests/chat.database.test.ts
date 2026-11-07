@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { AiFailure } from "../server/soc";
+import { AiFailure, createSocProvider } from "../server/soc";
 import { createApplication } from "../server/application";
 import { localEnabled, localFixture } from "./local.fixture";
 
@@ -45,6 +45,32 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     const reloaded = (await (await app(pm)(new Request(path))).json()).turns;
     expect(reloaded).toHaveLength(1); expect(reloaded[0].reply).toBe("x".repeat(8001));
     expect((await pm.client.rpc("read_request", { target_org: org, request_id: task.id })).data.fields).toEqual({ title: "", description: "" });
+  });
+
+  it("normalizes usable provider output for private review without saving or publishing it", async () => {
+    fixture = localFixture(); const pm = await fixture.actor("PM"); const other = await fixture.actor("PM");
+    const org = (await pm.client.rpc("create_organisation", { organisation_name: "Tolerant responses" })).data;
+    const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    const fields = { title: "Original title", description: "## Problem description\nKeep this wording.\n\n## Out of scope\nKeep this too." };
+    expect((await pm.client.rpc("save_draft", { target_org: org, request_id: task.id, expected_revision: 1, content: fields })).error).toBeNull();
+    let content: unknown = { publish: true, tool_calls: [{ name: "publish" }], diagnostic: { private: "discard me" }, proposal: { title: "Unwanted title", description: "## Acceptance criteria\n- Reload restores the filter.", status: "published" } };
+    const provider = createSocProvider({ baseUrl: "https://soclaas-api.comp.nus.edu.sg/v1", model: "fixture-model", key: "fixture-key" }, async () => Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(content) } }] }));
+    const app = (actor: typeof pm) => createApplication({ origin: "http://localhost:3000", client: () => actor.client, chat: { worker: () => fixture.admin, provider } });
+    const path = `http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`;
+    const post = async () => {
+      const response = await app(pm)(new Request(path, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), revision: 2, fields, message: "Add acceptance criteria to this ticket. Only change the Acceptance criteria section; preserve its title and all other content." }) }));
+      expect(response.status).toBe(200); return (await response.json()).turn;
+    };
+    const turn = await post();
+    expect(turn).toMatchObject({ status: "completed", reply: "Review these suggested ticket changes.", proposal: { title: fields.title, description: fields.description + "\n\n## Acceptance criteria\n- Reload restores the filter." } });
+    expect(Object.keys(turn.proposal).sort()).toEqual(["description", "title"]);
+    expect(JSON.stringify(turn)).not.toContain("discard me");
+    expect((await (await app(pm)(new Request(path))).json()).turns).toEqual([turn]);
+    expect((await app(other)(new Request(path))).status).toBe(403);
+    content = { reply: "Keep this clarification", proposal: { title: "Partial" } };
+    expect(await post()).toMatchObject({ status: "failed", proposal: null, reply: null, error_code: "invalid_output", diagnostic: { source: "invalid_output", reason: "invalid_schema" } });
+    const saved = (await pm.client.rpc("read_request", { target_org: org, request_id: task.id })).data;
+    expect(saved).toMatchObject({ fields, revision: 2, submitted_at: null });
   });
 
   it("limits acceptance suggestions to that section and keeps gap analysis conversational", async () => {
