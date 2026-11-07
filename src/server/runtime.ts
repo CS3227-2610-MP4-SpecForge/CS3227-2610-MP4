@@ -37,8 +37,7 @@ export async function handleRequest(request: Request) {
         if (process.env.NODE_ENV !== "development" || !["http://localhost:3000", "http://localhost:3001"].includes(origin) || process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:55321") throw new AiFailure("configuration");
         return (await import("../tests/fake-ai")).localFakeAi(input);
       }
-      if (process.env.SOCLAAS_CHAT_MODEL !== "qwen3.5:9b") throw new AiFailure("configuration");
-      return createSocProvider({ baseUrl: process.env.SOCLAAS_BASE_URL ?? "", key: process.env.SOCLAAS_API_KEY ?? "", model: process.env.SOCLAAS_CHAT_MODEL })(input);
+      return createSocProvider({ baseUrl: process.env.SOCLAAS_BASE_URL ?? "", key: process.env.SOCLAAS_API_KEY ?? "", model: process.env.SOCLAAS_CHAT_MODEL ?? "" })(input);
     },
   }, client() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

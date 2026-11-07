@@ -47,14 +47,14 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     expect((await pm.client.rpc("read_request", { target_org: org, request_id: task.id })).data.fields).toEqual({ title: "", description: "" });
   });
 
-  it("normalizes usable provider output for private review without saving or publishing it", async () => {
+  it.each(["qwen3.5:9b", "gemma4:26b"])("normalizes %s output for private review without saving or publishing it", async model => {
     fixture = localFixture(); const pm = await fixture.actor("PM"); const other = await fixture.actor("PM");
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "Tolerant responses" })).data;
     const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     const fields = { title: "Original title", description: "## Problem description\nKeep this wording.\n\n## Out of scope\nKeep this too." };
     expect((await pm.client.rpc("save_draft", { target_org: org, request_id: task.id, expected_revision: 1, content: fields })).error).toBeNull();
     let content: unknown = { publish: true, tool_calls: [{ name: "publish" }], diagnostic: { private: "discard me" }, proposal: { title: "Unwanted title", description: "## Acceptance criteria\n- Reload restores the filter.", status: "published" } };
-    const provider = createSocProvider({ baseUrl: "https://soclaas-api.comp.nus.edu.sg/v1", model: "fixture-model", key: "fixture-key" }, async () => Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(content) } }] }));
+    const provider = createSocProvider({ baseUrl: "https://soclaas-api.comp.nus.edu.sg/v1", model, key: "fixture-key" }, async () => Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(content) } }] }));
     const app = (actor: typeof pm) => createApplication({ origin: "http://localhost:3000", client: () => actor.client, chat: { worker: () => fixture.admin, provider } });
     const path = `http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`;
     const post = async () => {

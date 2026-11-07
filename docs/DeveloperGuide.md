@@ -132,7 +132,10 @@ JSON prompt; prompt-only formatting was observed returning HTTP200/stop with
 non-JSON content in a synthetic first-draft reproduction. The paired JSON-mode
 check returned a valid chat-only reply. These are compatibility observations,
 not a reliability/latency benchmark or diagnosis of historical discarded output.
-Only the verified configured `qwen3.5:9b` runtime model is currently enabled.
+Server-side configuration supports exact model IDs `qwen3.5:9b` and `gemma4:26b`.
+`createSocProvider` rejects missing/unsupported IDs before transport; runtime uses
+`SOCLAAS_CHAT_MODEL` from the effective server environment. The prompt and caps
+are identical for both models; there is no automatic model fallback.
 Authenticated discovery reported65,536context tokens. One authorized2048-output-
 token check failed or timed out under a45-second deadline; a second600-token check returned valid JSON
 with a chat-only reply (49prompt/33completion tokens). These establish limited
@@ -147,8 +150,8 @@ contradictory unknowns, chat-only clarity, invalid schema/sections and a local t
 also occurred. Prompt guidance now explicitly forbids added implementation/lifetime
 requirements, keeps unknowns consistent, identifies clarity as an edit, and shows
 ATX headings/JSON shape. These are guidance changes, not semantic enforcement.
-Live acceptance generation and consistently useful, scope-preserving drafting
-remain unverified. The live checks exercised the provider and section constraint;
+That run did not establish successful live acceptance generation or consistently
+useful, scope-preserving drafting. The live checks exercised the provider and section constraint;
 authenticated HTTP/persistence/browser evidence is deterministic with a fake provider.
 Do not interpret passing local tests as live-provider reliability evidence.
 
@@ -163,8 +166,64 @@ converted to clarification. Field whitespace is preserved. No prose extraction o
 alternate ticket shape is accepted. Internal reply/proposal, client request and
 storage contracts stay canonical; acceptance-section merging runs after
 normalization. Extra publish/tool/diagnostic-like content keys are discarded,
-while actual envelope tool calls remain rejected. No new live-provider evidence
-was obtained for this relaxation.
+while actual envelope tool calls remain rejected.
+
+The subsequent [committed live check](../logs/2026-11-08-soc-live-verification.md)
+at `2febb62` used ten serial synthetic calls, with unchanged prompts/caps and no
+retries. Seven normalized (five proposals/two chat-only replies), two timed out,
+and one correctly failed invalid_schema with null title/empty description. One
+live clarity proposal had two extra fields stripped, establishing actual tolerant
+normalization; missing-reply fallback was not exercised. One live acceptance
+result preserved the original title/description through section merging, but
+its new criteria invented session/cache behavior and omitted a supplied reset
+requirement. Other drafts/clarity edits also invented or omitted requirements.
+These observations establish limited compatibility, not reliable writing quality,
+authenticated end-to-end success or provider-wide reliability/quotas. No source or
+prompt changes were made during that check.
+
+A subsequent [short-prompt experiment](../logs/2026-11-08-soc-prompt-variant.md)
+paired the same five synthetic cases with baseline and a fixed shorter,
+action-specific system prompt (ten calls total, no retries). Each arm returned
+four accepted outputs and one rejected output. Candidate unknowns/clarification
+were more focused in those observations, but drafting still invented storage/session
+choices, clarity omitted the supplied All-reset behavior, and acceptance lacked
+a description. The candidate was not adopted; production prompt remains at
+`2febb62`. Exact experiment text/rubric is recorded under `workflow/specs/`.
+This fixed-order, single-observation-per-case/arm sample does not establish a
+reliability or latency improvement. No application/model/config change followed.
+
+The [Qwen/Gemma comparison](../logs/2026-11-08-soc-model-comparison.md) discovered
+`gemma4:26b` with reported 131,072 context tokens and compared it with `qwen3.5:9b`
+on five fixed paired synthetic cases using the old prompt. Both had three
+normalized outputs and two 60-second local timeouts. Qwen's acceptance reply
+refused without a proposal; Gemma generated a section but invented a cache-reset
+criterion and omitted All-reset coverage. No overall winner was established;
+local `.env` remains Qwen. Gemma is enabled as an exact tested alternative, with
+the same limits/strict known-field validation and no fallback. Change only
+`SOCLAAS_CHAT_MODEL` to an enabled ID for a deliberate local trial and restart the
+dev process; process environment overrides `.env.local`, which overrides `.env`.
+Both env files are ignored. No provider/model-specific diagnosis follows from
+these small fixed-order observations or from reported context sizes.
+
+A [minimal diagnostic](../logs/2026-11-08-soc-minimal-diagnostic.md) then used one
+short three-requirement rewrite per model, with unchanged request settings.
+Both returned valid JSON and preserved the title; Qwen omitted the explicit All
+control, while Gemma retained all three supplied requirements without added behavior.
+One observation/model does not justify a production switch. Application prompt
+and default remain unchanged. SoC's public API guide does not specify JSON-mode
+or reasoning-effort semantics for these deployments; the detailed DocHub link
+could not be fetched. Generic Ollama compatibility documentation cannot verify
+SoC's backend/version or whether the effort setting is honored. See the diagnostic
+log for source links and the distinction between documented and measured behavior.
+
+The [varied Gemma clarity test](../logs/2026-11-08-gemma-clarity-variety.md) used
+five short fictional tickets with the same minimal prompt. Four returned complete
+proposals with unchanged titles; one timed out. Published-edit and upload-failure
+rewrites met the full preservation rubric, but filter wording dropped the explicit
+All label and export wording introduced scope ambiguity. No prompt/model rollout
+followed; existing configuration and review/publication controls remain. These
+small, empty-history cases do not establish reliability on full tickets or implement
+the fictional upload/expiry behavior used as test text.
 
 Application policy: full serialized messages (system, complete private history,
 current editor and message) <=48,000UTF-8bytes;2,000output tokens;60-second deadline;

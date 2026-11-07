@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSocProvider } from "../server/soc";
-const configuration = { baseUrl: "https://soclaas-api.comp.nus.edu.sg/v1", model: "fixture-model", key: "fixture-key" };
+const configuration = { baseUrl: "https://soclaas-api.comp.nus.edu.sg/v1", model: "qwen3.5:9b", key: "fixture-key" };
 const input = { fields: { title: "Search", description: "Find requests" }, message: "Help clarify", history: [] };
 const envelope = (content: string, finish = "stop") => Response.json({ choices: [{ finish_reason: finish, message: { content } }] });
 describe("SoC provider interface", () => {
@@ -8,8 +8,29 @@ describe("SoC provider interface", () => {
     let wire: Record<string, unknown> = {};
     const provider = createSocProvider(configuration, async (_url, init) => { wire = JSON.parse(String(init?.body)); return envelope(JSON.stringify({ reply: "Here is a draft.", proposal: { title: "Search requests", description: "## Desired behaviour\n\n- Search titles" } })); });
     expect(await provider(input)).toEqual({ reply: "Here is a draft.", proposal: { title: "Search requests", description: "## Desired behaviour\n\n- Search titles" } });
-    expect(wire).toMatchObject({ max_tokens: 2000, reasoning_effort: "none", response_format: { type: "json_object" }, model: "fixture-model" });
+    expect(wire).toMatchObject({ max_tokens: 2000, reasoning_effort: "none", response_format: { type: "json_object" }, model: "qwen3.5:9b" });
     expect(await createSocProvider(configuration, async () => envelope('{"reply":"Who is the user?","proposal":null}'))(input)).toEqual({ reply: "Who is the user?", proposal: null });
+  });
+  it.each(["gemma4:unverified", "qwen3.6:35b", ""])("rejects unsupported model %s before contacting the provider", async model => {
+    let calls = 0;
+    const provider = createSocProvider({ ...configuration, model }, async () => { calls++; return envelope('{"reply":"Hi","proposal":null}'); });
+    await expect(provider(input)).rejects.toMatchObject({ code: "configuration" });
+    expect(calls).toBe(0);
+  });
+  it.each(["qwen3.5:9b", "gemma4:26b"])("uses the same bounded JSON request for enabled model %s", async model => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    try {
+      let wire: Record<string, unknown> = {};
+      const provider = createSocProvider({ ...configuration, model }, async (_url, init) => {
+        wire = JSON.parse(String(init?.body));
+        expect(init).toMatchObject({ redirect: "error", cache: "no-store" });
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+        return envelope('{"reply":"Which columns?","proposal":null}');
+      });
+      expect(await provider(input)).toEqual({ reply: "Which columns?", proposal: null });
+      expect(wire).toMatchObject({ model, max_tokens: 2000, reasoning_effort: "none", response_format: { type: "json_object" } });
+      expect(timeout).toHaveBeenCalledWith(60000);
+    } finally { timeout.mockRestore(); }
   });
   it("sends scope and uncertainty rules separately from untrusted ticket content", async () => {
     let messages: { role: string; content: string }[] = [];
@@ -79,9 +100,9 @@ describe("SoC provider interface", () => {
     expect(failure).toMatchObject({ code: "invalid_output", diagnostic: { source: "invalid_output", reason } });
     expect(JSON.stringify(failure)).not.toContain("PRIVATE_FINISH_REASON");
   });
-  it("rejects oversized context without dropping history or contacting SoC", async () => {
+  it.each(["qwen3.5:9b", "gemma4:26b"])("rejects oversized context without dropping history or contacting %s", async model => {
     let calls = 0;
-    const provider = createSocProvider(configuration, async () => { calls++; return envelope('{}'); });
+    const provider = createSocProvider({ ...configuration, model }, async () => { calls++; return envelope('{}'); });
     await expect(provider({ ...input, history: [{ message: "x".repeat(49000), reply: null, proposal: null }] })).rejects.toMatchObject({ code: "context_limit" });
     expect(calls).toBe(0);
   });
