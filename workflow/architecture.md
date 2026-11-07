@@ -20,3 +20,9 @@ organisation-admin membership are distinct. See the approved product spec and
 Source, tests, Supabase migrations/config and local tooling belong under `src/`.
 Root package/framework configuration is required tooling. Use the documented
 checks; future PM/Developer AI modules share one server-side provider adapter.
+
+The PM AI chat uses session-authorized reads plus isolated service-role-only
+turn admission/completion after verified identity. Worker RPCs recheck access;
+ordinary account/task operations remain on the session client. Never accept
+client-supplied actor IDs/history or expose the worker key. SoC context contains
+only one task and its complete private conversation; no silent trimming.

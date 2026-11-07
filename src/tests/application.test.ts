@@ -40,6 +40,9 @@ describe("account and organisation HTTP interface", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(await response.json()).toEqual({ error: "Membership service unavailable. Try again later." });
+    const requestFailure = await app(post(`/api/organisations/${user.id}/requests`, { creationKey: user.id }));
+    expect(requestFailure.status).toBe(503);
+    expect(await requestFailure.json()).toEqual({ error: "Request service unavailable. Your text is preserved; check the saved version before retrying." });
   });
   it("rejects cross-origin signup before contacting Supabase", async () => {
     const { app, requests } = fixture();

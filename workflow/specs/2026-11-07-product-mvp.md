@@ -1,5 +1,9 @@
 # SpecForge initial product specification
 
+Approved amendment: [two-field AI workspace](2026-11-07-two-field-ai-workspace.md)
+supersedes the six-field editor/validation shape and adds private chat with
+explicit proposal application. The earlier details below retain their history.
+
 Status: approved by the user on 2026-11-07. Decisions captured on 2026-11-07;
 React through Next.js and Supabase selected. Hosting must be free; the exact
 provider is deferred subject to an early deployment-compatibility check.

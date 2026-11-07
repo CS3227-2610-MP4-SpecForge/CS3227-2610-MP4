@@ -1,7 +1,10 @@
+import { handleChat, type ChatDependencies } from "./chat";
+import { handleRequests } from "./requests";
+import { error, json, InputError, readBody } from "./http";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-type Options = { origin: string; client(): SupabaseClient; admitAuth?: () => boolean };
+type Options = { origin: string; client(): SupabaseClient; admitAuth?: () => boolean; chat?: ChatDependencies };
 export function createAuthAdmission() {
   let window = 0;
   let count = 0;
@@ -19,36 +22,7 @@ const credentials = z.strictObject({ email, password: z.string().min(1).max(128)
 const organisationInput = z.strictObject({ name: z.string().trim().min(1).max(80) });
 const membership = z.object({ is_admin: z.boolean(), organisation: z.object({ id: z.uuid(), name: z.string() }) });
 function organisationView(row: z.infer<typeof membership>) { return { ...row.organisation, isAdmin: row.is_admin }; }
-const headers = { "Cache-Control": "private, no-store", "Vary": "Cookie, Origin", "X-Content-Type-Options": "nosniff" };
-function json(value: unknown, status = 200) { return Response.json(value, { status, headers }); }
-function error(message: string, status: number) { return json({ error: message }, status); }
 function unavailable(failure: { status?: number } | null) { return Boolean(failure && (!failure.status || failure.status >= 500)); }
-class InputError extends Error {
-  constructor(readonly status: number) { super("Invalid request."); }
-}
-async function readBody(request: Request): Promise<unknown> {
-  if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") throw new InputError(415);
-  const reader = request.body?.getReader();
-  if (!reader) throw new InputError(400);
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > 8192) { await reader.cancel(); throw new InputError(413); }
-      chunks.push(value);
-    }
-    const bytes = new Uint8Array(size);
-    let position = 0;
-    for (const chunk of chunks) { bytes.set(chunk, position); position += chunk.byteLength; }
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-  } catch (failure) {
-    if (failure instanceof InputError) throw failure;
-    throw new InputError(400);
-  } finally { reader.releaseLock(); }
-}
 export function createApplication(options: Options) {
   const admitAuth = options.admitAuth ?? createAuthAdmission();
   return async function handle(request: Request): Promise<Response> {
@@ -105,6 +79,10 @@ export function createApplication(options: Options) {
         if (unavailable(failure)) return error("Service temporarily unavailable. Try again later.", 503);
         if (failure || !data.user) return error("Sign in to continue.", 401);
         if (!data.user.email_confirmed_at) return error("Verify your email to continue.", 403);
+        const chatResponse = await handleChat(request, client, data.user.id, options.chat);
+        if (chatResponse) return chatResponse;
+        const requestResponse = await handleRequests(request, client);
+        if (requestResponse) return requestResponse;
         const inbox = path === "/api/invitations";
         const responseMatch = path.match(/^\/api\/invitations\/([^/]+)$/);
         const management = path.match(/^\/api\/organisations\/([^/]+)\/(members|invitations)(?:\/([^/]+))?$/);

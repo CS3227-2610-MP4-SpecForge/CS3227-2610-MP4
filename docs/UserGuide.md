@@ -4,10 +4,11 @@
 
 This version supports email/password signup, email-code verification, login,
 logout, creating/listing/selecting your organisations, invitations and membership
-management. Both Product Managers
-and Developers use the same workspace. Organisation creators become admins.
+management, and the manual request lifecycle. Both Product Managers and
+Developers use the same workspace. Organisation creators become admins.
 
-Demo kits, feature requests and AI conversations remain approved future work.
+Demo kits and the partner-owned Developer AI remain future work. PM task chat
+uses SoC LLM; hosted deployment is not configured.
 No public application URL is available yet.
 
 ## Try the local app
@@ -59,6 +60,75 @@ Use **Refresh membership** to pick up changes made in another browser; server
 permissions always use current membership. Invitations and member lists currently
 display at most 100 entries. New invitations and resends share a limit of 20
 attempts per hour per organisation, including unknown addresses and duplicates.
+
+## Tasks and AI chat
+
+Select an organisation and choose **View requests**. PM authors can create/edit
+private drafts; current members read submitted tasks. There are two task fields:
+**Title** (up to160 Unicode characters) and **Description** (up to24,000).
+Description is free-form Markdown; headings are optional. Existing requests keep
+their title and all old section contents under description headings.
+
+Desktop places the task on the left and private AI chat on the right. On phones,
+use **Task / Chat** tabs; switching retains both panels. Chat is private to the
+original PM author, including from admins and after task publication.
+
+Describe your idea with **Send message**, or choose **Request task proposal**
+whenever you want a draft. AI can ask questions without changing the task. When
+it offers a title/description proposal, review it and choose **Apply update**.
+Both fields are replaced locally; review acknowledgement resets. If you edited
+while AI was responding or another editor saved a newer revision, the proposal
+is marked outdated and cannot apply. Request a fresh one explicitly.
+
+Drafts autosave750ms after a pause. Applying a proposal to a draft follows that
+same autosave. Submission requires a nonempty title/description, acknowledgement
+and **Submit request**. Published edits, including applied proposals, remain local
+until acknowledged **Save changes**. Readers see only the last saved task.
+Only the original PM author can edit; Developers cannot edit even when admins.
+
+**Delete draft** asks confirmation; submitted tasks cannot be deleted. Leaving
+or removal ends access; submitted work remains visible to members and rejoining
+restores author access. Dates and stable author-account IDs remain visible.
+
+On task save failure, local text is preserved and automatic saving stops. Use
+**Check saved version** before retrying, or explicitly reload/discard after a
+conflict. New-draft retries use the same creation key to avoid duplicates.
+
+On chat failure, your admitted message and previous conversation remain saved.
+Use **Refresh chat** after a lost response. A completed send is not duplicated;
+an absent send can be explicitly retried, using the current task if it changed.
+Failed turns have **Retry AI turn**; changed task snapshots need a new message.
+Failure notices distinguish:
+
+- **Local deadline:** SpecForge stopped waiting at its60-second provider deadline;
+  SoC may still be processing. No upstream status is inferred.
+- **Upstream HTTP error:** SoC returned an actual status such as502,504 or429;
+  the notice includes that status and app-observed elapsed time. A502 alone
+  does not prove the upstream cause was a timeout.
+- **Network failure:** the connection or response stream failed without an
+  upstream HTTP error response.
+- **Browser waiting limit:** the browser's75-second wait expired; refresh chat
+  to reconcile rather than assuming the server/provider failed.
+
+Provider failure details survive chat reloads. Older failed turns retain a generic
+notice because no detailed status/timing was recorded. Elapsed time measures
+what this app observed, not SoC's internal processing duration.
+
+There are no automatic provider retries or fallback models. Manual editing
+remains available when AI fails. Unsaved task text warns before departure and
+is not stored in browser persistent storage.
+
+App limits (not SoC quotas): one active AI turn per request/account,20attempts
+per account/hour,4,000-character messages,60-second provider deadline and
+600output tokens per response. The full serialized task/conversation/system
+context is capped at48,000UTF-8bytes; older messages are never silently removed.
+When context or conversation storage is full, continue editing manually. Chat
+storage is bounded to1MiB, reserving completion space before admission. Long or
+truncated AI responses fail safely; ask for a concise proposal or edit manually.
+
+Markdown display supports headings, lists, paragraphs and fenced code. Raw HTML,
+images and links remain literal text; they do not execute or fetch remote media.
+Lists show at most100requests. No hosted application URL is available yet.
 
 ## Failures
 

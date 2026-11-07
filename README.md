@@ -2,8 +2,9 @@
 
 A shared workspace for Product Managers and Developers. The initial slice
 implements verified email accounts, member-scoped organisations, invitations
-and admin/member management.
-The conversational feature-request AI and Developer AI are not implemented yet.
+and admin/member management, plus private PM drafts and explicitly published
+feature requests with a two-field editor and private SoC AI chat/proposals.
+The partner-owned Developer AI remains unimplemented.
 
 Use Node.js 24 and Docker Desktop:
 
