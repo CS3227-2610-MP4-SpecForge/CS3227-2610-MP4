@@ -1,8 +1,9 @@
 # Shared architecture policy
 
-Current decision: one deployable app with feature-oriented modules. Stack,
-schema, product entities and exact interfaces will be agreed with the product
-specification before scaffolding; this file does not invent their implementations.
+Current decision: one deployable Next.js/React app with feature-oriented modules
+and Supabase Auth/PostgreSQL. Organisations own requests; application roles and
+organisation-admin membership are distinct. See the approved product spec and
+`docs/DeveloperGuide.md` for implemented interfaces and their test seams.
 
 - Keep PM and Developer features distinct, sharing authentication, project
   authorization, persistence and SoC LLM access instead of reimplementing them.
@@ -16,4 +17,6 @@ specification before scaffolding; this file does not invent their implementation
 - Review boundary changes when they happen; record a significant trade-off here
   or in a short ADR only when future maintainers need the reason.
 
-Source code belongs under `src/`. No test commands exist until a stack is selected.
+Source, tests, Supabase migrations/config and local tooling belong under `src/`.
+Root package/framework configuration is required tooling. Use the documented
+checks; future PM/Developer AI modules share one server-side provider adapter.

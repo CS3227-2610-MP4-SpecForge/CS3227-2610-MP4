@@ -1,0 +1,112 @@
+import { test, expect } from "@playwright/test";
+import { localFixture } from "../local.fixture";
+const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
+
+test("PM and Developer manage invitations, admin handover and leaving", async ({ page, browser }) => {
+  const fixture = localFixture();
+  const a = await fixture.actor("PM");
+  const b = await fixture.actor("Developer");
+  const context = await browser.newContext();
+  const recipient = await context.newPage();
+  const login = async (target: typeof page, actor: typeof a) => {
+    await target.goto(origin + "/sign-in");
+    await target.getByLabel("Email address").fill(actor.email);
+    await target.getByLabel("Password", { exact: true }).fill(actor.password);
+    await target.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(target).toHaveURL(/\/workspace$/);
+  };
+  page.on("dialog", dialog => dialog.accept());
+  recipient.on("dialog", dialog => dialog.accept());
+  try {
+    await login(page, a);
+    await page.getByLabel("Organisation name").fill("Membership journey");
+    await page.getByRole("button", { name: "Create organisation", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Membership journey", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Leave organisation", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Organisation membership" }).getByRole("alert")).toContainText("at least one admin");
+    await page.getByLabel("Invite by registered email").fill(b.email);
+    await page.getByRole("button", { name: "Send invitation", exact: true }).click();
+    await expect(page.getByText(b.email, { exact: true })).toBeVisible();
+    await login(recipient, b);
+    await expect(recipient.getByRole("heading", { name: "Your invitations" })).toBeVisible();
+    await recipient.getByRole("button", { name: "Decline", exact: true }).click();
+    await expect(recipient.getByText("No pending invitations.")).toBeVisible();
+    await page.getByRole("button", { name: "Refresh membership", exact: true }).click();
+    await expect(page.getByText("No pending outgoing invitations.")).toBeVisible();
+    await page.getByLabel("Invite by registered email").fill(b.email);
+    await page.getByRole("button", { name: "Send invitation", exact: true }).click();
+    await expect(page.getByText(b.email, { exact: true })).toBeVisible();
+    await recipient.getByRole("button", { name: "Refresh membership", exact: true }).click();
+    await recipient.getByRole("button", { name: "Accept", exact: true }).click();
+    await expect(recipient.getByRole("button", { name: /Membership journey Member/ })).toBeVisible();
+    await page.getByRole("button", { name: "Refresh membership", exact: true }).click();
+    const member = page.getByRole("listitem").filter({ has: page.getByText(b.email, { exact: true }) });
+    await member.getByRole("button", { name: "Promote to admin", exact: true }).click();
+    await expect(member.getByRole("button", { name: "Demote admin", exact: true })).toBeVisible();
+    await member.getByRole("button", { name: "Demote admin", exact: true }).click();
+    await expect(member.getByRole("button", { name: "Promote to admin", exact: true })).toBeVisible();
+    await member.getByRole("button", { name: "Promote to admin", exact: true }).click();
+    await expect(member.getByRole("button", { name: "Demote admin", exact: true })).toBeVisible();
+    await page.route("**/api/organisations", async route => {
+      if (route.request().method() === "GET") await new Promise(resolve => setTimeout(resolve, 1500));
+      await route.continue();
+    });
+    const self = page.getByRole("listitem").filter({ has: page.getByText(a.email, { exact: true }) });
+    await self.getByRole("button", { name: "Demote admin", exact: true }).click();
+    await expect(page.getByText("You have member access to this organisation.")).toBeVisible();
+    const membership = page.getByRole("region", { name: "Organisation membership" });
+    await expect(membership.getByRole("button", { name: "Refresh membership", exact: true })).toBeEnabled();
+    await expect(membership.getByRole("alert")).toHaveCount(0);
+    await page.getByRole("button", { name: "Leave organisation", exact: true }).click();
+    await expect(page.getByText("Your team starts here")).toBeVisible();
+    await recipient.getByRole("button", { name: "Refresh membership", exact: true }).click();
+    await recipient.getByRole("button", { name: /Membership journey Admin/ }).click();
+    await expect(recipient.getByText("You have admin access to this organisation.")).toBeVisible();
+    await expect(recipient.getByLabel("Invite by registered email")).toBeVisible();
+    await recipient.setViewportSize({ width: 390, height: 844 });
+    expect(await recipient.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await recipient.screenshot({ path: "test-results/membership-mobile.png", fullPage: true, caret: "initial" });
+    await page.screenshot({ path: "test-results/membership-pm.png", fullPage: true, caret: "initial" });
+  } finally { await context.close(); await fixture.cleanup(); }
+});
+
+test("Developer admin resends expired invitations, cancels and removes a PM member", async ({ page }) => {
+  const fixture = localFixture();
+  const admin = await fixture.actor("Developer");
+  const pm = await fixture.actor("PM");
+  const org = (await admin.client.rpc("create_organisation", { organisation_name: "Outgoing controls" })).data;
+  page.on("dialog", dialog => dialog.accept());
+  try {
+    await page.goto("/sign-in");
+    await page.getByLabel("Email address").fill(admin.email);
+    await page.getByLabel("Password", { exact: true }).fill(admin.password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/workspace$/);
+    await page.getByRole("button", { name: /Outgoing controls Admin/ }).click();
+    await page.getByLabel("Invite by registered email").fill(pm.email);
+    await page.getByRole("button", { name: "Send invitation", exact: true }).click();
+    await expect(page.getByText(pm.email, { exact: true })).toBeVisible();
+    const invitation = (await pm.client.rpc("list_invitations")).data[0].id;
+    await fixture.admin.from("organisation_invitations").update({ expires_at: "2020-01-01T00:00:00Z" }).eq("id", invitation);
+    await page.getByRole("button", { name: "Refresh membership", exact: true }).click();
+    await page.getByRole("button", { name: "Resend", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Resend", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Cancel invitation", exact: true }).click();
+    await expect(page.getByText("No pending outgoing invitations.")).toBeVisible();
+    await page.getByLabel("Invite by registered email").focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Send invitation", exact: true })).toBeFocused();
+    await page.getByLabel("Invite by registered email").fill(pm.email);
+    await page.getByRole("button", { name: "Send invitation", exact: true }).click();
+    await expect(page.getByText(pm.email, { exact: true })).toBeVisible();
+    const fresh = (await pm.client.rpc("list_invitations")).data[0].id;
+    await pm.client.rpc("respond_invitation", { invitation_id: fresh, decision: "accept" });
+    await page.getByRole("button", { name: "Refresh membership", exact: true }).click();
+    const member = page.getByRole("listitem").filter({ has: page.getByText(pm.email, { exact: true }) });
+    await expect(member.getByRole("button", { name: "Remove member", exact: true })).toBeVisible();
+    await page.screenshot({ path: "test-results/membership-desktop.png", fullPage: true, caret: "initial" });
+    await member.getByRole("button", { name: "Remove member", exact: true }).click();
+    await expect(page.getByText(pm.email, { exact: true })).toHaveCount(0);
+    expect((await pm.client.from("organisations").select("id").eq("id", org)).data).toEqual([]);
+  } finally { await fixture.cleanup(); }
+});

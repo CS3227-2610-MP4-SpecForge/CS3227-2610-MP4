@@ -19,5 +19,19 @@ invoke Superpowers automatically or maintain its per-task planning paperwork.
 - The app must use SoC LLM; exact provider limits are unverified. Deployment must
   use team-managed automation with separate development/production environments.
 
-Current state: no application scaffold, stack, build or test commands exist yet.
-Do not invent passing checks. Complete product requirements before scaffolding.
+Current state: approved initial product specification under `workflow/specs/`;
+Next.js/React and Supabase scaffold with verified accounts and initial
+organisation workflow, including invitations and membership/admin management.
+Read `docs/DeveloperGuide.md` for setup/check commands.
+The PM AI, partner-owned Developer AI and hosted deployment remain unfinished.
+Do not invent passing checks or treat future product scope as implemented.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

@@ -1,9 +1,9 @@
 # Shared UI policy
 
 Both student-owned feature sets use one app shell and shared UI components.
-Choose a representative screen and shared theme before building separate pages.
-If React is selected, shadcn/ui is the proposed starting library; no framework
-or UI dependency has been installed yet.
+The organisation workspace is the initial representative screen. React is
+selected; the first slice uses shared controls under `src/components/` and CSS
+theme tokens in `src/app/globals.css`. shadcn/ui remains optional, not installed.
 
 - Define colors, type scale, spacing, radii and focus styles once in theme tokens.
 - Reuse navigation, page headers/action bars, forms, status badges and request cards.
