@@ -1,6 +1,8 @@
 # SpecForge development workflow design
 
-Status: approved by the user on 2026-11-07; implementation not started.
+Status: historical. Approved initially, then superseded by the user-selected
+lightweight workflow in [../README.md](../README.md) on 2026-11-07.
+Do not use this document's per-task dispatch or paperwork as current policy.
 
 ## Purpose and scope
 
