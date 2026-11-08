@@ -16,10 +16,11 @@ export async function handleDelivery(request: Request, client: SupabaseClient): 
   if (!z.uuid().safeParse(org).success || match && !z.uuid().safeParse(match[2]).success) return error("Ticket not found.", 404);
   let rpc: string; let args: Record<string, unknown> = { target_org: org }; let schema: z.ZodType;
   if (members && request.method === "GET") {
-    const input = z.strictObject({ after: z.uuid().optional(), search: z.string().max(160).default("") }).safeParse(Object.fromEntries(url.searchParams));
+    const input = z.strictObject({ after: z.uuid().optional(), search: z.string().max(160).default(""), selected: z.string().max(184).transform(value => value.split(",")).pipe(z.array(z.uuid()).max(5)).optional() }).safeParse(Object.fromEntries(url.searchParams));
     if (!input.success) return error("Invalid member page.", 400);
-    rpc = "ticket_members"; args.after_user = input.data.after ?? null; args.member_search = input.data.search;
-    schema = z.object({ members: z.array(z.object({ user_id: z.uuid(), app_role: z.enum(["PM", "Developer"]) })), next_cursor: z.uuid().nullable() });
+    rpc = "ticket_members"; args.after_user = input.data.after ?? null; args.member_search = input.data.search; args.selected_users = input.data.selected ?? [];
+    const member = z.object({ user_id: z.uuid(), email: z.string().min(1).max(320), app_role: z.enum(["PM", "Developer"]) });
+    schema = z.object({ members: z.array(member).max(50), selected_members: z.array(member).max(5), next_cursor: z.uuid().nullable() });
   } else if (match) {
     args.request_id = match[2];
     if (match[3] === "delivery" && request.method === "POST") {

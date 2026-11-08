@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { deadlineLabel, ticketPriorities, ticketStatuses, type Delivery, type TicketStatus, type TicketPriority } from "@/delivery";
+import { deadlineLabel, type Delivery } from "@/delivery";
 import type { FeatureRequest } from "@/requests";
 import { api, ApiError, failureMessage } from "./http";
-import { Button, Field, Notice } from "./ui";
+import { Button, DatePicker, Dropdown, Notice } from "./ui";
+import { PriorityPill, StatusPill, priorityOptions, statusOptions } from "./ticket-pills";
 import { TicketMembers } from "./ticket-members";
 export function TicketDelivery({ item, accountId, path, onSaved }: { item: FeatureRequest; accountId: string; path: string; onSaved: (delivery: Delivery) => void }) {
   const [saved, setSaved] = useState<Delivery>(item);
@@ -53,7 +54,7 @@ export function TicketDelivery({ item, accountId, path, onSaved }: { item: Featu
       <p className="hint">{dirty ? "Unsaved delivery changes." : ""}</p>
       <div className="actions"><Button disabled={busy || blocked || !dirty}>Update</Button>{error && <Button type="button" className="secondary" disabled={busy} onClick={reload}>Reload delivery details</Button>}</div>
     </form> : <section className="delivery-fields-section" aria-label="Ticket delivery details">
-      <dl className="delivery-fields read-only-fields"><div><dt>Delivery status</dt><dd>{published ? ticketStatuses[saved.status] : ticketStatuses.to_do}</dd></div><div><dt>Priority</dt><dd>{ticketPriorities[saved.priority]}</dd></div><div><dt>Due date</dt><dd>{deadlineLabel({ ...saved, submitted_at: item.submitted_at })}</dd></div><div><dt>Assignees</dt><dd>{saved.assignee_ids.length ? saved.assignee_ids.join(", ") : "Unassigned"}</dd></div></dl>
+      <dl className="delivery-fields read-only-fields"><div><dt>Delivery status</dt><dd><StatusPill value={published ? saved.status : "to_do"} /></dd></div><div><dt>Priority</dt><dd><PriorityPill value={saved.priority} /></dd></div><div><dt>Due date</dt><dd>{deadlineLabel({ ...saved, submitted_at: item.submitted_at })}</dd></div><div><dt>Assignees</dt><dd><TicketMembers organisationId={item.organisation_id} selected={saved.assignee_ids} /></dd></div></dl>
     </section>}
   </div>;
 }
@@ -64,17 +65,16 @@ export function TicketDeliveryFields({ item, accountId, value, disabled, onChang
   const canStatus = published && (author || item.assignee_ids.includes(accountId));
   return <section className="stack delivery-fields-section" aria-label="Ticket delivery details">
       <div className="delivery-fields">
-        <div className="field">{canStatus || !published ? <label htmlFor="ticket-status">Delivery status</label> : <span className="field-label">Delivery status</span>}{canStatus || !published
-          ? <select id="ticket-status" value={published ? value.status : "to_do"} disabled={disabled || !canStatus} onChange={event => onChange({ ...value, status: event.target.value as TicketStatus })}>{Object.entries(ticketStatuses).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
-          : <span className="field-value">{published ? ticketStatuses[value.status] : ticketStatuses.to_do}</span>}</div>
-        <div className="field">{author ? <label htmlFor="ticket-priority">Priority</label> : <span className="field-label">Priority</span>}{author
-          ? <select id="ticket-priority" value={value.priority} disabled={disabled} onChange={event => onChange({ ...value, priority: event.target.value as TicketPriority })}>{Object.entries(ticketPriorities).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
-          : <span className="field-value">{ticketPriorities[value.priority]}</span>}</div>
-        {author ? <Field id="ticket-due" label="Due date" form={formId} type="date" min="0001-01-01" max="9999-12-31" value={(value.due_date ?? "")} disabled={disabled} onChange={event => onChange({ ...value, due_date: event.target.value || null })} />
+        {canStatus || !published
+          ? <Dropdown id="ticket-status" label="Delivery status" value={published ? value.status : "to_do"} options={statusOptions} disabled={disabled || !canStatus} onChange={status => onChange({ ...value, status })} />
+          : <div className="field"><span className="field-label">Delivery status</span><span className="field-value"><StatusPill value={value.status} /></span></div>}
+        {author
+          ? <Dropdown id="ticket-priority" label="Priority" value={value.priority} options={priorityOptions} disabled={disabled} onChange={priority => onChange({ ...value, priority })} />
+          : <div className="field"><span className="field-label">Priority</span><span className="field-value"><PriorityPill value={value.priority} /></span></div>}
+        {author ? <DatePicker id="ticket-due" label="Due date" form={formId} value={value.due_date} disabled={disabled} onChange={due_date => onChange({ ...value, due_date })} />
           : <div className="field"><span className="field-label">Due date</span><span className="field-value">{deadlineLabel({ ...value, submitted_at: item.submitted_at })}</span></div>}
       </div>
-      {author ? <details className="assignee-field"><summary>Assignees ({value.assignee_ids.length}/5)</summary><p className="hint">{value.assignee_ids.length ? value.assignee_ids.join(", ") : "Unassigned"}</p><Button type="button" className="secondary" disabled={disabled || value.assignee_ids.length >= 5 || value.assignee_ids.includes(accountId)} onClick={() => onChange({ ...value, assignee_ids: [...value.assignee_ids, accountId] })}>Assign me</Button><TicketMembers organisationId={item.organisation_id} selected={value.assignee_ids} onChange={assignee_ids => onChange({ ...value, assignee_ids })} disabled={disabled} /></details>
-        : <p className="hint">Assigned accounts: {value.assignee_ids.join(", ")}</p>}
+      <TicketMembers organisationId={item.organisation_id} selected={value.assignee_ids} onChange={author ? assignee_ids => onChange({ ...value, assignee_ids }) : undefined} disabled={disabled} />
   </section>;
 }
 

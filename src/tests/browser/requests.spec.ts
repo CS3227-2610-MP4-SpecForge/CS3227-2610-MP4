@@ -1,3 +1,4 @@
+import { setDueDate } from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { localFixture } from "../local.fixture";
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
@@ -43,7 +44,7 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await reader.goto(`/organisations/${org}/requests`);
     await expect(reader.getByText("No requests yet.")).toBeVisible();
     await expect(reader.getByRole("button", { name: "New draft", exact: true })).toHaveCount(0);
-    await page.getByLabel("Due date", { exact: true }).fill("2026-12-20");
+    await setDueDate(page, "2026-12-20");
     await expect(saved(page)).toBeVisible();
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toContainText("This task is visible to members of the");
@@ -281,7 +282,7 @@ test("applying a proposal to a published task remains local until explicit Updat
   const { fixture, pm, org, id } = await setupEditor(page);
   try {
     await fill(page); await expect(saved(page)).toBeVisible();
-    await page.getByLabel("Due date", { exact: true }).fill("2026-12-20");
+    await setDueDate(page, "2026-12-20");
     await expect(saved(page)).toBeVisible();
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toContainText("This task is visible to members of the");

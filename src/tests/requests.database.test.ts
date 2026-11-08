@@ -49,9 +49,9 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
     expect((await pm.client.rpc("save_ticket", args)).error).toBeNull();
     expect((await pm.client.rpc("save_ticket", { ...args, action: "save_published", expected_revision: 2, delivery_changes: {} })).error?.code).toBe("P0001");
     const update = await pm.client.rpc("save_ticket", { ...args, expected_revision: 2, expected_delivery_revision: 2,
-      action: "save_published", content: { ...fields, title: "Updated together" }, delivery_changes: { priority: "urgent" } });
+      action: "save_published", content: { ...fields, title: "Updated together" }, delivery_changes: { priority: "high" } });
     expect(update.error).toBeNull();
-    expect(update.data).toMatchObject({ revision: 3, delivery_revision: 3, fields: { title: "Updated together" }, priority: "urgent" });
+    expect(update.data).toMatchObject({ revision: 3, delivery_revision: 3, fields: { title: "Updated together" }, priority: "high" });
     expect((await other.client.rpc("save_ticket", { ...args, expected_revision: 3, expected_delivery_revision: 3, action: "save_published" })).error?.code).toBe("42501");
   });
 

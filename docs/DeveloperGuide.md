@@ -111,10 +111,11 @@ creation order without changing existing content revisions or timestamps.
   keys `due_date/priority/assignee_ids/status`. `update_delivery` locks organisation
   then ticket, checks current identity/membership and author/assignee permissions,
   and conditionally increments delivery revision without changing content revision.
-- `GET /api/organisations/[org]/ticket-members?search=&after=`:
-  `ticket_members` returns up to 50 current-member IDs/roles and `next_cursor`.
-  Search runs before paging. Admin-only membership management/email access is
-  unchanged.
+- `GET /api/organisations/[org]/ticket-members?search=&after=&selected=`:
+  `ticket_members` returns up to 50 current-member IDs/emails/roles,
+  `next_cursor`, and up to five independently resolved `selected_members`.
+  Email search runs before paging. All organisation members can use this lookup;
+  membership management remains admin-only.
 - `GET .../requests/[id]/activity?before=`: `read_ticket_activity` uses descending
   bigint IDs serialized as strings, 50 entries and `next_cursor`.
 - `POST .../requests/[id]/activity`: `{creationKey, body}`; `comment_ticket` derives
@@ -477,3 +478,61 @@ informed the React/Next.js/Supabase and future demo-kit discussion. Its source a
 workflow were not copied into this implementation. Supabase's official SSR,
 email-code and RLS documentation informed integration. Next.js, React, Supabase,
 Zod, Vitest and Playwright are dependencies; consult their package licenses.
+
+## Email assignee picker
+
+Ticket authors click the Assignees box and type part of a member's email. A
+scrollable suggestion list supports Arrow Up/Down, Enter, Escape and mouse
+selection. Selected emails appear as removable chips; the five-assignee limit
+still applies. Search for your own email to assign yourself. Draft selections
+follow autosave; published changes require Update.
+
+Apply `20261108017000_email_assignees.sql` with
+`npx supabase migration up --local --workdir src`. The session-authorized
+`ticket_members` RPC now returns `{members, selected_members, next_cursor}` with
+only `{user_id, email, app_role}` per member. Email search is case-insensitive,
+literal substring matching, capped at 160 characters and 50 results per page.
+The HTTP lookup accepts optional `selected` (comma-separated UUIDs, maximum five)
+so selected labels resolve independently of search/cursor. Both result groups
+are restricted to current members of the requested organisation. Assignment
+storage and permissions still use UUIDs. No hosted migration was applied.
+
+## Three priorities and shared pill dropdowns
+
+The shared library exports `Dropdown`, `DropdownOption`, `Pill` and `PillTone`;
+see `workflow/ui.md` for the fixed-choice interface and keyboard behavior.
+Ticket status and priority use its controlled pill dropdowns; reader fields and
+list badges reuse `ticket-pills.tsx` so labels and tones stay consistent.
+
+Apply `20261108018000_three_priorities.sql` with the local additive migration
+command. It maps urgent to high atomically, increments delivery revision and
+updates modification time only for affected tickets, and preserves content
+revisions and historical activity. The migration suppresses the activity trigger
+only inside its locked transaction to avoid inventing user activity. SQL/HTTP
+writes and filters accept only low/medium/high. Earlier migration files and
+historical activity values remain intact. No hosted migration was applied.
+
+`node src/tooling/test-local.mjs ticket-migration` includes an isolated legacy
+priority check in a temporary database inside disposable local Supabase. It
+verifies mapping, unchanged unaffected tickets/history and stale-revision
+conflicts without modifying the main local database's saved tickets.
+
+## Purple date picker
+
+Ticket due dates use the shared controlled `DatePicker` from `ui.tsx`, wrapping
+`@daypicker/react` 10.0.2. DayPicker and its required date-fns and @date-fns/tz packages
+are installed from npm with lockfile integrity; no runtime assets are fetched.
+The upstream libraries use the MIT license. Install was performed with lifecycle
+scripts disabled. Shared Button now has its own module to avoid a circular
+import between the UI barrel and DatePicker.
+
+The popover owns pending exact-date text; only valid Apply/day/Today selections
+emit a YYYY-MM-DD string, and Clear emits null. Local full-year construction and
+calendar-field checks preserve years 0001–9999 and avoid UTC date shifts. Invalid
+input preserves the committed date; closing cancels unapplied text. The backend
+contract and author permissions are unchanged. The library stylesheet loads
+once in the root layout before the purple theme overrides.
+
+Browser coverage uses `setDueDate` through the visible Exact date/Apply controls,
+plus calendar day/month/year/keyboard selection, optional dates, save/reload,
+negative-timezone/boundary validation and desktop/mobile visual checks.

@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, failureMessage } from "./http";
-import { Button, Notice } from "./ui";
+import { Button, Notice, Pill } from "./ui";
 import { deadlineLabel, localDay, ticketPriorities, ticketStatuses, type TicketMember } from "@/delivery";
+import { PriorityPill, StatusPill } from "./ticket-pills";
 import { TicketMembers } from "./ticket-members";
 import type { FeatureRequest } from "@/requests";
 
@@ -72,7 +73,7 @@ export function RequestList({ organisationId }: { organisationId: string }) {
     {!loaded ? <Notice>Loading requests…</Notice> : <>
       <Button className="secondary" disabled={pending} onClick={() => { setError(""); setReload(n => n + 1); }}>Refresh requests</Button>
       {!error && items.length === 0 && <div className="card"><p className="muted">{query ? "No tickets match these filters." : "No requests yet."}</p></div>}
-      <ul className="organisation-list">{items.map(item => <li className="card request-summary" key={item.id}><div className="ticket-badges"><span className="badge">{item.submitted_at ? ticketStatuses[item.status] : "Private draft"}</span><span className="badge">{ticketPriorities[item.priority]}</span><span>{deadlineLabel(item)}</span></div><h2><a href={`/organisations/${organisationId}/requests/${item.id}`}>{item.fields.title || "Untitled draft"}</a></h2><p className="muted">Assignees: {item.assignee_ids.length ? item.assignee_ids.join(", ") : "Unassigned"}</p><p className="muted">Author account: {item.author_id}</p><p className="muted">Last modified: {new Date(item.updated_at).toLocaleString()}</p></li>)}</ul>
+      <ul className="organisation-list">{items.map(item => <li className="card request-summary" key={item.id}><div className="ticket-badges">{item.submitted_at ? <StatusPill value={item.status} /> : <Pill>Private draft</Pill>}<PriorityPill value={item.priority} /><span>{deadlineLabel(item)}</span></div><h2><a href={`/organisations/${organisationId}/requests/${item.id}`}>{item.fields.title || "Untitled draft"}</a></h2><p className="muted">Assignees: {item.assignee_ids.length ? item.assignee_ids.join(", ") : "Unassigned"}</p><p className="muted">Author account: {item.author_id}</p><p className="muted">Last modified: {new Date(item.updated_at).toLocaleString()}</p></li>)}</ul>
       {nextOffset !== null && <Button className="secondary" disabled={pending} onClick={more}>Load more tickets</Button>}
     </>}
   </section>;

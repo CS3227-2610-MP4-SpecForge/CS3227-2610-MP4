@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import "@daypicker/react/style.css";
 import "./globals.css";
 export const metadata: Metadata = { title: "SpecForge", description: "A shared home for clear software requirements." };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

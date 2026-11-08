@@ -1,3 +1,4 @@
+import { setDueDate } from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localFixture } from "../local.fixture";
@@ -33,7 +34,7 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
     expect(Math.abs(bannerBox.x - cardBox.x - 1)).toBeLessThanOrEqual(2);
     expect(Math.abs(bannerBox.width - cardBox.width + 2)).toBeLessThanOrEqual(2);
     await expect(page.getByRole("link", { name: "Back to requests", exact: true }).locator("svg")).toHaveAttribute("aria-hidden", "true");
-    await expect(page.getByLabel("Delivery status", { exact: true })).toHaveValue("to_do");
+    await expect(page.getByLabel("Delivery status", { exact: true })).toHaveText("To do");
     await expect(page.getByLabel("Delivery status", { exact: true })).toBeDisabled();
     await expect(page.getByRole("heading", { name: "Remember filters", exact: true })).toHaveCount(0);
     await expect(page.getByText(/^SF-\d+$/)).toHaveCount(0);
@@ -82,7 +83,7 @@ test("a new ticket is editable with AI collapsed and a Developer reads the same 
     await page.getByLabel("Title", { exact: true }).fill("Write the ticket directly");
     await page.getByLabel("Description", { exact: true }).fill("The main editor stays available without AI.");
     await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
-    await page.getByLabel("Due date", { exact: true }).fill("2026-12-20");
+    await setDueDate(page, "2026-12-20");
     await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
     let release!: () => void; const hold = new Promise<void>(resolve => { release = resolve; });
     let started!: () => void; const captured = new Promise<void>(resolve => { started = resolve; });

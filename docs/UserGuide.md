@@ -43,7 +43,7 @@ Select an organisation to manage it. Admins can use **Invite by registered
 email** for an existing account. The invitation appears under **Your invitations**
 in that account's workspace; no invitation email is sent. Addresses are matched
 without case sensitivity. Sending shows a generic result; check outgoing
-invitations to see eligible recipients. There is no account directory.
+invitations to see eligible recipients. There is no global account directory.
 
 Recipients must verify their account, then choose **Accept** or **Decline**.
 Accepting grants ordinary membership, never admin access. Invitations expire
@@ -78,9 +78,11 @@ expands the author and saved timestamps. Reader views show it below Refresh save
 request, before team discussion.
 
 Beneath the title, the author sets a date-only **Due date**, **Priority**
-(Low, Medium, High or Urgent), and zero to five assignees. Open **Assignees** to
-search current members by account ID or role. Either PMs or Developers can be
-assigned; no email directory is exposed. All draft fields autosave privately.
+(Low, Medium or High), and zero to five assignees. Click the **Assignees** box and
+start typing an email. Matching current organisation members appear in a
+scrollable list; click a suggestion or use the arrow keys and Enter to select it.
+Use Escape to close suggestions and the × beside an email to remove it. Either
+PMs or Developers can be assigned. Search your own email to assign yourself. All draft fields autosave privately.
 **Publish** publishes the whole ticket, including delivery details. Due date is optional and can be cleared after
 publication. After publication, **Update** saves text and delivery edits together. Existing published tickets without a deadline remain unscheduled
 until their author sets one. A departed member is unassigned automatically;
@@ -236,3 +238,16 @@ Ticket lists use 50-item pages with **Load more tickets**. No hosted application
 
 Online ordinary signup will require configured SMTP delivery. Planned generated
 demo accounts will bypass email delivery, but are not provisioned in this slice.
+
+Priority appears as a colored pill: **Low** is yellow, **Medium** orange, and
+**High** red. Existing Urgent tickets become High. Click the priority or delivery
+status pill to choose a value; use arrow keys and Enter, or Escape to dismiss.
+Status colors are gray (To do/Cancelled), blue (In progress), purple (In review),
+and green (Done). Read-only tickets and request-list badges use the same pills.
+
+Click **Due date** to open the purple calendar. Choose a day, navigate with the
+month/year controls, or enter **Exact date** as YYYY-MM-DD and select **Apply
+date**. **Today** selects your local calendar day; **Clear date** leaves the
+ticket Unscheduled. Escape or clicking outside dismisses the calendar without
+applying pending text. Use arrow keys to move between days and Enter to select.
+Draft changes autosave; published changes still require **Update**.
