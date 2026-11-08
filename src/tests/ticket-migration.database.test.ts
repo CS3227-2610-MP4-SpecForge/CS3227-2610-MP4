@@ -38,10 +38,8 @@ it.skipIf(process.env.SPECFORGE_TICKET_MIGRATION_TEST !== "1")("migrates existin
         select organisation_id into org from public.feature_requests limit 1;
         draft := public.create_request(org,gen_random_uuid());
         if draft->>'ticket_number' <> '3' then raise exception 'Counter not continued'; end if;
-        begin
-          perform public.publish_request(org,(draft->>'id')::uuid,1,'{"title":"New work","description":"Must schedule"}',true,true);
-          raise exception 'Missing deadline accepted';
-        exception when sqlstate '22023' then null; end;
+        perform public.publish_request(org,(draft->>'id')::uuid,1,'{"title":"New work","description":"Optional schedule"}',true,true);
+        if (select due_date from public.feature_requests where id = (draft->>'id')::uuid) is not null then raise exception 'Invented deadline'; end if;
       end$$;
       select 'migration-ok';`);
     expect(result).toContain("migration-ok");

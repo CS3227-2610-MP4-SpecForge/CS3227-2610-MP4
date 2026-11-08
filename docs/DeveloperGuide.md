@@ -96,8 +96,9 @@ for an already-running database.
 The approved [ticket delivery spec](../workflow/specs/2026-11-08-ticket-delivery.md)
 adds typed metadata outside `{title, description}`: `ticket_number`, `due_date`,
 `priority`, `status`, `assignee_ids`, and independent `delivery_revision`.
-New publication requires a due date; existing published records are preserved
-with null deadlines. Additive migrations assign organisation-scoped numbers in
+Due dates are optional for drafts and published records; supplied dates remain
+validated. The additive optional-date migration removes both the first-publication
+trigger and the published-date-clearing restriction. Additive migrations assign organisation-scoped numbers in
 creation order without changing existing content revisions or timestamps.
 
 - `GET /api/organisations/[org]/requests` now uses `list_ticket_page`: 50 entries,
@@ -134,9 +135,88 @@ Focused checks: `node src/tooling/test-local.mjs delivery`,
 and `node src/tooling/test-local.mjs ticket-migration`. The last creates and drops
 one uniquely named throwaway database inside `supabase_db_specforge`, replays all
 migrations with minimal Auth compatibility fixtures, and checks legacy data,
-reference counters and new-deadline enforcement. Real Auth/RLS is exercised by
+reference counters and optional publication dates. Real Auth/RLS is exercised by
 ordinary integration tests. It does not reset the app database or contact hosted
 services. Run generated-type/build checks sequentially with browser checks.
+
+## Ticket layout and AI sidebar
+
+The approved [layout spec](../workflow/specs/2026-11-08-ticket-layout.md) removes
+visible ticket references and the duplicated author-page title heading. Internal
+numbers, routes and compatible search/storage interfaces remain unchanged.
+`TicketDeliveryFields` renders compact fields below Title; `CopyTicketLink` lives in
+the compact navigation row. Storage keeps separate delivery/content revision
+checks; the author UI coordinates one whole-ticket save. `TicketDeliveryFields` is controlled by
+the author editor; `TicketDelivery` handles assigned-reader status edits. The
+Title and due-date inputs associate with the ticket form by native `form`
+attributes. Title/description required validation runs on Publish; due date is
+optional. Incomplete draft
+autosaves bypass form validation. Whitespace/limit failures show on-demand
+validation. Idle Publish is clickable; busy or conflicted actions remain blocked.
+
+`ChatPanel` retains its existing request/retry state and owns a two-column layout:
+main ticket content plus a collapsible, initially open AI sidebar. Header and
+review slots let the editor supply its existing controls without duplicating AI
+state. Drafting, writing tools, undo and suggestion review all render inside the
+sidebar. The main editor is always available on empty drafts. Typing a title
+ends first-draft mode so an in-flight draft cannot overwrite manual title entry.
+Collapsing uses `hidden`, preserving the mounted conversation and instruction.
+The layout move preserves provider behaviour and permissions. The whole-ticket
+save contract extension is described below.
+
+Focused browser check:
+`SPECFORGE_BROWSER_ORIGIN=http://localhost:3001 node src/tooling/test-local.mjs layout-browser`.
+Browser modes also accept an optional test-name regex as a final argument, e.g.
+`node src/tooling/test-local.mjs requests-browser "a lost first-draft response"`.
+The layout check covers field/tool placement, hidden references, collapse persistence, sidebar
+review, new-draft manual writing and the Developer layout. Existing browser
+freshness, retry and in-flight-edit regressions remain in the full suite.
+
+## Ticket visibility banner and icons
+
+The approved [visibility spec](../workflow/specs/2026-11-08-ticket-visibility-banner.md)
+adds `TicketVisibility` directly along the top inside edge of the left ticket
+card, above Title. Navigation remains above the card, with a shared Lucide
+ArrowLeft on Back to requests. Responsive card padding keeps the banner flush
+without clipping the ticket editor. `RequestScreen`
+loads the organisation name from the existing authorized organisation GET; no
+banner is rendered until ticket, account and organisation have loaded. Reader
+and author views share the same banner; author visibility follows saved state,
+including recovery after an ambiguous Publish. Local published edits do not
+change the banner. The old publication badge is removed. The native collapsed About this ticket
+section shows metadata at the bottom of the ticket card, beneath author actions
+or the reader refresh action and before team discussion.
+
+Draft delivery status is a disabled To do select, distinct from visibility.
+Status permissions after publication remain unchanged. `lucide-react` is pinned
+to 1.70.0 (ISC), with named static Lock/Eye imports, decorative aria-hidden SVGs
+and shared `.ui-icon` size/stroke tokens. Use the same library/style for future
+icons; no runtime CDN/network fetching. Purple banner styles reuse theme tokens
+and wrap long organisation names. Layout browser tests cover delayed/lost
+publication, author/member parity, mobile wrapping, failed name loading and safe
+text rendering. No database or permission changes.
+
+## Whole-ticket Publish and Update
+
+The approved [whole-ticket spec](../workflow/specs/2026-11-08-ticket-autosave.md)
+supersedes separate delivery saves. Author drafts autosave all editable fields;
+Publish and Update save the whole ticket. Published metadata remains local until
+Update. Publish/Update are direct explicit actions without an acknowledgement
+checkbox. They send the legacy `acknowledged: true` compatibility field; server
+validation, permissions and atomic persistence are unchanged.
+
+Content mutation HTTP actions accept optional `delivery: {revision, changes}`.
+When supplied, `save_ticket` locks the authored request, checks both revisions,
+then composes existing `update_delivery` and `save_draft`/`publish_request` in one
+transaction. Validation or conflicts roll back all writes and activity. Empty
+changes still check delivery revision. Legacy calls remain compatible; assigned
+readers retain the status-only delivery endpoint with an Update button.
+
+The author editor owns delivery state and navigation protection alongside text.
+Its lost-response check compares content, publication state, delivery values and
+both expected revisions before reporting success. Recovery controls appear only
+after failures. Apply `20261108015000_whole_ticket_saves.sql` using the local
+additive migration command before testing. No hosted migration has been applied.
 
 ## Two-field tasks and private AI chat
 

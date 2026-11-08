@@ -63,27 +63,39 @@ attempts per hour per organisation, including unknown addresses and duplicates.
 
 ## Ticket delivery and team discussion
 
-Each ticket has a stable organisation-scoped reference such as **SF-42** and a
-**Copy ticket link** action. References can have gaps. Links still require current
-organisation membership; drafts remain private even when someone is assigned.
+A purple visibility banner runs along the top edge of the ticket panel, above
+the title. **Back to requests** has a left-arrow icon. A lock with **This task is
+private and unpublished** means only its author can read it. After publication,
+an eye with **This task is visible to members of the [organisation name]
+organisation** describes the saved ticket's audience. Unsaved published edits
+keep this banner because members still see the last saved version.
 
-The author uses **Delivery details** to set a date-only **Due date**, **Priority**
+The title appears once at the top of the ticket. Delivery fields sit beneath
+it, followed by Description and team discussion/activity. Use **Copy ticket
+link** to share the page. Links still require current organisation membership;
+drafts remain private even when someone is assigned. **About this ticket**, at the bottom of the ticket panel below Publish/Update,
+expands the author and saved timestamps. Reader views show it below Refresh saved
+request, before team discussion.
+
+Beneath the title, the author sets a date-only **Due date**, **Priority**
 (Low, Medium, High or Urgent), and zero to five assignees. Open **Assignees** to
 search current members by account ID or role. Either PMs or Developers can be
-assigned; no email directory is exposed. Use **Save delivery details** explicitly:
-these fields save independently of ticket text. Save a deadline before first
-publication. Existing published tickets without a deadline remain unscheduled
+assigned; no email directory is exposed. All draft fields autosave privately.
+**Publish** publishes the whole ticket, including delivery details. Due date is optional and can be cleared after
+publication. After publication, **Update** saves text and delivery edits together. Existing published tickets without a deadline remain unscheduled
 until their author sets one. A departed member is unassigned automatically;
 rejoining does not restore old assignments.
 
-Published tickets have a **Delivery status**: To do, In progress, In review, Done
+Drafts show a disabled **To do** delivery status. This describes progress; the
+visibility banner describes who can read the ticket. Published tickets have a
+**Delivery status**: To do, In progress, In review, Done
 or Cancelled. The author and current assignees can change it, including reopening
 completed work. Only the author changes scheduling, priority and assignments.
 Other members can read and comment. Draft/publication state remains separate from
 delivery status. Overdue and due-today indicators use your browser's local date;
 Done and Cancelled tickets are excluded from overdue work.
 
-The request list supports title/reference search, status, priority and assignee
+The request list supports title search, status, priority and assignee
 filters, including **Assigned to me**, **Unassigned** and **Overdue only**. Choose
 recently updated or due-date sorting, then **Apply filters**. Filters run across
 all visible tickets; **Load more tickets** fetches another page. Refresh after
@@ -99,8 +111,9 @@ a new attempt. **Load older activity** reads another 50 entries.
 Activity records publication, requirements edits and delivery changes with actor
 and time. It does not include old description text, private draft changes or AI
 conversations. Existing changes from before this feature have no backfilled
-activity. On a delivery conflict, your local input remains visible; use **Reload
-delivery details** to discard those edits and load current values before retrying.
+activity. On a save conflict, your local input remains visible. Authors can use
+**Reload saved version and discard edits**; assigned readers can use **Reload
+delivery details**. These recovery controls appear only when needed.
 
 ## Tasks and AI chat
 
@@ -110,16 +123,19 @@ private drafts; current members read submitted tasks. There are two task fields:
 Description is free-form Markdown; headings are optional. Existing requests keep
 their title and all old section contents under description headings.
 
-New drafts start with **What needs to change?** Write a rough idea and choose
-**Draft ticket**, or choose **Start manually** to write the title and description
-yourself. Rough ideas autosave privately. A fresh AI draft fills the editor and
+New drafts show editable **Title** and **Description** immediately. Write
+directly, or use **What needs to change?** in the right AI panel and choose
+**Draft ticket**. **Start manually** dismisses the starter and focuses Title;
+typing a title also switches to manual writing. Rough ideas autosave privately. A fresh AI draft fills the editor and
 has **Undo AI draft** during the current editing session while its generated
 content is unchanged. AI never publishes
 for you; failed, stale or recovered generations require review instead.
 
-The ticket occupies the main workspace. **Discuss with AI** opens or collapses a
-private discussion panel; on phones it appears below the editor. Collapsing keeps
-your conversation and typed instruction. Chat is private to the original PM
+The ticket occupies the main workspace. The right AI panel starts open and
+contains drafting tools, private discussion, suggestions and undo. Use **Hide AI
+assistant** or **Show AI assistant** to collapse or reopen it; on phones it
+appears beneath the ticket. Collapsing keeps your conversation, typed instruction
+and pending suggestion. Chat is private to the original PM
 author, including from admins and after publication.
 
 Use **Improve clarity**, **Add acceptance criteria**, or **Find missing details**
@@ -141,24 +157,26 @@ accompanying message; the app displays “Review these suggested ticket changes.
 Extra response fields are ignored. Incomplete ticket suggestions still fail safely
 rather than replacing either field with partial content.
 
-AI edits appear as **Suggested ticket changes** in the editor, with removed/added
+AI edits appear as **Suggested ticket changes** in the AI panel, with removed/added
 text. Choose **Accept changes** or **Discard**. Conversational proposals have a
 **Review ticket changes** action to open the same review. Acceptance replaces the
-reviewed fields locally and clears acknowledgement. Editing during generation or
+reviewed fields locally. Editing during generation or
 another saved revision makes suggestions outdated; your writing is preserved.
 Recovered or historical AI drafts never automatically replace the editor.
 
-Drafts autosave750ms after a pause. Accepting AI changes in a draft follows that
-same autosave. Submission requires a nonempty title/description, acknowledgement
-and **Submit request**. Published edits, including accepted AI changes, remain local
-until acknowledged **Save changes**. Readers see only the last saved task.
+All draft fields autosave750ms after a pause. Accepting AI changes in a draft
+follows that same autosave. **Publish** requires a nonempty title/description and publishes all ticket
+fields together. Due date and assignees are optional. Published
+edits, including delivery details and accepted AI changes, remain local until
+**Update**. Readers see only the last saved ticket. If required fields are missing, clicking
+**Publish** focuses the missing field and shows validation.
 Only the original PM author can edit ticket requirements; assigned Developers can update delivery status. Admin status grants no additional ticket-editing rights.
 
 **Delete draft** asks confirmation; submitted tasks cannot be deleted. Leaving
 or removal ends access; submitted work remains visible to members and rejoining
 restores author access. Dates and stable author-account IDs remain visible.
 
-On task save failure, local text is preserved and automatic saving stops. Use
+On ticket save failure, local text and delivery edits are preserved and automatic saving stops. Use
 **Check saved version** before retrying, or explicitly reload/discard after a
 conflict. New-draft retries use the same creation key to avoid duplicates.
 

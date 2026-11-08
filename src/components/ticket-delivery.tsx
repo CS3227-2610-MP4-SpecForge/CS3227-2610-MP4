@@ -15,6 +15,12 @@ export function TicketDelivery({ item, accountId, path, onSaved }: { item: Featu
   const published = Boolean(item.submitted_at);
   const canStatus = published && (author || saved.assignee_ids.includes(accountId));
   const dirty = dueDate !== (saved.due_date ?? "") || priority !== saved.priority || status !== saved.status || JSON.stringify(assigned) !== JSON.stringify(saved.assignee_ids);
+  // Adopt a refreshed snapshot only while clean; pending status edits retain
+  // their original revision so concurrent writes still produce a conflict.
+  if (!dirty && !busy && item.delivery_revision > saved.delivery_revision) {
+    setSaved(item); setDueDate(item.due_date ?? ""); setPriority(item.priority);
+    setStatus(item.status); setAssigned(item.assignee_ids);
+  }
   useEffect(() => {
     if (!dirty && !busy) return;
     const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -40,24 +46,43 @@ export function TicketDelivery({ item, accountId, path, onSaved }: { item: Featu
     try { adopt((await api(path)).request); setBlocked(false); setError(""); setMessage("Saved delivery details loaded."); }
     catch (failure) { setError(failureMessage(failure)); } finally { operation.current = false; setBusy(false); }
   }
-  async function copyLink() {
-    try { await navigator.clipboard.writeText(window.location.href); setMessage("Ticket link copied."); }
-    catch { setError("Could not copy the link. Copy this page’s address from your browser."); }
-  }
-  return <aside className="card stack delivery-panel" aria-label="Ticket delivery details">
-    <div className="section-title"><h2>SF-{saved.ticket_number}</h2><Button type="button" className="secondary" onClick={copyLink}>Copy ticket link</Button></div>
-    <div className="ticket-badges"><span className="badge">{published ? ticketStatuses[saved.status] : "Private draft"}</span><span className="badge">{ticketPriorities[saved.priority]} priority</span><span>{deadlineLabel({ ...saved, submitted_at: item.submitted_at })}</span></div>
+  return <div className="stack">
     {error && <Notice danger>{error}</Notice>}{message && <Notice>{message}</Notice>}
-    {author || canStatus ? <form className="stack" onSubmit={event => { event.preventDefault(); void save(); }}>
-      {author && <>
-        <div className="delivery-fields"><Field id="ticket-due" label="Due date" type="date" min="0001-01-01" max="9999-12-31" value={dueDate} disabled={busy || blocked} onChange={event => setDueDate(event.target.value)} hint={published ? "Published tickets need a deadline." : "Save a deadline before publishing."} />
-        <div className="field"><label htmlFor="ticket-priority">Priority</label><select id="ticket-priority" value={priority} disabled={busy || blocked} onChange={event => setPriority(event.target.value as TicketPriority)}>{Object.entries(ticketPriorities).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div></div>
-        <details><summary>Assignees ({assigned.length}/5)</summary><Button type="button" className="secondary" disabled={busy || blocked || assigned.length >= 5 || assigned.includes(accountId)} onClick={() => setAssigned(current => [...current, accountId])}>Assign me</Button><TicketMembers organisationId={item.organisation_id} selected={assigned} onChange={setAssigned} disabled={busy || blocked} /></details>
-      </>}
-      {canStatus && <div className="field"><label htmlFor="ticket-status">Delivery status</label><select id="ticket-status" value={status} disabled={busy || blocked} onChange={event => setStatus(event.target.value as TicketStatus)}>{Object.entries(ticketStatuses).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div>}
-      <p className="hint">{dirty ? "Unsaved delivery changes." : "Delivery details are saved separately from ticket text."}</p>
-      <div className="actions"><Button disabled={busy || blocked || !dirty}>Save delivery details</Button><Button type="button" className="secondary" disabled={busy} onClick={reload}>Reload delivery details</Button></div>
-    </form> : <><p>Assignees: {saved.assignee_ids.length ? saved.assignee_ids.join(", ") : "Unassigned"}</p><Button type="button" className="secondary" disabled={busy} onClick={reload}>Refresh delivery details</Button></>}
-    {canStatus && !author && <p className="hint">Assigned accounts: {saved.assignee_ids.join(", ")}</p>}
-  </aside>;
+    {author || canStatus ? <form className="stack" aria-label="Delivery fields" onSubmit={event => { event.preventDefault(); void save(); }}>
+      <TicketDeliveryFields item={item} accountId={accountId} value={{ ...saved, due_date: dueDate || null, priority, status, assignee_ids: assigned }} disabled={busy || blocked} onChange={value => { setDueDate(value.due_date ?? ""); setPriority(value.priority); setStatus(value.status); setAssigned(value.assignee_ids); }} />
+      <p className="hint">{dirty ? "Unsaved delivery changes." : ""}</p>
+      <div className="actions"><Button disabled={busy || blocked || !dirty}>Update</Button>{error && <Button type="button" className="secondary" disabled={busy} onClick={reload}>Reload delivery details</Button>}</div>
+    </form> : <section className="delivery-fields-section" aria-label="Ticket delivery details">
+      <dl className="delivery-fields read-only-fields"><div><dt>Delivery status</dt><dd>{published ? ticketStatuses[saved.status] : ticketStatuses.to_do}</dd></div><div><dt>Priority</dt><dd>{ticketPriorities[saved.priority]}</dd></div><div><dt>Due date</dt><dd>{deadlineLabel({ ...saved, submitted_at: item.submitted_at })}</dd></div><div><dt>Assignees</dt><dd>{saved.assignee_ids.length ? saved.assignee_ids.join(", ") : "Unassigned"}</dd></div></dl>
+    </section>}
+  </div>;
+}
+
+export function TicketDeliveryFields({ item, accountId, value, disabled, onChange, formId }: { item: FeatureRequest; accountId: string; value: Delivery; formId?: string; disabled: boolean; onChange: (value: Delivery) => void }) {
+  const author = item.author_id === accountId;
+  const published = Boolean(item.submitted_at);
+  const canStatus = published && (author || item.assignee_ids.includes(accountId));
+  return <section className="stack delivery-fields-section" aria-label="Ticket delivery details">
+      <div className="delivery-fields">
+        <div className="field">{canStatus || !published ? <label htmlFor="ticket-status">Delivery status</label> : <span className="field-label">Delivery status</span>}{canStatus || !published
+          ? <select id="ticket-status" value={published ? value.status : "to_do"} disabled={disabled || !canStatus} onChange={event => onChange({ ...value, status: event.target.value as TicketStatus })}>{Object.entries(ticketStatuses).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
+          : <span className="field-value">{published ? ticketStatuses[value.status] : ticketStatuses.to_do}</span>}</div>
+        <div className="field">{author ? <label htmlFor="ticket-priority">Priority</label> : <span className="field-label">Priority</span>}{author
+          ? <select id="ticket-priority" value={value.priority} disabled={disabled} onChange={event => onChange({ ...value, priority: event.target.value as TicketPriority })}>{Object.entries(ticketPriorities).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
+          : <span className="field-value">{ticketPriorities[value.priority]}</span>}</div>
+        {author ? <Field id="ticket-due" label="Due date" form={formId} type="date" min="0001-01-01" max="9999-12-31" value={(value.due_date ?? "")} disabled={disabled} onChange={event => onChange({ ...value, due_date: event.target.value || null })} />
+          : <div className="field"><span className="field-label">Due date</span><span className="field-value">{deadlineLabel({ ...value, submitted_at: item.submitted_at })}</span></div>}
+      </div>
+      {author ? <details className="assignee-field"><summary>Assignees ({value.assignee_ids.length}/5)</summary><p className="hint">{value.assignee_ids.length ? value.assignee_ids.join(", ") : "Unassigned"}</p><Button type="button" className="secondary" disabled={disabled || value.assignee_ids.length >= 5 || value.assignee_ids.includes(accountId)} onClick={() => onChange({ ...value, assignee_ids: [...value.assignee_ids, accountId] })}>Assign me</Button><TicketMembers organisationId={item.organisation_id} selected={value.assignee_ids} onChange={assignee_ids => onChange({ ...value, assignee_ids })} disabled={disabled} /></details>
+        : <p className="hint">Assigned accounts: {value.assignee_ids.join(", ")}</p>}
+  </section>;
+}
+
+export function CopyTicketLink() {
+  const [message, setMessage] = useState("");
+  async function copy() {
+    try { await navigator.clipboard.writeText(window.location.href); setMessage("Ticket link copied."); }
+    catch { setMessage("Could not copy the link. Copy this page’s address from your browser."); }
+  }
+  return <div className="copy-ticket-link"><Button type="button" className="secondary" onClick={copy}>Copy ticket link</Button>{message && <span className="hint" role="status">{message}</span>}</div>;
 }

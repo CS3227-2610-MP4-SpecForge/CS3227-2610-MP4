@@ -7,6 +7,15 @@ export function deliveryOf(item: Delivery): Delivery {
   const { ticket_number, delivery_revision, due_date, priority, status, assignee_ids } = item;
   return { ticket_number, delivery_revision, due_date, priority, status, assignee_ids };
 }
+export function deliveryChanges(next: Delivery, saved: Delivery) {
+  const changes: Partial<Pick<Delivery, "due_date" | "priority" | "status" | "assignee_ids">> = {};
+  if (next.due_date !== saved.due_date) changes.due_date = next.due_date;
+  if (next.priority !== saved.priority) changes.priority = next.priority;
+  if (next.status !== saved.status) changes.status = next.status;
+  if (JSON.stringify(next.assignee_ids) !== JSON.stringify(saved.assignee_ids)) changes.assignee_ids = next.assignee_ids;
+  return changes;
+}
+export function sameDelivery(a: Delivery, b: Delivery) { return Object.keys(deliveryChanges(a, b)).length === 0; }
 export type TicketMember = { user_id: string; app_role: "PM" | "Developer" };
 export type TicketActivity = { id: string; request_id: string; actor_id: string | null; kind: "published" | "delivery_updated" | "requirements_updated" | "comment"; body: string | null; changes: Record<string, { from: unknown; to: unknown }>; created_at: string };
 export function localDay(now = new Date()) { return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`; }

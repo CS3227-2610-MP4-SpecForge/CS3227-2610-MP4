@@ -25,7 +25,10 @@ organisation workflow, including invitations and membership/admin management, pl
 lifecycle (private drafts, publication and author-only editing), a two-field
 Markdown task editor, ticket-first AI drafting/inline suggestions and collapsible private SoC discussion.
 Tickets also support due dates, up to five assignees, delivery status/priority,
-organisation-scoped references, filtered/paged lists, shared comments and activity.
+internally stored organisation-scoped references, filtered/paged lists, shared
+comments and activity. Ticket fields sit beneath the editable title; AI tools,
+discussion and suggestion review occupy a collapsible right panel. Ticket
+references are hidden from the user interface.
 Read `docs/DeveloperGuide.md` for setup/check commands.
 PM AI reliability/provider-wide quotas and hosted deployment remain unverified;
 the partner-owned Developer AI remains unfinished.

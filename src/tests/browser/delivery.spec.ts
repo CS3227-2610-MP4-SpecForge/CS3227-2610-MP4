@@ -7,6 +7,42 @@ async function login(page: Page, actor: { email: string; password: string }) {
   await page.getByLabel("Password", { exact: true }).fill(actor.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click(); await expect(page).toHaveURL(/\/workspace$/);
 }
+test("one ticket action publishes and updates text and delivery together", async ({ page }) => {
+  const fixture = localFixture(); const pm = await fixture.actor("PM");
+  const org = (await pm.client.rpc("create_organisation", { organisation_name: "Whole ticket browser" })).data;
+  const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+  try {
+    await login(page, pm); await page.goto(`/organisations/${org}/requests/${draft.id}`);
+    await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
+    await expect(page.getByText("All draft fields autosave privately after a short pause.", { exact: false })).toHaveCount(0);
+    await expect(page.getByLabel("I acknowledge the assumptions and unresolved questions.")).toHaveCount(0);
+    await page.getByLabel("Title", { exact: true }).fill("Publish everything");
+    await page.getByLabel("Description", { exact: true }).fill("Private text and scheduling");
+    await page.getByLabel("Due date", { exact: true }).fill("2026-12-20");
+    await page.getByLabel("Priority", { exact: true }).selectOption("high");
+    await expect(page.getByRole("button", { name: "Save delivery details", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel("Due date", { exact: true })).toHaveValue("2026-12-20");
+    await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Publish everything");
+    await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toHaveText("This task is private and unpublished");
+    // Publish must include delivery changes made just before clicking.
+    await page.getByLabel("Priority", { exact: true }).selectOption("urgent");
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Update", exact: true })).toBeVisible();
+    await page.getByLabel("Title", { exact: true }).fill("Updated everything");
+    await page.getByLabel("Due date", { exact: true }).fill("2026-12-25");
+    await page.waitForTimeout(1000);
+    const before = (await pm.client.rpc("read_request", { target_org: org, request_id: draft.id })).data;
+    expect(before.fields.title).toBe("Publish everything"); expect(before.due_date).toBe("2026-12-20");
+    await page.getByRole("button", { name: "Update", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Updated everything");
+    await expect(page.getByLabel("Due date", { exact: true })).toHaveValue("2026-12-25");
+  } finally { await fixture.cleanup(); }
+});
+
 test("author schedules work; assignee updates status and comments; list filters and mobile details work", async ({ page, browser }) => {
   const fixture = localFixture(); const pm = await fixture.actor("PM"); const dev = await fixture.actor("Developer");
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Delivery workspace" })).data;
@@ -21,15 +57,13 @@ test("author schedules work; assignee updates status and comments; list filters 
     await page.getByLabel("Priority", { exact: true }).selectOption("high");
     await page.getByText("Assignees (0/5)", { exact: true }).click();
     await page.getByLabel(`Assign ${dev.id}`, { exact: true }).check();
-    await page.getByRole("button", { name: "Save delivery details", exact: true }).click();
-    await expect(page.getByText("Delivery details saved.", { exact: true })).toBeVisible();
-    await page.getByLabel("I acknowledge the assumptions and unresolved questions.").check();
-    await page.getByRole("button", { name: "Submit request", exact: true }).click();
-    await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toContainText("This task is visible to members of the");
     await login(reader, dev); await reader.goto(`/organisations/${org}/requests/${draft.id}`);
     await expect(reader.getByLabel("Due date", { exact: true })).toHaveCount(0);
     await reader.getByLabel("Delivery status", { exact: true }).selectOption("in_progress");
-    await reader.getByRole("button", { name: "Save delivery details", exact: true }).click();
+    await reader.getByRole("button", { name: "Update", exact: true }).click();
     await expect(reader.getByText("Delivery details saved.", { exact: true })).toBeVisible();
     await reader.getByLabel("Comment", { exact: true }).fill("<script>window.ticketInjected = true</script>");
     await reader.getByRole("button", { name: "Post comment", exact: true }).click();
@@ -60,14 +94,14 @@ test("delivery conflicts preserve edits and a lost comment response retries with
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests/${draft.id}`);
     await page.getByLabel("Priority", { exact: true }).focus(); await page.keyboard.press("Tab");
-    await expect(page.getByText("Assignees (0/5)", { exact: true })).toBeFocused();
+    await expect(page.getByLabel("Due date", { exact: true })).toBeFocused();
     await pm.client.rpc("update_delivery", { ...args, expected_revision: 2, changes: { priority: "urgent" } });
     await page.getByLabel("Due date", { exact: true }).fill("2026-12-25");
-    await page.getByRole("button", { name: "Save delivery details", exact: true }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "saved ticket changed" })).toBeVisible();
+    await page.getByRole("button", { name: "Update", exact: true }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "saved request changed" })).toBeVisible();
     await expect(page.getByLabel("Due date", { exact: true })).toHaveValue("2026-12-25");
     page.once("dialog", dialog => dialog.accept());
-    await page.getByRole("button", { name: "Reload delivery details", exact: true }).click();
+    await page.getByRole("button", { name: "Reload saved version and discard edits", exact: true }).click();
     await expect(page.getByLabel("Priority", { exact: true })).toHaveValue("urgent");
     await expect(page.getByLabel("Due date", { exact: true })).toHaveValue("2026-12-20");
     let dropped = false;
@@ -87,7 +121,7 @@ test("delivery conflicts preserve edits and a lost comment response retries with
   } finally { await fixture.cleanup(); }
 });
 
-test("a delayed text autosave response cannot roll back a separately saved deadline", async ({ page }) => {
+test("delivery edits made during an autosave are saved by the next autosave", async ({ page }) => {
   const fixture = localFixture(); const pm = await fixture.actor("PM");
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Independent saves" })).data;
   const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
@@ -103,11 +137,10 @@ test("a delayed text autosave response cannot roll back a separately saved deadl
     });
     await page.getByLabel("Description", { exact: true }).fill("New text while scheduling"); await captured;
     await page.getByLabel("Due date", { exact: true }).fill("2026-12-20");
-    await page.getByRole("button", { name: "Save delivery details", exact: true }).click();
-    await expect(page.getByText("Delivery details saved.", { exact: true })).toBeVisible();
     release(); await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
-    await page.getByLabel("I acknowledge the assumptions and unresolved questions.").check();
-    await expect(page.getByRole("button", { name: "Submit request", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
+    await page.reload();
+    await expect(page.getByLabel("Due date", { exact: true })).toHaveValue("2026-12-20");
   } finally { release?.(); await fixture.cleanup(); }
 });
 
@@ -185,4 +218,88 @@ test("posting during an older activity read retains a complete, duplicate-free f
     await expect(page.locator(".activity-entry")).toHaveCount(53);
     await expect(page.getByText("Published this ticket", { exact: true })).toHaveCount(1);
   } finally { release?.(); await fixture.cleanup(); }
+});
+
+test("reader refresh loads new delivery details without losing a pending status edit", async ({ page }) => {
+  const fixture = localFixture(); const pm = await fixture.actor("PM"); const dev = await fixture.actor("Developer");
+  const org = (await pm.client.rpc("create_organisation", { organisation_name: "Delivery refresh" })).data;
+  await pm.client.rpc("invite_member", { target_org: org, target_email: dev.email });
+  await dev.client.rpc("respond_invitation", { invitation_id: (await dev.client.rpc("list_invitations")).data[0].id, decision: "accept" });
+  const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+  const args = { target_org: org, request_id: draft.id };
+  await pm.client.rpc("save_ticket", { ...args, expected_revision: 1, expected_delivery_revision: 1,
+    content: { title: "Refresh delivery", description: "Read the current schedule" }, delivery_changes: { due_date: "2026-12-20", assignee_ids: [dev.id] }, action: "submit", acknowledged: true });
+  try {
+    await login(page, dev); await page.goto(`/organisations/${org}/requests/${draft.id}`);
+    await expect(page.getByText("Medium", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Delivery status", { exact: true })).toHaveValue("to_do");
+    await pm.client.rpc("update_delivery", { ...args, expected_revision: 2, changes: { priority: "urgent", due_date: "2026-12-25" } });
+    await page.getByRole("button", { name: "Refresh saved request", exact: true }).click();
+    await expect(page.getByText("Urgent", { exact: true })).toBeVisible();
+    await expect(page.getByText("2026-12-25", { exact: true })).toBeVisible();
+    await page.getByLabel("Delivery status", { exact: true }).selectOption("in_review");
+    await pm.client.rpc("update_delivery", { ...args, expected_revision: 3, changes: { priority: "low" } });
+    await page.getByRole("button", { name: "Refresh saved request", exact: true }).click();
+    await expect(page.getByLabel("Delivery status", { exact: true })).toHaveValue("in_review");
+  } finally { await fixture.cleanup(); }
+});
+
+test("a failed Update preserves editable metadata and a lost response confirms the whole ticket", async ({ page }) => {
+  const fixture = localFixture(); const pm = await fixture.actor("PM");
+  const org = (await pm.client.rpc("create_organisation", { organisation_name: "Update recovery" })).data;
+  const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+  await pm.client.rpc("save_ticket", { target_org: org, request_id: draft.id, expected_revision: 1, expected_delivery_revision: 1,
+    content: { title: "Correct scheduling", description: "Keep local edits" }, delivery_changes: { due_date: "2026-12-20" }, action: "submit", acknowledged: true });
+  try {
+    await login(page, pm); await page.goto(`/organisations/${org}/requests/${draft.id}`);
+    let fail = true;
+    await page.route(`**/api/organisations/${org}/requests/${draft.id}`, async route => {
+      if (route.request().method() === "POST" && fail) {
+        fail = false; await route.fulfill({ status: 503, json: { error: "Temporary save failure" } });
+      } else await route.continue();
+    });
+    await page.getByLabel("Title", { exact: true }).fill("Keep corrected scheduling");
+    await page.getByLabel("Due date", { exact: true }).fill("");
+    await page.getByRole("button", { name: "Update", exact: true }).click();
+    await page.getByRole("button", { name: "Check saved version", exact: true }).click();
+    await expect(page.getByText(/The saved version is unchanged/)).toBeVisible();
+    await expect(page.getByLabel("Due date", { exact: true })).toBeEnabled();
+    await page.getByLabel("Due date", { exact: true }).fill("2026-12-25");
+    await page.route(`**/api/organisations/${org}/requests/${draft.id}`, async route => {
+      if (route.request().method() === "POST") { await route.fetch(); await route.abort("failed"); }
+      else await route.continue();
+    });
+    await page.getByRole("button", { name: "Update", exact: true }).click();
+    await page.getByRole("button", { name: "Check saved version", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Keep corrected scheduling");
+    await expect(page.getByLabel("Due date", { exact: true })).toHaveValue("2026-12-25");
+  } finally { await fixture.cleanup(); }
+});
+
+
+test("Publish allows an unscheduled ticket and Update can remove its due date", async ({ page }) => {
+  const fixture = localFixture(); const pm = await fixture.actor("PM");
+  const org = (await pm.client.rpc("create_organisation", { organisation_name: "Unscheduled browser" })).data;
+  const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+  try {
+    await login(page, pm); await page.goto(`/organisations/${org}/requests/${draft.id}`);
+    await page.getByLabel("Title", { exact: true }).fill("Optional schedule");
+    await page.getByLabel("Description", { exact: true }).fill("Publish the work before choosing a deadline.");
+    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await page.getByRole("button", { name: "Publish", exact: true }).click({ timeout: 5000 });
+    await expect(page.getByRole("button", { name: "Update", exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel("Due date", { exact: true })).toHaveValue("");
+    await page.getByLabel("Due date", { exact: true }).fill("2026-12-20");
+    await page.getByRole("button", { name: "Update", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await page.getByLabel("Due date", { exact: true }).fill("");
+    await page.getByRole("button", { name: "Update", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel("Due date", { exact: true })).toHaveValue("");
+    await expect(page.getByRole("button", { name: "Update", exact: true })).toBeVisible();
+  } finally { await fixture.cleanup(); }
 });

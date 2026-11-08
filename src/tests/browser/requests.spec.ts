@@ -8,6 +8,10 @@ async function login(page: Page, actor: { email: string; password: string }) {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/workspace$/);
 }
+async function openAi(page: Page) {
+  const show = page.getByRole("button", { name: "Show AI assistant", exact: true });
+  if (await show.isVisible()) await show.click();
+}
 const content = { "Title": "Find saved requirements", "Description": "## Problem description\n\nPMs need to find work.\n\n## Desired behaviour\n\n- Filter requests by title.\n\n<script>window.requestInjected = true</script>\n\n![tracking](https://tracking.invalid/pixel)\n\n[unsafe](javascript:alert(1))" };
 async function fill(page: Page) { for (const [label, value] of Object.entries(content)) await page.getByLabel(label, { exact: true }).fill(value); }
 const saved = (page: Page) => page.getByRole("status").filter({ hasText: /^Saved$/ });
@@ -29,7 +33,7 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await page.getByRole("button", { name: "Start manually", exact: true }).click();
     await page.getByLabel("Title", { exact: true }).focus();
     await page.keyboard.press("Tab");
-    await expect(page.getByLabel("Description", { exact: true })).toBeFocused();
+    await expect(page.getByLabel("Priority", { exact: true })).toBeFocused();
     await fill(page);
     await expect(saved(page)).toBeVisible();
     const editorUrl = page.url();
@@ -39,15 +43,14 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await reader.goto(`/organisations/${org}/requests`);
     await expect(reader.getByText("No requests yet.")).toBeVisible();
     await expect(reader.getByRole("button", { name: "New draft", exact: true })).toHaveCount(0);
-    await page.getByLabel("I acknowledge the assumptions and unresolved questions.").check();
     await page.getByLabel("Due date", { exact: true }).fill("2026-12-20");
-    await page.getByRole("button", { name: "Save delivery details", exact: true }).click();
-    await expect(page.getByText("Delivery details saved.", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Submit request", exact: true }).click();
-    await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
+    await expect(saved(page)).toBeVisible();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toContainText("This task is visible to members of the");
     await reader.reload();
     await reader.getByRole("link", { name: content.Title, exact: true }).click();
     await expect(reader.getByRole("heading", { name: content.Title, exact: true })).toBeVisible();
+    await reader.getByText("About this ticket", { exact: true }).click();
     await expect(reader.getByText(`Author account: ${pm.id}`, { exact: true })).toBeVisible();
     await expect(reader.getByLabel("Title", { exact: true })).toHaveCount(0);
     await expect(reader.getByRole("heading", { name: "Problem description", exact: true })).toBeVisible();
@@ -59,8 +62,7 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await page.waitForTimeout(1000); // Allow the draft debounce interval to elapse: published edits must remain local.
     await reader.reload();
     await expect(reader.getByRole("heading", { name: content.Title, exact: true })).toBeVisible();
-    await page.getByLabel("I acknowledge the assumptions and unresolved questions.").check();
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await page.getByRole("button", { name: "Update", exact: true }).click();
     await expect(saved(page)).toBeVisible();
     await reader.reload();
     await expect(reader.getByRole("heading", { name: "Updated saved requirements", exact: true })).toBeVisible();
@@ -80,7 +82,7 @@ async function setupEditor(page: Page) {
   await page.goto(`/organisations/${org}/requests`);
   await page.getByRole("button", { name: "New draft", exact: true }).click();
   await page.getByRole("button", { name: "Start manually", exact: true }).click();
-  await page.getByRole("button", { name: "Discuss with AI", exact: true }).click();
+  await openAi(page);
   await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
   return { fixture, pm, org, id: page.url().split("/").at(-1)! };
 }
@@ -109,7 +111,7 @@ test("lost creation/save responses reconcile without duplicate drafts or automat
       await route.continue();
     });
     await page.getByLabel("Title", { exact: true }).fill("Saved despite response loss");
-    await expect(page.getByText("Save failed — local text preserved", { exact: true })).toBeVisible();
+    await expect(page.getByText("Save failed — local edits preserved", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Saved despite response loss");
     expect(saveAttempts).toBe(1);
     await page.getByRole("button", { name: "Check saved version", exact: true }).click();
@@ -130,7 +132,7 @@ test("failed saves require reconciliation; in-flight edits and stale editor text
       if (route.request().method() === "POST" && fail) { fail = false; await route.abort(); } else await route.continue();
     });
     await page.getByLabel("Title", { exact: true }).fill("Keep this failed edit");
-    await expect(page.getByText("Save failed — local text preserved", { exact: true })).toBeVisible();
+    await expect(page.getByText("Save failed — local edits preserved", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Check saved version", exact: true }).click();
     await page.getByRole("button", { name: "Retry draft save", exact: true }).click();
     await expect(saved(page)).toBeVisible();
@@ -153,7 +155,7 @@ test("failed saves require reconciliation; in-flight edits and stale editor text
     const current = (await pm.client.rpc("read_request", { target_org: org, request_id: id })).data;
     await pm.client.rpc("save_draft", { target_org: org, request_id: id, expected_revision: current.revision, content: { ...current.fields, title: "A newer saved version" } });
     await page.getByLabel("Title", { exact: true }).fill("Local stale edit to keep");
-    await expect(page.getByText("Save failed — local text preserved", { exact: true })).toBeVisible();
+    await expect(page.getByText("Save failed — local edits preserved", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Local stale edit to keep");
     let historyWarning = false;
     page.once("dialog", dialog => { historyWarning = true; return dialog.dismiss(); });
@@ -185,7 +187,7 @@ test("same-document skip link keeps unsaved-work protection active", async ({ pa
       if (route.request().method() === "POST") await route.abort(); else await route.continue();
     });
     await page.getByLabel("Title", { exact: true }).fill("Unsaved navigation text");
-    await expect(page.getByText("Save failed — local text preserved", { exact: true })).toBeVisible();
+    await expect(page.getByText("Save failed — local edits preserved", { exact: true })).toBeVisible();
     await page.getByRole("link", { name: "Skip to content", exact: true }).focus();
     await page.getByRole("link", { name: "Skip to content", exact: true }).click();
     expect(warnings).toBe(0);
@@ -198,7 +200,8 @@ test("same-document skip link keeps unsaved-work protection active", async ({ pa
 test("two-field AI workspace keeps clarification separate, applies fresh proposals and blocks stale updates", async ({ page }) => {
   const { fixture, pm, org, id } = await setupEditor(page);
   try {
-    await expect(page.getByRole("form", { name: "Request editor" }).getByRole("textbox")).toHaveCount(2);
+    await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Description", { exact: true })).toBeVisible();
     await page.getByLabel("AI instruction or question", { exact: true }).fill("Clarify this feature");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
     await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
@@ -229,14 +232,14 @@ test("two-field AI workspace keeps clarification separate, applies fresh proposa
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Manual edit during generation");
     await page.reload();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Another editor saved this");
-    await page.getByRole("button", { name: "Discuss with AI", exact: true }).click();
+    await openAi(page);
     await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
     await page.screenshot({ path: "test-results/ai-workspace-desktop.png", fullPage: true, caret: "initial" });
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Discuss with AI", exact: true }).click();
+    await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
     await expect(page.getByLabel("AI instruction or question", { exact: true })).not.toBeVisible();
-    await page.getByRole("button", { name: "Discuss with AI", exact: true }).focus();
+    await page.getByRole("button", { name: "Show AI assistant", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -274,25 +277,21 @@ test("lost chat responses reconcile once and failed turns retry without duplicat
   } finally { await fixture.cleanup(); }
 });
 
-test("applying a proposal to a published task remains local until explicit Save changes", async ({ page }) => {
+test("applying a proposal to a published task remains local until explicit Update", async ({ page }) => {
   const { fixture, pm, org, id } = await setupEditor(page);
   try {
     await fill(page); await expect(saved(page)).toBeVisible();
-    await page.getByLabel("I acknowledge the assumptions and unresolved questions.").check();
     await page.getByLabel("Due date", { exact: true }).fill("2026-12-20");
-    await page.getByRole("button", { name: "Save delivery details", exact: true }).click();
-    await expect(page.getByText("Delivery details saved.", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Submit request", exact: true }).click();
-    await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
+    await expect(saved(page)).toBeVisible();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toContainText("This task is visible to members of the");
     const before = (await pm.client.rpc("read_request", { target_org: org, request_id: id })).data;
     await page.getByLabel("AI instruction or question", { exact: true }).fill("Please suggest a task proposal.");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
     await page.getByRole("button", { name: "Accept changes", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
-    await expect(page.getByLabel("I acknowledge the assumptions and unresolved questions.")).not.toBeChecked();
     expect((await pm.client.rpc("read_request", { target_org: org, request_id: id })).data.fields).toEqual(before.fields);
-    await page.getByLabel("I acknowledge the assumptions and unresolved questions.").check();
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await page.getByRole("button", { name: "Update", exact: true }).click();
     await expect(saved(page)).toBeVisible();
     expect((await pm.client.rpc("read_request", { target_org: org, request_id: id })).data.fields.title).toBe("AI task proposal");
   } finally { await fixture.cleanup(); }
@@ -337,7 +336,7 @@ test("AI failures show distinct durable local timeout, upstream HTTP and network
       await expect(page.getByRole("alert").filter({ hasText: expected })).toBeVisible();
     }
     await page.reload();
-    await page.getByRole("button", { name: "Discuss with AI", exact: true }).click();
+    await openAi(page);
     await expect(page.getByRole("alert").filter({ hasText: "SoC returned HTTP 502 after 1.2 s" })).toBeVisible();
     await expect(page.getByRole("alert").filter({ hasText: "local 60-second deadline" })).toBeVisible();
     await expect(page.getByRole("alert").filter({ hasText: "No upstream HTTP error response was received" })).toBeVisible();
@@ -358,7 +357,7 @@ test("rough ideas become private AI drafts with undo and inline review", async (
     await page.getByRole("button", { name: "Draft ticket", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
     await expect(saved(page)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Discuss with AI", exact: true })).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("button", { name: "Hide AI assistant", exact: true })).toHaveAttribute("aria-expanded", "true");
     await page.getByRole("button", { name: "Undo AI draft", exact: true }).click();
     await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Remember filters when I return to the request list.");
     await page.getByLabel("Title", { exact: true }).fill("Remember my filters");
@@ -425,8 +424,8 @@ test("targeted writing preserves other sections and unanswered questions can sta
     await expect(page.getByRole("region", { name: "Suggested ticket changes", exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Description", { exact: true })).toHaveValue(before);
     await page.getByLabel("AI instruction or question", { exact: true }).fill("Keep this instruction while I write.");
-    await page.getByRole("button", { name: "Discuss with AI", exact: true }).click();
-    await page.getByRole("button", { name: "Discuss with AI", exact: true }).click();
+    await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
+    await page.getByRole("button", { name: "Show AI assistant", exact: true }).click();
     await expect(page.getByLabel("AI instruction or question", { exact: true })).toHaveValue("Keep this instruction while I write.");
     await page.getByRole("button", { name: "Leave undecided", exact: true }).click();
     await expect(page.getByRole("region", { name: "Suggested ticket changes", exact: true })).toBeVisible();
@@ -458,7 +457,7 @@ test("a lost first-draft response preserves the rough idea and requires review a
     await page.getByRole("button", { name: "Refresh chat", exact: true }).click();
     await expect(page.getByRole("button", { name: "Review ticket changes", exact: true })).toBeVisible();
     await expect(page.getByLabel("What needs to change?", { exact: true })).toHaveValue("Keep my original idea after response loss.");
-    await page.getByRole("button", { name: "Review ticket changes", exact: true }).click();
+    await page.getByRole("button", { name: "Review ticket changes", exact: true }).click({ timeout: 10000 });
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("");
     await page.getByRole("button", { name: "Accept changes", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");

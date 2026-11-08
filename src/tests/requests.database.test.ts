@@ -8,6 +8,69 @@ const fields = { title: "Search requests", description: "## Problem description\
 describe.skipIf(!localEnabled)("request storage interface", () => {
   let fixture: ReturnType<typeof localFixture>;
   afterEach(async () => { await fixture?.cleanup(); });
+  it("saves and publishes the entire ticket atomically through HTTP", async () => {
+    fixture = localFixture();
+    const pm = await fixture.actor("PM");
+    const org = (await pm.client.rpc("create_organisation", { organisation_name: "Whole ticket" })).data;
+    const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    const app = createApplication({ origin: "http://localhost:3000", client: () => pm.client });
+    const url = `http://localhost:3000/api/organisations/${org}/requests/${draft.id}`;
+    const post = (body: unknown) => app(new Request(url, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify(body) }));
+    const response = await post({ action: "save_draft", revision: 1, fields,
+      delivery: { revision: 1, changes: { due_date: "2026-12-20", priority: "high" } } });
+    expect(response.status).toBe(200);
+    expect((await response.json()).request).toMatchObject({ fields, revision: 2, delivery_revision: 2, submitted_at: null, priority: "high" });
+    const published = await post({ action: "submit", revision: 2, fields, acknowledged: true,
+      delivery: { revision: 2, changes: { due_date: "2026-12-25" } } });
+    expect(published.status).toBe(200);
+    expect((await published.json()).request).toMatchObject({ revision: 3, delivery_revision: 3, due_date: "2026-12-25", submitted_at: expect.any(String) });
+  });
+
+  it("rolls whole-ticket writes back and rejects unauthorized or stale saves", async () => {
+    fixture = localFixture(); const pm = await fixture.actor("PM"); const other = await fixture.actor("PM");
+    const org = (await pm.client.rpc("create_organisation", { organisation_name: "Atomic saves" })).data;
+    const elsewhere = (await pm.client.rpc("create_organisation", { organisation_name: "Other org" })).data;
+    await pm.client.rpc("invite_member", { target_org: org, target_email: other.email });
+    await other.client.rpc("respond_invitation", { invitation_id: (await other.client.rpc("list_invitations")).data[0].id, decision: "accept" });
+    const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    const args = { target_org: org, request_id: draft.id, expected_revision: 1, expected_delivery_revision: 1,
+      content: fields, delivery_changes: { due_date: "2026-12-20", priority: "high" }, action: "submit", acknowledged: true };
+    for (const invalid of [
+      { acknowledged: false }, { content: { ...fields, description: "" } },
+      { delivery_changes: { assignee_ids: [randomUUID()] } }, { expected_revision: 2 },
+      { expected_delivery_revision: 2 }, { delivery_changes: null }, { action: null },
+    ]) {
+      expect((await pm.client.rpc("save_ticket", { ...args, ...invalid })).error).not.toBeNull();
+      expect((await pm.client.rpc("read_request", { target_org: org, request_id: draft.id })).data)
+        .toMatchObject({ revision: 1, delivery_revision: 1, due_date: null, priority: "medium", fields: { title: "" }, submitted_at: null });
+    }
+    expect((await other.client.rpc("save_ticket", args)).error?.code).toBe("42501");
+    expect((await pm.client.rpc("save_ticket", { ...args, target_org: elsewhere })).error?.code).toBe("42501");
+    expect((await pm.client.rpc("save_ticket", args)).error).toBeNull();
+    expect((await pm.client.rpc("save_ticket", { ...args, action: "save_published", expected_revision: 2, delivery_changes: {} })).error?.code).toBe("P0001");
+    const update = await pm.client.rpc("save_ticket", { ...args, expected_revision: 2, expected_delivery_revision: 2,
+      action: "save_published", content: { ...fields, title: "Updated together" }, delivery_changes: { priority: "urgent" } });
+    expect(update.error).toBeNull();
+    expect(update.data).toMatchObject({ revision: 3, delivery_revision: 3, fields: { title: "Updated together" }, priority: "urgent" });
+    expect((await other.client.rpc("save_ticket", { ...args, expected_revision: 3, expected_delivery_revision: 3, action: "save_published" })).error?.code).toBe("42501");
+  });
+
+  it("publishes without a deadline and lets the author add and clear it", async () => {
+    fixture = localFixture(); const pm = await fixture.actor("PM");
+    const org = (await pm.client.rpc("create_organisation", { organisation_name: "Optional dates" })).data;
+    const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    const args = { target_org: org, request_id: draft.id };
+    const published = await pm.client.rpc("save_ticket", { ...args, expected_revision: 1, expected_delivery_revision: 1,
+      content: fields, delivery_changes: {}, action: "submit", acknowledged: true });
+    expect(published.error).toBeNull();
+    expect(published.data).toMatchObject({ due_date: null, priority: "medium", assignee_ids: [], submitted_at: expect.any(String) });
+    expect((await pm.client.rpc("update_delivery", { ...args, expected_revision: 1, changes: { due_date: "2026-12-20" } })).error).toBeNull();
+    const cleared = await pm.client.rpc("save_ticket", { ...args, expected_revision: 2, expected_delivery_revision: 2,
+      content: fields, delivery_changes: { due_date: null }, action: "save_published", acknowledged: true });
+    expect(cleared.error).toBeNull(); expect(cleared.data.due_date).toBeNull();
+    expect((await pm.client.rpc("update_delivery", { ...args, expected_revision: 3, changes: { due_date: "2026-02-30" } })).error?.code).toBe("22023");
+  });
+
   it("creates an author-private PM draft and safely repeats creation after response loss", async () => {
     fixture = localFixture();
     const pm = await fixture.actor("PM");

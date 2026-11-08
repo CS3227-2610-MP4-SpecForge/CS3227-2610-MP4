@@ -1,15 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { taskFields, requestRecord, ticketListQuery } from "./ticket-schemas";
+import { taskFields, requestRecord, ticketListQuery, date, priority, status } from "./ticket-schemas";
 export { taskFields } from "./ticket-schemas";
 import { error, json, readBody } from "./http";
 
 const fields = taskFields;
 const revision = z.number().int().min(1).max(2147483647);
+const delivery = z.strictObject({ revision, changes: z.strictObject({
+  due_date: date.nullable().optional(), priority: priority.optional(), status: status.optional(),
+  assignee_ids: z.array(z.uuid()).max(5).refine(ids => new Set(ids).size === ids.length).optional(),
+}) }).optional();
 const mutation = z.discriminatedUnion("action", [
-  z.strictObject({ action: z.literal("save_draft"), revision, fields }),
-  z.strictObject({ action: z.literal("submit"), revision, fields, acknowledged: z.literal(true) }),
-  z.strictObject({ action: z.literal("save_published"), revision, fields, acknowledged: z.literal(true) }),
+  z.strictObject({ action: z.literal("save_draft"), revision, fields, delivery }),
+  z.strictObject({ action: z.literal("submit"), revision, fields, delivery, acknowledged: z.literal(true) }),
+  z.strictObject({ action: z.literal("save_published"), revision, fields, delivery, acknowledged: z.literal(true) }),
   z.strictObject({ action: z.literal("delete_draft"), revision }),
 ]);
 export async function handleRequests(request: Request, client: SupabaseClient): Promise<Response | null> {
@@ -37,7 +41,7 @@ export async function handleRequests(request: Request, client: SupabaseClient): 
       rpc = "create_request"; args.creation_key = input.data.creationKey;
     } else {
       const input = mutation.safeParse(body);
-      if (!input.success) return error("Check the request fields and acknowledgement.", 400);
+      if (!input.success) return error("Check the ticket fields.", 400);
       const action = input.data;
       args = { ...args, request_id: id, expected_revision: action.revision };
       if (action.action === "delete_draft") { rpc = "delete_draft"; deleted = true; }
@@ -47,12 +51,19 @@ export async function handleRequests(request: Request, client: SupabaseClient): 
         if (action.action !== "save_draft") {
           args.acknowledged = action.acknowledged; args.first_submission = action.action === "submit";
         }
+        if (action.delivery) {
+          rpc = "save_ticket";
+          args.expected_delivery_revision = action.delivery.revision;
+          args.delivery_changes = action.delivery.changes;
+          args.action = action.action;
+          delete args.first_submission;
+        }
       }
     }
   } else return error("Not found.", 404);
   const { data, error: failure } = await client.rpc(rpc, args);
   if (failure?.code === "42501") return error("Request unavailable or access has changed.", 403);
-  if (failure?.code === "22023") return error("Complete title and description, save a due date, and acknowledge your review before publishing. Check field limits.", 400);
+  if (failure?.code === "22023") return error("Check title, description, due date, assignees and field limits before publishing or updating.", 400);
   if (failure?.code === "P0001") return error("The saved request changed. Your text is preserved; reload the saved version before continuing.", 409);
   if (failure) return error("Request service unavailable. Your text is preserved; check the saved version before retrying.", 503);
   if (deleted) return json({ message: "Draft deleted." });

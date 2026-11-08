@@ -18,7 +18,7 @@ describe.skipIf(!localEnabled)("ticket delivery storage interface", () => {
     expect(saved.data).toMatchObject({ revision: 1, delivery_revision: 2, due_date: "2026-12-20", priority: "high", assignee_ids: [pm.id] });
     expect((await pm.client.rpc("read_request", { target_org: org, request_id: draft.id })).data.ticket_number).toBe(1);
   });
-  it("requires publication deadlines, restricts delivery powers, and revokes assignments on departure", async () => {
+  it("validates supplied dates, restricts delivery powers, and revokes assignments on departure", async () => {
     fixture = localFixture();
     const author = await fixture.actor("PM");
     const dev = await fixture.actor("Developer");
@@ -32,7 +32,6 @@ describe.skipIf(!localEnabled)("ticket delivery storage interface", () => {
     const draft = (await author.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     const update = (actor: typeof author, changes: unknown, rev = 1) => actor.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: rev, changes });
     const publish = () => author.client.rpc("publish_request", { target_org: org, request_id: draft.id, expected_revision: 1, content: { title: "Deliver search", description: "Find saved work" }, acknowledged: true, first_submission: true });
-    expect((await publish()).error?.code).toBe("22023");
     for (const date of ["2026-02-30", "infinity", "0000-01-01"]) expect((await update(author, { due_date: date })).error?.code).toBe("22023");
     expect((await update(author, { assignee_ids: [dev.id, dev.id] })).error?.code).toBe("22023");
     expect((await update(author, { assignee_ids: [randomUUID()] })).error?.code).toBe("22023");
@@ -46,7 +45,7 @@ describe.skipIf(!localEnabled)("ticket delivery storage interface", () => {
     expect((await update(dev, { status: "done", priority: "urgent" }, 2)).error?.code).toBe("42501");
     expect((await update(dev, { status: "in_progress" }, 2)).data).toMatchObject({ status: "in_progress", revision: 2, delivery_revision: 3 });
     expect((await update(author, { priority: "high" }, 2)).error?.code).toBe("P0001");
-    expect((await update(author, { due_date: null }, 3)).error?.code).toBe("22023");
+    expect((await update(author, { due_date: "2026-02-30" }, 3)).error?.code).toBe("22023");
     expect((await author.client.rpc("change_member", { target_org: org, target_user: dev.id, decision: "remove" })).error).toBeNull();
     const removed = (await author.client.rpc("read_request", { target_org: org, request_id: draft.id })).data;
     expect(removed).toMatchObject({ assignee_ids: [], delivery_revision: 4, revision: 2 });
