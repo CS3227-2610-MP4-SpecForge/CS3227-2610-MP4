@@ -184,9 +184,13 @@ loads the organisation name from the existing authorized organisation GET; no
 banner is rendered until ticket, account and organisation have loaded. Reader
 and author views share the same banner; author visibility follows saved state,
 including recovery after an ambiguous Publish. Local published edits do not
-change the banner. The old publication badge is removed. The native collapsed About this ticket
-section shows metadata at the bottom of the ticket card, beneath author actions
-or the reader refresh action and before team discussion.
+change the banner. The old publication badge is removed. The static About this
+ticket section shows metadata at the bottom of the ticket card, beneath author
+actions or the reader refresh action and before team discussion. The author
+save status sits below the metadata. Draft content saves record
+`last_autosaved_at`, which survives delivery-only updates and is cleared on
+publication. Older drafts with no recorded autosave time and published tickets
+show Last saved using `updated_at`.
 
 Draft delivery status is a disabled To do select, distinct from visibility.
 Status permissions after publication remain unchanged. `lucide-react` is pinned

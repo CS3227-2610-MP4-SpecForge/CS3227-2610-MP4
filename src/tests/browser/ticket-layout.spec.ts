@@ -1,4 +1,4 @@
-import { setDueDate } from "./ui.fixture";
+import { savedTicketStatus, setDueDate } from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localFixture } from "../local.fixture";
@@ -15,7 +15,8 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
   const fixture = localFixture(); const pm = await fixture.actor("PM");
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Ticket layout" })).data;
   const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
-  await pm.client.rpc("save_draft", { target_org: org, request_id: draft.id, expected_revision: 1, content: { title: "Remember filters", description: "Keep selected filters when returning." } });
+  const { data: savedDraft } = await pm.client.rpc("save_draft", { target_org: org, request_id: draft.id, expected_revision: 1, content: { title: "Remember filters", description: "Keep selected filters when returning." } });
+  await pm.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: 1, changes: { priority: "high" } });
   try {
     await page.goto("/sign-in"); await page.getByLabel("Email address").fill(pm.email); await page.getByLabel("Password", { exact: true }).fill(pm.password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click(); await expect(page).toHaveURL(/\/workspace$/);
@@ -23,10 +24,14 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Remember filters");
     await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toHaveText("This task is private and unpublished");
     const card = page.locator(".ticket-content");
-    const about = card.getByText("About this ticket", { exact: true });
+    const about = card.getByRole("region", { name: "About this ticket", exact: true });
     await expect(about).toBeVisible();
     expect((await about.boundingBox())!.y).toBeGreaterThan((await page.getByRole("button", { name: "Publish", exact: true }).boundingBox())!.y);
-    await expect(page.getByText(`Author account: ${pm.id}`, { exact: true })).not.toBeVisible();
+    await expect(about.getByText(`Author account: ${pm.id}`, { exact: true })).toBeVisible();
+    const saveStatus = about.getByRole("status");
+    await expect(saveStatus).toHaveText(/^Last autosaved: .+/);
+    await expect(saveStatus.locator("time")).toHaveAttribute("datetime", savedDraft.updated_at);
+    expect((await saveStatus.boundingBox())!.y).toBeGreaterThan((await about.getByText(/^Last modified:/).boundingBox())!.y);
     await expect(page.locator(".ticket-topbar").getByText("About this ticket", { exact: true })).toHaveCount(0);
     await expect(card.getByRole("region", { name: "Task visibility", exact: true })).toBeVisible();
     const cardBox = (await card.boundingBox())!; const bannerBox = (await visibility(page).boundingBox())!;
@@ -59,8 +64,13 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: "test-results/ticket-layout-mobile.png", fullPage: true });
     await page.getByRole("link", { name: "Back to requests", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/organisations/${org}/requests$`));
     await expect(page.getByText(/^SF-\d+$/)).toHaveCount(0);
     await expect(page.getByPlaceholder("Title or SF-number", { exact: true })).toHaveCount(0);
+    const backToWorkspace = page.getByRole("link", { name: "Back to workspace", exact: true });
+    await expect(backToWorkspace.locator("svg")).toHaveAttribute("aria-hidden", "true");
+    await backToWorkspace.press("Enter");
+    await expect(page).toHaveURL(/\/workspace$/);
   } finally { await fixture.cleanup(); }
 });
 
@@ -78,13 +88,62 @@ test("a new ticket is editable with AI collapsed and a Developer reads the same 
     await page.goto(`/organisations/${org}/requests`); await page.getByRole("button", { name: "New draft", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Description", { exact: true })).toBeVisible();
+    const about = page.getByRole("region", { name: "About this ticket", exact: true });
+    await expect(about.getByRole("status")).toHaveText("Awaiting first autosave");
     await expect(page.getByRole("complementary", { name: "AI discussion", exact: true }).getByLabel("What needs to change?", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
     await page.getByLabel("Title", { exact: true }).fill("Write the ticket directly");
-    await page.getByLabel("Description", { exact: true }).fill("The main editor stays available without AI.");
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toHaveText(/^Last autosaved: .+/);
+    const description = page.getByRole("textbox", { name: "Description", exact: true });
+    const write = page.getByRole("tab", { name: "Write", exact: true });
+    const preview = page.getByRole("tab", { name: "Preview", exact: true });
+    const previewPanel = page.getByRole("tabpanel", { name: "Preview", exact: true });
+    await expect(write).toHaveAttribute("aria-selected", "true");
+    await preview.click();
+    await expect(previewPanel).toHaveText("Nothing to preview yet.");
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(description).toBeFocused();
+    await expect(page.getByRole("form", { name: "Request editor" }).getByRole("alert")).toHaveText("Enter a title and description within the field limits.");
+    await expect(visibility(page)).toHaveText(privateVisibility);
+    const literalHtml = '<img src="/test-image" onerror="alert(1)">';
+    const literalMarkers = "Escaped \\**markers\\**, \\*single stars\\*, snake_case_name, first_𐐀_then and an unpaired **marker.";
+    const markdown = [
+      "## **Acceptance _criteria_**",
+      "",
+      "- The *main editor* stays **available without AI**.",
+      "",
+      `Keep **${literalHtml}** and _${literalHtml}_ as text.`,
+      "",
+      literalMarkers,
+      "",
+      "```",
+      "**literal code**, *stars* and _underscores_",
+      "```",
+    ].join("\n");
+    await description.fill(markdown);
+    await write.press("ArrowRight");
+    await expect(preview).toBeFocused();
+    await expect(description).not.toBeVisible();
+    const previewHeading = previewPanel.getByRole("heading", { name: "Acceptance criteria" });
+    await expect(previewHeading.locator("strong")).toHaveText("Acceptance criteria");
+    await expect(previewHeading.locator("strong em")).toHaveText("criteria");
+    await expect(previewPanel.getByRole("listitem").locator("strong")).toHaveText("available without AI");
+    await expect(previewPanel.getByRole("listitem").locator("em")).toHaveText("main editor");
+    await expect(previewPanel.locator("p strong")).toHaveText(literalHtml);
+    await expect(previewPanel.locator("p em")).toHaveText(literalHtml);
+    await expect(previewPanel.locator("img")).toHaveCount(0);
+    const literalParagraph = previewPanel.locator("p").filter({ hasText: literalMarkers });
+    await expect(literalParagraph).toHaveText(literalMarkers);
+    await expect(literalParagraph.locator("em, strong")).toHaveCount(0);
+    await expect(previewPanel.locator("pre code")).toHaveText("**literal code**, *stars* and _underscores_");
+    await preview.press("Tab");
+    await expect(previewPanel).toBeFocused();
+    await preview.press("ArrowLeft");
+    await expect(description).toHaveValue(markdown);
+    await preview.click();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await setDueDate(page, "2026-12-20");
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     let release!: () => void; const hold = new Promise<void>(resolve => { release = resolve; });
     let started!: () => void; const captured = new Promise<void>(resolve => { started = resolve; });
     await page.route("**/api/organisations/*/requests/*", async route => {
@@ -95,6 +154,7 @@ test("a new ticket is editable with AI collapsed and a Developer reads the same 
     await page.getByRole("button", { name: "Publish", exact: true }).click(); await captured;
     await expect(visibility(page)).toHaveText(privateVisibility);
     release(); await expect(visibility(page)).toHaveText(publishedVisibility);
+    await expect(savedTicketStatus(page)).toHaveText(/^Last saved: .+/);
     await expect(page.getByLabel("Delivery status", { exact: true })).toBeEnabled();
     await expect(visibility(page).locator("svg")).toHaveAttribute("aria-hidden", "true");
     await page.getByLabel("Title", { exact: true }).fill("Local unpublished edits");
@@ -102,17 +162,22 @@ test("a new ticket is editable with AI collapsed and a Developer reads the same 
     await page.getByLabel("Title", { exact: true }).fill("Write the ticket directly");
     await page.screenshot({ path: "test-results/ticket-visibility-author.png", fullPage: true });
     expect((await page.getByLabel("Comment", { exact: true }).boundingBox())!.height).toBeLessThan(240);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(previewPanel).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const path = new URL(page.url()).pathname;
     await reader.goto("/sign-in"); await reader.getByLabel("Email address").fill(developer.email); await reader.getByLabel("Password", { exact: true }).fill(developer.password);
     await reader.getByRole("button", { name: "Sign in", exact: true }).click(); await expect(reader).toHaveURL(/\/workspace$/);
     await reader.goto(path);
     await expect(visibility(reader)).toHaveText(publishedVisibility);
-    const aboutReader = reader.getByText("About this ticket", { exact: true });
+    await expect(reader.getByRole("heading", { name: "Acceptance criteria" })).toBeVisible();
+    const publishedItem = reader.getByRole("listitem").filter({ hasText: "The main editor stays available without AI." });
+    await expect(publishedItem.locator("strong")).toHaveText("available without AI");
+    await expect(publishedItem.locator("em")).toHaveText("main editor");
+    const aboutReader = reader.getByRole("region", { name: "About this ticket", exact: true });
     expect((await aboutReader.boundingBox())!.y).toBeGreaterThan((await reader.getByRole("button", { name: "Refresh saved request", exact: true }).boundingBox())!.y);
     expect((await aboutReader.boundingBox())!.y).toBeLessThan((await reader.getByRole("heading", { name: "Team discussion & activity", exact: true }).boundingBox())!.y);
-    await aboutReader.focus(); await reader.keyboard.press("Enter");
-    await expect(reader.getByText(`Author account: ${pm.id}`, { exact: true })).toBeVisible();
-    await reader.keyboard.press("Enter");
+    await expect(aboutReader.getByText(`Author account: ${pm.id}`, { exact: true })).toBeVisible();
     await expect(reader.locator(".ticket-content").getByRole("region", { name: "Task visibility", exact: true })).toBeVisible();
     expect((await visibility(reader).boundingBox())!.y).toBeGreaterThan((await reader.getByRole("link", { name: "Back to requests", exact: true }).boundingBox())!.y);
     const title = reader.getByRole("heading", { name: "Write the ticket directly", exact: true });

@@ -1,4 +1,4 @@
-import { setDueDate } from "./ui.fixture";
+import { savedTicketStatus as saved, setDueDate } from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { localFixture } from "../local.fixture";
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
@@ -15,7 +15,6 @@ async function openAi(page: Page) {
 }
 const content = { "Title": "Find saved requirements", "Description": "## Problem description\n\nPMs need to find work.\n\n## Desired behaviour\n\n- Filter requests by title.\n\n<script>window.requestInjected = true</script>\n\n![tracking](https://tracking.invalid/pixel)\n\n[unsafe](javascript:alert(1))" };
 async function fill(page: Page) { for (const [label, value] of Object.entries(content)) await page.getByLabel(label, { exact: true }).fill(value); }
-const saved = (page: Page) => page.getByRole("status").filter({ hasText: /^Saved$/ });
 
 test("PM autosaves/resumes and publishes; Developer reads only saved published changes", async ({ page, browser }) => {
   const fixture = localFixture();
@@ -51,8 +50,8 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await reader.reload();
     await reader.getByRole("link", { name: content.Title, exact: true }).click();
     await expect(reader.getByRole("heading", { name: content.Title, exact: true })).toBeVisible();
-    await reader.getByText("About this ticket", { exact: true }).click();
-    await expect(reader.getByText(`Author account: ${pm.id}`, { exact: true })).toBeVisible();
+    const about = reader.getByRole("region", { name: "About this ticket", exact: true });
+    await expect(about.getByText(`Author account: ${pm.id}`, { exact: true })).toBeVisible();
     await expect(reader.getByLabel("Title", { exact: true })).toHaveCount(0);
     await expect(reader.getByRole("heading", { name: "Problem description", exact: true })).toBeVisible();
     await expect(reader.locator("script").filter({ hasText: "window.requestInjected = true" })).toHaveCount(0);

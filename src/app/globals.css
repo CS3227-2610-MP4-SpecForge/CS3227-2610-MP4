@@ -103,7 +103,12 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .checkbox-field { display: flex; align-items: start; gap: 12px; }
 .checkbox-field input { margin-top: 7px; flex-shrink: 0; }
 
-.task-panel #request-description { min-height: 430px; }
+.task-panel :is(#request-description, .ticket-description-preview) { min-height: 430px; }
+.ticket-description-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space); }
+.ticket-description-tabs { display: flex; gap: var(--space); }
+.ticket-description-tabs .button { min-height: 36px; padding: 4px 12px; }
+.ticket-description-tabs .button[aria-selected="true"] { background: var(--brand-soft); color: var(--brand); border-color: var(--brand-border); }
+.ticket-description-preview { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
 .chat-panel { position: sticky; top: 24px; }
 .chat-panel .section-title { justify-content: space-between; flex-wrap: wrap; }
 .chat-panel > p { margin-bottom: 0; }
@@ -117,7 +122,7 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .markdown > :last-child { margin-bottom: 0; }
 @media (max-width: 800px) {
   .chat-panel { position: static; }
-  .task-panel #request-description { min-height: 360px; }
+  .task-panel :is(#request-description, .ticket-description-preview) { min-height: 360px; }
 }
 
 .ticket-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
@@ -130,8 +135,9 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .ticket-topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: .85rem; }
 .copy-ticket-link { margin-left: auto; display: flex; flex-direction: column; gap: 6px; max-width: 300px; }
 .ticket-about { border-top: 1px solid var(--border); padding-top: 16px; font-size: .8rem; }
-.ticket-about summary { cursor: pointer; color: var(--muted); }
-.ticket-back-link { display: inline-flex; align-items: center; gap: 6px; }
+.ticket-about h2 { margin: 0; font-size: .85rem; }
+.ticket-about > :last-child { margin-bottom: 0; }
+.back-link { display: inline-flex; align-items: center; gap: 6px; width: fit-content; }
 .ticket-content { --ticket-padding: 28px; padding: var(--ticket-padding); gap: 24px; }
 .ticket-content > .ticket-visibility { margin: calc(-1 * var(--ticket-padding)) calc(-1 * var(--ticket-padding)) 0; border-width: 0 0 1px; border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; }
 .ticket-content #request-title { font-size: 1.35rem; font-weight: 650; min-height: 52px; }

@@ -1,6 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { requestFields, sameFields, type FeatureRequest, type RequestFields } from "@/requests";
 import { api, ApiError, failureMessage } from "./http";
 import type { ChatTurn } from "@/chat";
@@ -11,7 +10,7 @@ import { deliveryOf, deliveryChanges, sameDelivery, type Delivery } from "@/deli
 import { TicketDelivery, TicketDeliveryFields, CopyTicketLink } from "./ticket-delivery";
 import { TicketVisibility } from "./ticket-visibility";
 import { TicketActivity } from "./ticket-activity";
-import { Button, Field, Notice, TextareaField } from "./ui";
+import { BackLink, Button, Field, Notice } from "./ui";
 
 type Problem = { kind: "conflict" | "ambiguous" | "retry" | "denied"; message: string };
 type Action = "save_draft" | "submit" | "save_published" | "delete_draft";
@@ -31,11 +30,11 @@ export function RequestScreen({ organisationId, requestId }: { organisationId: s
     }).catch(failure => { if (active) setError(failureMessage(failure)); });
     return () => { active = false; };
   }, [path, organisationId, reload]);
-  if (error && (!item || !account || !organisationName)) return <section className="stack"><BackToRequests href={listPath} /><Notice danger>{error}</Notice><Button onClick={() => { setError(""); setReload(n => n + 1); }}>Retry loading request</Button></section>;
+  if (error && (!item || !account || !organisationName)) return <section className="stack"><BackLink href={listPath} fullPage>Back to requests</BackLink><Notice danger>{error}</Notice><Button onClick={() => { setError(""); setReload(n => n + 1); }}>Retry loading request</Button></section>;
   if (!item || !account || !organisationName) return <Notice>Loading request…</Notice>;
   if (item.author_id === account.id && account.role === "PM") return <RequestEditor key={item.id} initial={item} path={path} listPath={listPath} accountId={account.id} organisationName={organisationName} />;
   return <section className="stack request-page ticket-reader">
-    <div className="ticket-topbar"><BackToRequests href={listPath} /><CopyTicketLink /></div>
+    <div className="ticket-topbar"><BackLink href={listPath} fullPage>Back to requests</BackLink><CopyTicketLink /></div>
     {error && <Notice danger>{error} Your local input is preserved; retry Refresh saved request.</Notice>}
     <div className="card stack ticket-content">
       <TicketVisibility published={Boolean(item.submitted_at)} organisationName={organisationName} />
@@ -49,17 +48,14 @@ export function RequestScreen({ organisationId, requestId }: { organisationId: s
   </section>;
 }
 
-function BackToRequests({ href }: { href: string }) {
-  return <a className="ticket-back-link" href={href}><ArrowLeft className="ui-icon" aria-hidden="true" focusable="false" />Back to requests</a>;
-}
-
-function RequestMetadata({ item }: { item: FeatureRequest }) {
-  return <details className="request-metadata ticket-about">
-    <summary>About this ticket</summary>
+function RequestMetadata({ item, children }: { item: FeatureRequest; children?: ReactNode }) {
+  return <section className="request-metadata ticket-about" aria-labelledby="ticket-about-heading">
+    <h2 id="ticket-about-heading">About this ticket</h2>
     <p>Author account: {item.author_id}</p>
     {item.submitted_at && <p>Published: {new Date(item.submitted_at).toLocaleString()}</p>}
     <p>Last modified: {new Date(item.updated_at).toLocaleString()}</p>
-  </details>;
+    {children}
+  </section>;
 }
 function RequestEditor({ initial, path, listPath, accountId, organisationName }: { initial: FeatureRequest; path: string; listPath: string; accountId: string; organisationName: string }) {
   const [starting, setStarting] = useState(!initial.submitted_at && !initial.fields.title.trim());
@@ -72,6 +68,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
   const problemLive = useRef<Problem | null>(null);
   const [stored, setStored] = useState(initial);
   const [fields, setFields] = useState(initial.fields);
+  const [descriptionMode, setDescriptionMode] = useState<"write" | "preview">("write");
   const [validation, setValidation] = useState("");
   const [delivery, setDelivery] = useState<Delivery>(deliveryOf(initial));
   const latestDelivery = useRef(delivery);
@@ -99,9 +96,14 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
     const next = { ...latest.current, [key]: value };
     latest.current = next; setFields(next); setMessage(""); setValidation("");
   }
+  function focusDescription() {
+    setDescriptionMode("write");
+    window.requestAnimationFrame(() => document.getElementById("request-description")?.focus());
+  }
   async function save(action: Action) {
     if (operation.current || (problem && problem.kind !== "retry")) return;
     if ((action === "submit" || action === "save_published") && !complete) {
+      if (descriptionMode === "preview" && !fields.description.trim()) focusDescription();
       setValidation("Enter a title and description within the field limits."); return;
     }
     operation.current = true; setBusy(action === "save_draft" ? "autosave" : "explicit"); setMessage("");
@@ -220,19 +222,21 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
     } catch (failure) { setMessage(failureMessage(failure)); }
   }
   const blocked = Boolean(problem && problem.kind !== "retry");
+  const pendingStatus = busy ? "Saving…" : problem ? "Save failed — local edits preserved" : dirty ? "Unsaved changes" : null;
+  const autosavedAt = published ? null : stored.last_autosaved_at;
+  const savedAt = autosavedAt ?? (published || stored.revision > 1 ? stored.updated_at : null);
   return <section className="stack request-page ticket-editor">
     <ChatPanel path={path + "/chat"} fields={fields} revision={stored.revision} canSend={!busy && !applying && !blocked && withinLimits && (published || !dirty)} starting={starting} onManual={startManually} onRoughIdea={value => edit("description", value)} onSuggestion={receiveSuggestion}
-      header={<><BackToRequests href={listPath} /><CopyTicketLink /></>}
+      header={<><BackLink href={listPath} fullPage>Back to requests</BackLink><CopyTicketLink /></>}
       review={<>
         {message && <Notice>{message}</Notice>}
         {undo && <div className="actions"><Button className="secondary" disabled={Boolean(busy) || applying || blocked || !sameFields(fields, undo.after)} onClick={undoDraft}>Undo AI draft</Button></div>}
-        {suggestion && <SuggestionReview turn={suggestion} fields={fields} revision={stored.revision} disabled={Boolean(busy) || applying || blocked} onAccept={() => { void acceptSuggestion(); }} onDiscard={() => { review(null); window.requestAnimationFrame(() => document.getElementById("request-description")?.focus()); }} />}
+        {suggestion && <SuggestionReview turn={suggestion} fields={fields} revision={stored.revision} disabled={Boolean(busy) || applying || blocked} onAccept={() => { void acceptSuggestion(); }} onDiscard={() => { review(null); focusDescription(); }} />}
       </>}>
       <div className="card stack ticket-content">
         <TicketVisibility published={published} organisationName={organisationName} />
         <Field id="request-title" label="Title" form="request-content" required maxLength={320} value={fields.title} disabled={busy === "explicit"} onChange={event => edit("title", event.target.value)} />
         <TicketDeliveryFields item={stored} accountId={accountId} value={delivery} formId="request-content" disabled={busy === "explicit" || applying || blocked} onChange={editDelivery} />
-        <p className="ticket-save-status" role="status">{busy ? "Saving…" : problem ? "Save failed — local edits preserved" : dirty ? "Unsaved changes" : "Saved"}</p>
         {problem && <div className="stack"><Notice danger>{problem.message}</Notice><div className="actions">
           {problem.kind === "ambiguous" && <Button className="secondary" disabled={Boolean(busy)} onClick={reconcile}>Check saved version</Button>}
           {problem.kind === "retry" && !published && <Button disabled={Boolean(busy)} onClick={() => save("save_draft")}>Retry draft save</Button>}
@@ -240,13 +244,52 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
         </div></div>}
         {!withinLimits && <Notice danger>Title is limited to 160 characters and description to 24,000. Your local edits are preserved; shorten it before saving.</Notice>}
         <form id="request-content" className="stack" aria-label="Request editor" onSubmit={event => { event.preventDefault(); void save(published ? "save_published" : "submit"); }} aria-busy={Boolean(busy)}>
-          <TextareaField id="request-description" label="Description" required maxLength={48000} value={fields.description} disabled={busy === "explicit"} onChange={event => edit("description", event.target.value)} />
+          <div className="field">
+            <div className="ticket-description-header">
+              <label htmlFor="request-description">Description</label>
+              <div className="ticket-description-tabs" role="tablist" aria-label="Description mode" onKeyDown={event => {
+                let next: typeof descriptionMode;
+                switch (event.key) {
+                  case "ArrowLeft":
+                  case "ArrowRight": next = descriptionMode === "write" ? "preview" : "write"; break;
+                  case "Home": next = "write"; break;
+                  case "End": next = "preview"; break;
+                  default: return;
+                }
+                event.preventDefault();
+                setDescriptionMode(next);
+                event.currentTarget.querySelector<HTMLButtonElement>(`#description-${next}-tab`)?.focus();
+              }}>
+                {(["write", "preview"] as const).map(mode => <Button key={mode} type="button" className="secondary" role="tab"
+                  id={`description-${mode}-tab`} aria-controls={`description-${mode}-panel`} aria-selected={descriptionMode === mode}
+                  tabIndex={descriptionMode === mode ? 0 : -1} onClick={() => setDescriptionMode(mode)}>
+                  {mode === "write" ? "Write" : "Preview"}
+                </Button>)}
+              </div>
+            </div>
+            <div id="description-write-panel" role="tabpanel" aria-labelledby="description-write-tab" hidden={descriptionMode !== "write"}>
+              <textarea id="request-description" rows={4} required={descriptionMode === "write"} maxLength={48000} value={fields.description}
+                disabled={busy === "explicit"} onChange={event => edit("description", event.target.value)} />
+            </div>
+            <div id="description-preview-panel" className="ticket-description-preview" role="tabpanel" aria-labelledby="description-preview-tab"
+              tabIndex={0} hidden={descriptionMode !== "preview"}>
+              {descriptionMode === "preview" && (fields.description.trim()
+                ? <Markdown text={fields.description} />
+                : <p className="hint">Nothing to preview yet.</p>)}
+            </div>
+          </div>
           {validation && <Notice danger>{validation}</Notice>}
           <div className="actions"><Button disabled={Boolean(busy) || applying || blocked || (published && !dirty)}>{published ? "Update" : "Publish"}</Button>
             {!published && <Button type="button" className="secondary" disabled={Boolean(busy) || applying || blocked} onClick={() => { if (window.confirm("Delete this private draft? This cannot be undone.")) void save("delete_draft"); }}>Delete draft</Button>}
           </div>
         </form>
-        <RequestMetadata item={stored} />
+        <RequestMetadata item={stored}>
+          <p className="ticket-save-status" role="status">
+            {pendingStatus ?? (savedAt
+              ? <>{autosavedAt ? "Last autosaved: " : "Last saved: "}<time dateTime={savedAt}>{new Date(savedAt).toLocaleString()}</time></>
+              : "Awaiting first autosave")}
+          </p>
+        </RequestMetadata>
       </div>
       {published && <TicketActivity path={path + "/activity"} />}
     </ChatPanel>

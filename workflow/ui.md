@@ -15,6 +15,13 @@ theme tokens in `src/app/globals.css`. shadcn/ui remains optional, not installed
   and at least one page from the other role. UI consistency is checked in code
   review and browser evidence, not guaranteed by prompts alone.
 
+## Back links
+
+Use `BackLink` from `src/components/ui.tsx` for page-level back navigation. It
+pairs the link label with a decorative left arrow and shared icon spacing. Use
+`fullPage` for ticket routes that already use document navigation so the
+editor's unsaved-change warning still applies.
+
 ## Fixed-choice dropdowns and pills
 
 Use `Dropdown` from `src/components/ui.tsx` for new fixed-choice dropdowns. Its

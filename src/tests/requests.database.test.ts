@@ -11,7 +11,11 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
   it("saves and publishes the entire ticket atomically through HTTP", async () => {
     fixture = localFixture();
     const pm = await fixture.actor("PM");
+    const reader = await fixture.actor("Developer");
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "Whole ticket" })).data;
+    await pm.client.rpc("invite_member", { target_org: org, target_email: reader.email });
+    const invitation = (await reader.client.rpc("list_invitations")).data[0];
+    await reader.client.rpc("respond_invitation", { invitation_id: invitation.id, decision: "accept" });
     const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     const app = createApplication({ origin: "http://localhost:3000", client: () => pm.client });
     const url = `http://localhost:3000/api/organisations/${org}/requests/${draft.id}`;
@@ -19,11 +23,21 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
     const response = await post({ action: "save_draft", revision: 1, fields,
       delivery: { revision: 1, changes: { due_date: "2026-12-20", priority: "high" } } });
     expect(response.status).toBe(200);
-    expect((await response.json()).request).toMatchObject({ fields, revision: 2, delivery_revision: 2, submitted_at: null, priority: "high" });
+    const saved = (await response.json()).request;
+    expect(saved).toMatchObject({ fields, revision: 2, delivery_revision: 2, submitted_at: null, priority: "high", last_autosaved_at: saved.updated_at });
+    const readerView = () => reader.client.from("feature_requests").select("last_autosaved_at").eq("id", draft.id);
+    expect(await readerView()).toMatchObject({ error: null, data: [] });
+    const delivery = await pm.client.rpc("update_delivery", { target_org: org, request_id: draft.id,
+      expected_revision: 2, changes: { priority: "low" } });
+    expect(delivery.data).toMatchObject({ delivery_revision: 3, last_autosaved_at: saved.updated_at });
+    expect(delivery.data.updated_at).not.toBe(saved.updated_at);
+    const read = await app(new Request(url));
+    expect((await read.json()).request).toMatchObject({ last_autosaved_at: saved.updated_at });
     const published = await post({ action: "submit", revision: 2, fields, acknowledged: true,
-      delivery: { revision: 2, changes: { due_date: "2026-12-25" } } });
+      delivery: { revision: 3, changes: { due_date: "2026-12-25" } } });
     expect(published.status).toBe(200);
-    expect((await published.json()).request).toMatchObject({ revision: 3, delivery_revision: 3, due_date: "2026-12-25", submitted_at: expect.any(String) });
+    expect((await published.json()).request).toMatchObject({ revision: 3, delivery_revision: 4, due_date: "2026-12-25", submitted_at: expect.any(String), last_autosaved_at: null });
+    expect(await readerView()).toMatchObject({ error: null, data: [{ last_autosaved_at: null }] });
   });
 
   it("rolls whole-ticket writes back and rejects unauthorized or stale saves", async () => {

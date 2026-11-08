@@ -1,4 +1,4 @@
-import { selectPill, setDueDate } from "./ui.fixture";
+import { savedTicketStatus, selectPill, setDueDate } from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localFixture } from "../local.fixture";
@@ -23,7 +23,7 @@ test("purple date picker selects dates, validates exact input and preserves opti
     await popup.getByRole("button", { name: "Friday, 15 January 2027", exact: true }).click();
     await expect(field).toHaveText("15 Jan 2027"); await expect(field).toBeFocused();
     await expect(popup).toHaveCount(0);
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload(); await expect(field).toHaveText("15 Jan 2027");
     await field.click(); await popup.getByLabel("Exact date", { exact: true }).fill("2027-02-30");
     await popup.getByRole("button", { name: "Apply date", exact: true }).click();
@@ -42,12 +42,12 @@ test("purple date picker selects dates, validates exact input and preserves opti
     await expect(field).toHaveText("Unscheduled");
     await page.getByLabel("Title", { exact: true }).fill("Polished calendar");
     await page.getByLabel("Description", { exact: true }).fill("Pick a purple date or leave scheduling open.");
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await field.click(); await popup.getByLabel("Exact date", { exact: true }).fill("2030-06-15");
     await popup.getByRole("button", { name: "Apply date", exact: true }).click();
     await page.getByRole("button", { name: "Update", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload(); await expect(field).toHaveText("15 Jun 2030");
     await field.click(); await expect(popup).toBeVisible(); await page.screenshot({ path: "test-results/purple-calendar-desktop.png" });
     await page.keyboard.press("Escape"); await page.setViewportSize({ width: 390, height: 844 }); await field.click();
@@ -73,7 +73,7 @@ test.describe("calendar date boundaries", () => {
       for (const value of ["0001-01-01", "0099-12-31", "2000-02-29", "9999-12-31"]) {
         const request = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith(`/requests/${draft.id}`) && request.postDataJSON().delivery?.changes.due_date === value);
         await setDueDate(page, value); await request;
-        await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+        await expect(savedTicketStatus(page)).toBeVisible();
         await page.reload(); await field.click();
         await expect(popup.getByLabel("Exact date", { exact: true })).toHaveValue(value);
         await page.keyboard.press("Escape");
@@ -97,7 +97,7 @@ test.describe("calendar date boundaries", () => {
       await field.click(); await popup.getByRole("button", { name: "Apply date", exact: true }).focus(); await page.keyboard.press("Tab");
       await expect(popup).toHaveCount(0);
       await expect(page.getByRole("combobox", { name: "Assignees", exact: true })).toBeFocused();
-      await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+      await expect(savedTicketStatus(page)).toBeVisible();
     } finally { await fixture.cleanup(); }
   });
 });
@@ -126,14 +126,14 @@ test("priority and delivery status use accessible colored pill dropdowns", async
     await expect(choices).toHaveCount(0);
     await page.getByLabel("Title", { exact: true }).fill("Colored work");
     await page.getByLabel("Description", { exact: true }).fill("Three priority labels and shared status pills.");
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload(); await expect(priority).toHaveText("High");
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(status).toBeEnabled(); await status.click();
     await expect(page.getByRole("listbox", { name: "Delivery status options", exact: true }).getByRole("option")).toHaveText(["To do", "In progress", "In review", "Done", "Cancelled"]);
     await page.getByRole("option", { name: "Done", exact: true }).click();
     await page.getByRole("button", { name: "Update", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload(); await expect(status).toHaveText("Done");
     await page.setViewportSize({ width: 390, height: 844 }); await priority.click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -159,7 +159,7 @@ test("one ticket action publishes and updates text and delivery together", async
     await setDueDate(page, "2026-12-20");
     await selectPill(page, "Priority", "Low");
     await expect(page.getByRole("button", { name: "Save delivery details", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload();
     await expect(page.getByLabel("Due date", { exact: true })).toHaveText("20 Dec 2026");
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Publish everything");
@@ -174,7 +174,7 @@ test("one ticket action publishes and updates text and delivery together", async
     const before = (await pm.client.rpc("read_request", { target_org: org, request_id: draft.id })).data;
     expect(before.fields.title).toBe("Publish everything"); expect(before.due_date).toBe("2026-12-20");
     await page.getByRole("button", { name: "Update", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Updated everything");
     await expect(page.getByLabel("Due date", { exact: true })).toHaveText("25 Dec 2026");
@@ -197,7 +197,7 @@ test("email assignees support keyboard selection, self assignment, removal and r
     await input.fill(pm.email); await page.getByRole("option", { name: pm.email, exact: true }).click();
     await expect(page.getByRole("button", { name: "Assign me", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: `Remove ${pm.email}`, exact: true })).toBeVisible();
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload();
     await expect(page.getByRole("button", { name: `Remove ${dev.email}`, exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: `Remove ${pm.email}`, exact: true })).toBeVisible();
@@ -209,7 +209,7 @@ test("email assignees support keyboard selection, self assignment, removal and r
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: "test-results/email-assignees-mobile.png", fullPage: true });
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload(); await expect(page.getByRole("button", { name: `Remove ${dev.email}`, exact: true })).toHaveCount(0);
   } finally { await fixture.cleanup(); }
 });
@@ -228,7 +228,7 @@ test("author schedules work; assignee updates status and comments; list filters 
     await selectPill(page, "Priority", "High");
     await page.getByRole("combobox", { name: "Assignees", exact: true }).fill(dev.email);
     await page.getByRole("option", { name: dev.email, exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toContainText("This task is visible to members of the");
     await login(reader, dev); await reader.goto(`/organisations/${org}/requests/${draft.id}`);
@@ -308,7 +308,7 @@ test("delivery edits made during an autosave are saved by the next autosave", as
     });
     await page.getByLabel("Description", { exact: true }).fill("New text while scheduling"); await captured;
     await setDueDate(page, "2026-12-20");
-    release(); await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    release(); await expect(savedTicketStatus(page)).toBeVisible();
     await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
     await page.reload();
     await expect(page.getByLabel("Due date", { exact: true })).toHaveText("20 Dec 2026");
@@ -412,7 +412,7 @@ test("email picker retries lookup failures, restores off-page selections and enf
     await expect(page.getByRole("option", { name: members[4].email, exact: true })).toBeVisible();
     await input.press("ArrowUp"); await input.press("Enter");
     await expect(page.getByRole("button", { name: `Remove ${members[4].email}`, exact: true })).toBeVisible();
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload();
     await expect(page.getByRole("button", { name: `Remove ${members[5].email}`, exact: true })).toBeVisible();
     await expect(page.locator(".assignee-chip")).toHaveCount(5);
@@ -432,7 +432,7 @@ test("removing every assignee clears a selected-email lookup error", async ({ pa
     await page.getByRole("button", { name: "Remove Assignee unavailable", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: "Selected lookup failed" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Retry assignee emails", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
   } finally { await fixture.cleanup(); }
 });
 
@@ -516,7 +516,7 @@ test("a failed Update preserves editable metadata and a lost response confirms t
     });
     await page.getByRole("button", { name: "Update", exact: true }).click();
     await page.getByRole("button", { name: "Check saved version", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Keep corrected scheduling");
     await expect(page.getByLabel("Due date", { exact: true })).toHaveText("25 Dec 2026");
@@ -532,17 +532,17 @@ test("Publish allows an unscheduled ticket and Update can remove its due date", 
     await login(page, pm); await page.goto(`/organisations/${org}/requests/${draft.id}`);
     await page.getByLabel("Title", { exact: true }).fill("Optional schedule");
     await page.getByLabel("Description", { exact: true }).fill("Publish the work before choosing a deadline.");
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.getByRole("button", { name: "Publish", exact: true }).click({ timeout: 5000 });
     await expect(page.getByRole("button", { name: "Update", exact: true })).toBeVisible();
     await page.reload();
     await expect(page.getByLabel("Due date", { exact: true })).toHaveText("Unscheduled");
     await setDueDate(page, "2026-12-20");
     await page.getByRole("button", { name: "Update", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await setDueDate(page, "");
     await page.getByRole("button", { name: "Update", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
+    await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload();
     await expect(page.getByLabel("Due date", { exact: true })).toHaveText("Unscheduled");
     await expect(page.getByRole("button", { name: "Update", exact: true })).toBeVisible();

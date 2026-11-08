@@ -84,5 +84,10 @@ test("account forms support keyboard focus and do not overflow on mobile", async
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByLabel("Email address")).toBeVisible();
+  await page.getByRole("link", { name: "Verify your email", exact: true }).click();
+  const backToSignIn = page.getByRole("link", { name: "Back to sign in", exact: true });
+  await expect(backToSignIn.locator("svg")).toHaveAttribute("aria-hidden", "true");
+  await backToSignIn.press("Enter");
+  await expect(page).toHaveURL(/\/sign-in$/);
   expect(hydrationWarnings).toBe(0);
 });

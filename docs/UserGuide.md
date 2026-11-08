@@ -64,7 +64,8 @@ attempts per hour per organisation, including unknown addresses and duplicates.
 ## Ticket delivery and team discussion
 
 A purple visibility banner runs along the top edge of the ticket panel, above
-the title. **Back to requests** has a left-arrow icon. A lock with **This task is
+the title. **Back to requests**, **Back to workspace**, and **Back to sign in**
+share a left-arrow icon. A lock with **This task is
 private and unpublished** means only its author can read it. After publication,
 an eye with **This task is visible to members of the [organisation name]
 organisation** describes the saved ticket's audience. Unsaved published edits
@@ -73,9 +74,12 @@ keep this banner because members still see the last saved version.
 The title appears once at the top of the ticket. Delivery fields sit beneath
 it, followed by Description and team discussion/activity. Use **Copy ticket
 link** to share the page. Links still require current organisation membership;
-drafts remain private even when someone is assigned. **About this ticket**, at the bottom of the ticket panel below Publish/Update,
-expands the author and saved timestamps. Reader views show it below Refresh saved
-request, before team discussion.
+drafts remain private even when someone is assigned. **About this ticket** is
+always visible below **Publish** or **Update**. It shows the author and ticket
+timestamps, followed by the author's save status. Drafts show **Last autosaved**
+after their next autosave. Older drafts with no recorded autosave time and
+published tickets show **Last saved**. Readers see the details below
+**Refresh saved request**, before team discussion.
 
 Beneath the title, the author sets a date-only **Due date**, **Priority**
 (Low, Medium or High), and zero to five assignees. Click the **Assignees** box and
@@ -124,6 +128,9 @@ private drafts; current members read submitted tasks. There are two task fields:
 **Title** (up to160 Unicode characters) and **Description** (up to24,000).
 Description is free-form Markdown; headings are optional. Existing requests keep
 their title and all old section contents under description headings.
+Use **Write** to edit the Markdown and **Preview** to see how the current text,
+including unsaved edits, will appear to readers. Switch back to **Write** to
+continue editing. You can publish or update from either tab.
 
 New drafts show editable **Title** and **Description** immediately. Write
 directly, or use **What needs to change?** in the right AI panel and choose
@@ -219,8 +226,9 @@ When context or conversation storage is full, continue editing manually. Chat
 storage is bounded to1MiB, reserving completion space before admission. Long or
 truncated AI responses fail safely; ask for a concise proposal or edit manually.
 
-Markdown display supports headings, lists, paragraphs and fenced code. Raw HTML,
-images and links remain literal text; they do not execute or fetch remote media.
+Markdown display supports headings, lists, paragraphs, `**bold text**`,
+`*italic text*` or `_italic text_`, and fenced code. Raw HTML, images and links
+are displayed as text.
 Ticket lists use 50-item pages with **Load more tickets**. No hosted application URL is available yet.
 
 ## Failures

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, failureMessage } from "./http";
-import { Button, Field, Notice } from "./ui";
+import { BackLink, Button, Field, Notice } from "./ui";
 export function AccountForm({ mode }: { mode: "signup" | "signin" | "verify" }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -44,6 +44,6 @@ export function AccountForm({ mode }: { mode: "signup" | "signin" | "verify" }) 
         {mode === "verify" && <Field id="token" label="Verification code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6,10}" minLength={6} maxLength={10} required value={token} onChange={e => setToken(e.target.value)} disabled={pending} />}
         <Button disabled={pending}>{pending ? "Please wait…" : mode === "signup" ? "Create account" : mode === "signin" ? "Sign in" : "Verify email"}</Button>
       </form>
-      <div className="auth-links">{mode === "signup" ? <p>Already have an account? <Link href="/sign-in">Sign in</Link></p> : mode === "signin" ? <><p>New to SpecForge? <Link href="/sign-up">Create an account</Link></p><Link href="/verify-email">Verify your email</Link></> : <><Button className="text-button" onClick={resend} disabled={pending || !email}>Send a new code</Button><Link href="/sign-in">Back to sign in</Link></>}</div>
+      <div className="auth-links">{mode === "signup" ? <p>Already have an account? <Link href="/sign-in">Sign in</Link></p> : mode === "signin" ? <><p>New to SpecForge? <Link href="/sign-up">Create an account</Link></p><Link href="/verify-email">Verify your email</Link></> : <><Button className="text-button" onClick={resend} disabled={pending || !email}>Send a new code</Button><BackLink href="/sign-in">Back to sign in</BackLink></>}</div>
     </div></section>;
 }

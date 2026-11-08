@@ -57,3 +57,26 @@ the same section at the bottom of the ticket card, after Refresh saved request.
 Keep author/publication/last-modified data and native keyboard-accessible details
 behaviour; remove the old topbar toggle. Existing browser tests check position,
 collapsed/expanded metadata and author/reader consistency.
+
+## Follow-up: always-visible metadata and save timestamp
+
+Show About this ticket as a static section for authors and readers, in its
+current position at the bottom of the ticket card. Keep author, publication,
+and modification details visible. Put the author's save status after those
+details. A saved draft shows **Last autosaved** with its own server timestamp.
+Delivery-only changes leave that timestamp intact. A new draft awaits its
+first autosave. Older drafts with an unknown autosave time and published
+tickets show **Last saved**. Keep pending and failure feedback and the existing
+save behavior.
+
+Record the timestamp atomically with a draft content revision and clear it on
+publication to keep draft activity private. Use the existing authenticated
+HTTP/storage tests for save, delivery-only updates and publication, and the
+author/reader browser journeys to verify display and placement.
+
+## Follow-up: site-wide back links
+
+Use the same left arrow and spacing for Back to requests, Back to workspace,
+and Back to sign in. Each link retains its label, destination, and navigation
+behavior. The arrow is decorative. Extend the existing account and ticket
+layout browser journeys to verify the links and keyboard navigation.

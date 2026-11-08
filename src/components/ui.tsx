@@ -1,5 +1,15 @@
 import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 export { Button } from "./button";
+
+export function BackLink({ href, children, fullPage = false }: { href: string; children: ReactNode; fullPage?: boolean }) {
+  const NavigationLink = fullPage ? "a" : Link;
+  return <NavigationLink className="back-link" href={href}>
+    <ArrowLeft className="ui-icon" aria-hidden="true" focusable="false" />{children}
+  </NavigationLink>;
+}
+
 export function Field({ label, id, hint, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; id: string; hint?: string }) {
   return <div className="field"><label htmlFor={id}>{label}</label><input id={id} aria-describedby={hint ? `${id}-hint` : undefined} {...props} />{hint && <p className="hint" id={`${id}-hint`}>{hint}</p>}</div>;
 }

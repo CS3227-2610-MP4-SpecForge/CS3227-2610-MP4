@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, failureMessage } from "./http";
-import { Button, Notice, Pill } from "./ui";
+import { BackLink, Button, Notice, Pill } from "./ui";
 import { deadlineLabel, localDay, ticketPriorities, ticketStatuses, type TicketMember } from "@/delivery";
 import { PriorityPill, StatusPill } from "./ticket-pills";
 import { TicketMembers } from "./ticket-members";
@@ -55,7 +55,7 @@ export function RequestList({ organisationId }: { organisationId: string }) {
     } catch (failure) { setError(failureMessage(failure)); setPending(false); }
   }
   return <section className="stack">
-    <a href="/workspace">Back to workspace</a>
+    <BackLink href="/workspace" fullPage>Back to workspace</BackLink>
     <div className="page-heading"><div><p className="eyebrow">{organisation || "Organisation"}</p><h1>Requests</h1><p className="muted">Submitted requests are shared with your team. Drafts are private to their author.</p></div>{role === "PM" && <Button disabled={pending} onClick={create}>{pending ? "Creating…" : "New draft"}</Button>}</div>
     {error && <Notice danger>{error} If draft creation failed, retrying uses the same creation key.</Notice>}
     <form className="card stack" aria-label="Ticket filters" onSubmit={event => { event.preventDefault(); applyFilters(); }}>
