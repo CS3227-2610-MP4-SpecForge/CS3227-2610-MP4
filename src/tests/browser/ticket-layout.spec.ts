@@ -45,7 +45,9 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
     await expect(page.getByText(/^SF-\d+$/)).toHaveCount(0);
     const panel = page.getByRole("complementary", { name: "AI discussion", exact: true });
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Improve clarity", exact: true })).toBeVisible();
+    for (const name of ["Refresh chat", "Improve clarity", "Add acceptance criteria", "Find missing details"]) {
+      await expect(panel.getByRole("button", { name, exact: true })).toHaveCount(0);
+    }
     const title = (await page.getByLabel("Title", { exact: true }).boundingBox())!;
     const due = (await page.getByLabel("Due date", { exact: true }).boundingBox())!;
     const description = (await page.getByLabel("Description", { exact: true }).boundingBox())!;
@@ -57,7 +59,8 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Show AI assistant", exact: true }).click();
     await expect(panel.getByLabel("AI instruction or question", { exact: true })).toHaveValue("Keep my unsent thought");
-    await panel.getByRole("button", { name: "Improve clarity", exact: true }).click();
+    await panel.getByLabel("AI instruction or question", { exact: true }).fill("Suggest a proposal for clearer wording.");
+    await panel.getByRole("button", { name: "Ask AI", exact: true }).click();
     await expect(panel.getByRole("region", { name: "Suggested ticket changes", exact: true })).toBeVisible();
     await page.screenshot({ path: "test-results/ticket-layout-author.png", fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });

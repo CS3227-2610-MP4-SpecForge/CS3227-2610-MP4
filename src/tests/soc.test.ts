@@ -29,7 +29,7 @@ describe("SoC provider interface", () => {
       });
       expect(await provider(input)).toEqual({ reply: "Which columns?", proposal: null });
       expect(wire).toMatchObject({ model, max_tokens: 2000, reasoning_effort: "none", response_format: { type: "json_object" } });
-      expect(timeout).toHaveBeenCalledWith(60000);
+      expect(timeout).toHaveBeenCalledWith(90_000);
     } finally { timeout.mockRestore(); }
   });
   it("sends scope and uncertainty rules separately from untrusted ticket content", async () => {
@@ -42,7 +42,7 @@ describe("SoC provider interface", () => {
     expect(messages[0].role).toBe("system");
     expect(messages[0].content).toContain("Do not add storage technologies, retention periods, cross-session guarantees, roles, or extra workflows unless supplied");
     expect(messages[0].content).toContain("Keep material unknowns in an explicit Assumptions / unresolved questions section");
-    expect(messages[0].content).toContain("Improve clarity is an editing instruction: reword the supplied ticket and return a complete proposal");
+    expect(messages[0].content).toContain("Wording changes are edits. Return a complete proposal that preserves the existing scope.");
     expect(messages[0].content).toContain("Use ATX Markdown headings");
     expect(JSON.parse(messages.at(-1)!.content)).toEqual({ currentTask: fields, message: "Draft ticket" });
   });
@@ -123,10 +123,10 @@ describe("SoC provider interface", () => {
     expect(JSON.stringify(failure)).not.toContain("PRIVATE_PROVIDER_BODY");
   });
 
-  it.each(["fetch", "body"])("identifies our deadline during %s without waiting 60 seconds", async phase => {
+  it.each(["fetch", "body"])("identifies the 90-second deadline during %s", async phase => {
     const controller = new AbortController();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
-    const clock = vi.spyOn(performance, "now").mockReturnValueOnce(100).mockReturnValue(60100);
+    const clock = vi.spyOn(performance, "now").mockReturnValueOnce(100).mockReturnValue(90_100);
     try {
       const reason = new DOMException("PRIVATE_TIMEOUT_DETAIL", "TimeoutError");
       const provider = createSocProvider(configuration, async () => {
@@ -134,10 +134,10 @@ describe("SoC provider interface", () => {
         return new Response(new ReadableStream({ start(stream) { controller.abort(reason); stream.error(reason); } }));
       });
       const failure = await provider(input).catch(error => error);
-      expect(failure).toMatchObject({ code: "local_timeout", diagnostic: { source: "local_deadline", elapsed_ms: 60000 } });
+      expect(failure).toMatchObject({ code: "local_timeout", diagnostic: { source: "local_deadline", elapsed_ms: 90_000 } });
       expect(failure.diagnostic).not.toHaveProperty("http_status");
       expect(JSON.stringify(failure)).not.toContain("PRIVATE_TIMEOUT_DETAIL");
-      expect(timeout).toHaveBeenCalledWith(60000);
+      expect(timeout).toHaveBeenCalledWith(90_000);
     } finally { timeout.mockRestore(); clock.mockRestore(); }
   });
   it("does not call an unrelated AbortError our deadline", async () => {

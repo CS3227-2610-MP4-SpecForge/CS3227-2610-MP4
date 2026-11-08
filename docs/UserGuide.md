@@ -82,8 +82,9 @@ published tickets show **Last saved**. Readers see the details below
 **Refresh saved request**, before team discussion.
 
 Beneath the title, the author sets a date-only **Due date**, **Priority**
-(Low, Medium or High), and zero to five assignees. Click the **Assignees** box and
-start typing an email. Matching current organisation members appear in a
+(Low, Medium or High), and zero to five assignees. The **Assignees** label shows
+the current count, such as **(2/5)**. Click the box and start typing an email.
+Matching current organisation members appear in a
 scrollable list; click a suggestion or use the arrow keys and Enter to select it.
 Use Escape to close suggestions and the × beside an email to remove it. Either
 PMs or Developers can be assigned. Search your own email to assign yourself. All draft fields autosave privately.
@@ -147,13 +148,9 @@ appears beneath the ticket. Collapsing keeps your conversation, typed instructio
 and pending suggestion. Chat is private to the original PM
 author, including from admins and after publication.
 
-Use **Improve clarity**, **Add acceptance criteria**, or **Find missing details**
-for focused help. Acceptance suggestions preserve your title and other sections;
-unrecognized/ambiguous section structures may need manual editing. Finding missing
-details asks questions without modifying the ticket. Answer using the single
-**AI instruction or question** box and **Ask AI**, or choose **Leave undecided** to
-ask AI to record an open question rather than assume its answer. Useful answer
-options may appear as chat text; they are not separate selection controls.
+Use the **AI instruction or question** box and **Ask AI** for questions and
+suggested edits. Review suggestions before applying them. Choose **Leave undecided**
+to ask AI to record an open question. Useful answer options may appear as chat text.
 
 SoC writing remains experimental: a valid response can add unsupported requirements,
 omit supplied details, or contradict an unresolved question. Check the entire draft
@@ -189,10 +186,11 @@ On ticket save failure, local text and delivery edits are preserved and automati
 **Check saved version** before retrying, or explicitly reload/discard after a
 conflict. New-draft retries use the same creation key to avoid duplicates.
 
-On chat failure, your admitted message and previous conversation remain saved.
-Use **Refresh chat** after a lost response. A completed send is not duplicated;
-an absent send can be explicitly retried, using the current task if it changed.
-Failed turns have **Retry AI turn**; changed task snapshots need a new message.
+After a lost response, SpecForge checks the saved conversation automatically.
+If the send reached the server, its turn appears in the conversation. If the
+check finds no turn, you can resend using the current ticket. If the check
+fails, reopen the AI assistant to try again. Failed turns offer **Retry AI
+turn** when their ticket snapshot still matches.
 Failure notices distinguish:
 
 - **Invalid AI output:** new failures explain whether the response was cut short,
@@ -200,15 +198,15 @@ Failure notices distinguish:
   Earlier failures keep the generic message because their exact reason was not
   recorded. JSON response mode improves formatting; ticket validation remains.
 
-- **Local deadline:** SpecForge stopped waiting at its60-second provider deadline;
-  SoC may still be processing. No upstream status is inferred.
+- **Local deadline.** The notice reads “AI response timed out after 90 seconds.”
+  Earlier timeouts show their recorded duration in whole seconds.
 - **Upstream HTTP error:** SoC returned an actual status such as502,504 or429;
   the notice includes that status and app-observed elapsed time. A502 alone
   does not prove the upstream cause was a timeout.
 - **Network failure:** the connection or response stream failed without an
   upstream HTTP error response.
-- **Browser waiting limit:** the browser's75-second wait expired; refresh chat
-  to reconcile rather than assuming the server/provider failed.
+- **Browser waiting limit.** If the browser's 110-second wait expires, SpecForge
+  checks the turn's saved status.
 
 Provider failure details survive chat reloads. Older failed turns retain a generic
 notice because no detailed status/timing was recorded. Elapsed time measures
@@ -219,7 +217,7 @@ remains available when AI fails. Unsaved task text warns before departure and
 is not stored in browser persistent storage.
 
 App limits (not SoC quotas): one active AI turn per request/account,20attempts
-per account/hour,4,000-character messages,60-second provider deadline and
+per account/hour,4,000-character messages,90-second provider deadline and
 2,000output tokens per response (debugging policy; no separate AI reply character ceiling). The full serialized task/conversation/system
 context is capped at48,000UTF-8bytes; older messages are never silently removed.
 When context or conversation storage is full, continue editing manually. Chat

@@ -52,3 +52,11 @@ Approved test seams:
 
 Run focused red/green checks, repository verification and local integration/browser
 checks. Obtain independent security preflight/post-change and code review.
+
+## Follow-up: assignee count beside the label
+
+Show the live selection count as `(x/5)` beside the editable Assignees label.
+Remove the help line below the picker and keep the count associated with the
+combobox as its accessible description. The email placeholder and five-person
+limit remain. Verify the count at zero, after selecting and removing people,
+and at the limit in the existing picker browser journeys.

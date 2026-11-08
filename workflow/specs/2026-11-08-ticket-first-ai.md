@@ -48,3 +48,17 @@ Independent security preflight/post-review and one code/architecture review.
 Shared tokens/controls and read-only Developer ticket views must stay consistent.
 No Jira integration, issue status/assignment, streaming, model discovery, live
 quota verification or deployment changes in this slice.
+
+## Follow-up: simplify the AI panel
+
+Remove Refresh chat, Improve clarity, Add acceptance criteria, and Find missing
+details, along with their handlers and preset-only proposal processing. Keep
+Draft ticket, private Ask AI, Leave undecided, and explicit suggestion review.
+Historical messages and diagnostics remain readable.
+
+After an ambiguous send, check the saved conversation once automatically. Use
+the same turn key and offer an explicit resend only if the check finds no saved
+turn. Reopening the assistant can recover a failed read. Keep running-turn
+polling and require review before applying recovered proposals. Verify the panel
+and recovery in existing browser journeys and keep existing provider and private
+chat integration seams for validation and isolation.

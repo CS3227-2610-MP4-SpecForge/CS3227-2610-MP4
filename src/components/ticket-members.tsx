@@ -5,6 +5,8 @@ import { api, failureMessage } from "./http";
 import { Button, Notice } from "./ui";
 
 type MemberPage = { members: TicketMember[]; selected_members: TicketMember[]; next_cursor: string | null };
+const assigneeLimit = 5;
+
 export function TicketMembers({ organisationId, selected, onChange, disabled = false, onMembers }: { organisationId: string; selected?: string[]; onChange?: (ids: string[]) => void; disabled?: boolean; onMembers?: (members: TicketMember[]) => void }) {
   const [page, setPage] = useState<MemberPage>({ members: [], selected_members: [], next_cursor: null });
   const [identities, setIdentities] = useState<TicketMember[]>([]);
@@ -45,7 +47,8 @@ export function TicketMembers({ organisationId, selected, onChange, disabled = f
     return () => { current = false; };
   }, [path, selectedKey, reload]);
   const options = page.members.filter(member => !selected?.includes(member.user_id));
-  const full = (selected?.length ?? 0) >= 5;
+  const selectedCount = selected?.length ?? 0;
+  const full = selectedCount >= assigneeLimit;
   const expanded = open && !disabled && !full;
   useEffect(() => {
     if (expanded && activeIndex >= 0) list.current?.children[activeIndex]?.scrollIntoView({ block: "nearest" });
@@ -81,16 +84,18 @@ export function TicketMembers({ organisationId, selected, onChange, disabled = f
   </div>;
   if (!onChange) return <div className="field"><span className="field-label">Assignees</span><span className="field-value">{selected?.length ? selected.map(label).join(", ") : "Unassigned"}</span>{selectedKey && identityError && <><Notice danger>{identityError}</Notice><Button type="button" className="secondary" onClick={retry}>Retry assignee emails</Button></>}</div>;
   return <div className="field assignee-picker" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) { setOpen(false); setActiveIndex(-1); } }}>
-    <label htmlFor={id}>Assignees</label>
+    <div className="assignee-label">
+      <label htmlFor={id}>Assignees</label>
+      <span className="hint" id={`${id}-count`}>({selectedCount}/{assigneeLimit})</span>
+    </div>
     <div className="assignee-box" onClick={() => { if (!disabled) input.current?.focus(); }}>
       {selected?.map(userId => <span className="assignee-chip" key={userId}><span>{label(userId)}</span><button type="button" disabled={disabled} aria-label={`Remove ${label(userId)}`} onClick={event => { event.stopPropagation(); onChange(selected.filter(value => value !== userId)); input.current?.focus(); }}>×</button></span>)}
-      <input ref={input} id={id} role="combobox" autoComplete="off" aria-autocomplete="list" aria-expanded={expanded} aria-controls={expanded ? `${id}-list` : undefined} aria-activedescendant={expanded && options[activeIndex] ? `${id}-option-${activeIndex}` : undefined} aria-describedby={`${id}-hint`} placeholder={full ? "Five assignees selected" : "Type an email…"} maxLength={160} value={search} disabled={disabled} onFocus={() => setOpen(true)} onChange={event => query(event.target.value)} onKeyDown={event => {
+      <input ref={input} id={id} role="combobox" autoComplete="off" aria-autocomplete="list" aria-expanded={expanded} aria-controls={expanded ? `${id}-list` : undefined} aria-activedescendant={expanded && options[activeIndex] ? `${id}-option-${activeIndex}` : undefined} aria-describedby={`${id}-count`} placeholder={full ? "Five assignees selected" : "Type an email…"} maxLength={160} value={search} disabled={disabled} onFocus={() => setOpen(true)} onChange={event => query(event.target.value)} onKeyDown={event => {
         if (event.key === "Escape") { event.preventDefault(); setOpen(false); setActiveIndex(-1); }
         else if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setOpen(true); if (!loading && options.length) setActiveIndex(index => event.key === "ArrowDown" ? (index + 1) % options.length : (index <= 0 ? options.length : index) - 1); }
         else if (event.key === "Enter") { event.preventDefault(); if (expanded && !loading && options[activeIndex]) choose(options[activeIndex]); }
       }} />
     </div>
-    <p className="hint" id={`${id}-hint`}>{selected?.length ?? 0}/5 assigned. {full ? "Remove someone to add another assignee." : "Search organisation members by email."}</p>
     {selectedKey && identityError && <><Notice danger>{identityError}</Notice><Button type="button" className="secondary" onClick={retry}>Retry assignee emails</Button></>}
     {expanded && <div className="assignee-popover">
       <div ref={list} id={`${id}-list`} role="listbox" aria-label="Matching members" className="assignee-options" aria-busy={loading}>

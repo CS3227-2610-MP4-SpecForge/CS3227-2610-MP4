@@ -190,6 +190,10 @@ test("email assignees support keyboard selection, self assignment, removal and r
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests/${draft.id}`);
     const input = page.getByRole("combobox", { name: "Assignees", exact: true });
+    const count = page.getByText(/^\(\d\/5\)$/);
+    await expect(count).toHaveText("(0/5)");
+    await expect(input).toHaveAccessibleDescription("(0/5)");
+    await expect(page.getByText("Search organisation members by email.", { exact: false })).toHaveCount(0);
     await input.fill(dev.email.slice(5, 20).toUpperCase());
     await expect(page.getByRole("option", { name: dev.email, exact: true })).toBeVisible();
     await input.press("ArrowDown"); await input.press("Enter");
@@ -197,11 +201,13 @@ test("email assignees support keyboard selection, self assignment, removal and r
     await input.fill(pm.email); await page.getByRole("option", { name: pm.email, exact: true }).click();
     await expect(page.getByRole("button", { name: "Assign me", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: `Remove ${pm.email}`, exact: true })).toBeVisible();
+    await expect(count).toHaveText("(2/5)");
     await expect(savedTicketStatus(page)).toBeVisible();
     await page.reload();
     await expect(page.getByRole("button", { name: `Remove ${dev.email}`, exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: `Remove ${pm.email}`, exact: true })).toBeVisible();
     await page.getByRole("button", { name: `Remove ${dev.email}`, exact: true }).click();
+    await expect(count).toHaveText("(1/5)");
     await input.fill("non-member@example.com"); await expect(page.getByText("No matching members.", { exact: true })).toBeVisible();
     await input.press("Escape"); await expect(page.getByRole("listbox")).toHaveCount(0);
     await input.fill(pm.email); await expect(page.getByText("No matching members.", { exact: true })).toBeVisible();
@@ -405,7 +411,8 @@ test("email picker retries lookup failures, restores off-page selections and enf
       await expect(page.getByRole("option", { name: member.email, exact: true })).toBeVisible();
       await page.getByRole("option", { name: member.email, exact: true }).click();
     }
-    await expect(page.getByText("5/5 assigned.", { exact: false })).toBeVisible();
+    await expect(page.getByText("(5/5)", { exact: true })).toBeVisible();
+    await expect(input).toHaveAccessibleDescription("(5/5)");
     await expect(page.getByRole("listbox")).toHaveCount(0);
     await expect(input).toHaveAttribute("aria-expanded", "false");
     await page.getByRole("button", { name: `Remove ${pm.email}`, exact: true }).click();

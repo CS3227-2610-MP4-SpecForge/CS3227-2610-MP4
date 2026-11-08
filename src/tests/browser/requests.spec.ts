@@ -13,6 +13,10 @@ async function openAi(page: Page) {
   const show = page.getByRole("button", { name: "Show AI assistant", exact: true });
   if (await show.isVisible()) await show.click();
 }
+async function askAi(page: Page, message: string) {
+  await page.getByLabel("AI instruction or question", { exact: true }).fill(message);
+  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
+}
 const content = { "Title": "Find saved requirements", "Description": "## Problem description\n\nPMs need to find work.\n\n## Desired behaviour\n\n- Filter requests by title.\n\n<script>window.requestInjected = true</script>\n\n![tracking](https://tracking.invalid/pixel)\n\n[unsafe](javascript:alert(1))" };
 async function fill(page: Page) { for (const [label, value] of Object.entries(content)) await page.getByLabel(label, { exact: true }).fill(value); }
 
@@ -253,16 +257,20 @@ test("lost chat responses reconcile once and failed turns retry without duplicat
   try {
     const chat = `**/api/organisations/${org}/requests/${id}/chat`;
     let posts = 0;
+    let failedRead = false;
     await page.route(chat, async route => {
       if (route.request().method() === "POST") { posts++; if (posts === 1) { await route.fetch(); await route.abort(); return; } }
+      else if (posts === 1 && !failedRead) { failedRead = true; await route.abort(); return; }
       await route.continue();
     });
     await page.getByLabel("AI instruction or question", { exact: true }).fill("Clarify response loss");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "Refresh chat to reconcile" })).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: "Reopen the AI assistant" })).toBeVisible();
+    expect(failedRead).toBe(true);
     await expect(page.getByRole("button", { name: "Ask AI", exact: true })).toBeDisabled();
     await expect(page.getByLabel("AI instruction or question", { exact: true })).toHaveValue("Clarify response loss");
-    await page.getByRole("button", { name: "Refresh chat", exact: true }).click();
+    await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
+    await page.getByRole("button", { name: "Show AI assistant", exact: true }).click();
     await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
     await expect(page.getByText("Clarify response loss", { exact: true })).toHaveCount(1);
     await expect(page.getByLabel("AI instruction or question", { exact: true })).toHaveValue("");
@@ -299,18 +307,33 @@ test("applying a proposal to a published task remains local until explicit Updat
 
 
 test("an unadmitted send can use the current task after reconciliation without losing either draft", async ({ page }) => {
-  const { fixture, org, id } = await setupEditor(page);
+  const { fixture, pm, org, id } = await setupEditor(page);
   try {
-    let abort = true;
+    const target = { target_org: org, request_id: id, actor_id: pm.id };
+    let otherTurn: { id: string; generation: number } | undefined;
+    let reads = 0;
     await page.route(`**/api/organisations/${org}/requests/${id}/chat`, async route => {
-      if (route.request().method() === "POST" && abort) { abort = false; await route.abort(); } else await route.continue();
+      if (route.request().method() === "POST" && !otherTurn) {
+        const input = route.request().postDataJSON();
+        const admitted = await fixture.admin.rpc("begin_chat_turn", { ...target, turn_key: crypto.randomUUID(), base_revision: input.revision,
+          input_fields: input.fields, user_message: "A turn from another session", retry_failed: false });
+        expect(admitted.error).toBeNull();
+        otherTurn = admitted.data.turn;
+        await route.abort();
+      } else if (route.request().method() === "GET" && otherTurn && ++reads === 2) await route.abort();
+      else await route.continue();
     });
     await page.getByLabel("AI instruction or question", { exact: true }).fill("My unsent question");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "Refresh chat to reconcile" })).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: "Reopen the AI assistant" })).toBeVisible();
+    const completed = await fixture.admin.rpc("finish_chat_turn", { ...target, turn_id: otherTurn!.id, worker_generation: otherTurn!.generation,
+      human_reply: "The other turn finished.", task_proposal: null, failure_code: null, failure_diagnostic: null });
+    expect(completed.error).toBeNull();
     await page.getByLabel("Title", { exact: true }).fill("Changed after failed send");
     await expect(saved(page)).toBeVisible();
-    await page.getByRole("button", { name: "Refresh chat", exact: true }).click();
+    await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
+    await page.getByRole("button", { name: "Show AI assistant", exact: true }).click();
+    await expect(page.getByText("The other turn finished.", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Send reconciled message with current task", exact: true }).click();
     await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
     await expect(page.getByText("My unsent question", { exact: true })).toHaveCount(1);
@@ -325,7 +348,8 @@ test("AI failures show distinct durable local timeout, upstream HTTP and network
   try {
     for (const [message, expected] of [
       ["simulate upstream 502", "SoC returned HTTP 502 after 1.2 s"],
-      ["simulate local timeout", "SpecForge stopped waiting for SoC after 60.0 s"],
+      ["simulate local timeout", "AI response timed out after 90 seconds."],
+      ["simulate historical timeout", "AI response timed out after 60 seconds."],
       ["simulate network failure", "The connection to SoC failed after 0.6 s"],
       ["simulate failure", "No detailed diagnostic was recorded for this turn"],
       ["simulate malformed JSON", "SoC completed its response, but it was not valid JSON"],
@@ -338,7 +362,8 @@ test("AI failures show distinct durable local timeout, upstream HTTP and network
     await page.reload();
     await openAi(page);
     await expect(page.getByRole("alert").filter({ hasText: "SoC returned HTTP 502 after 1.2 s" })).toBeVisible();
-    await expect(page.getByRole("alert").filter({ hasText: "local 60-second deadline" })).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: /^AI response timed out after 90 seconds\.$/ })).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: /^AI response timed out after 60 seconds\.$/ })).toBeVisible();
     await expect(page.getByRole("alert").filter({ hasText: "No upstream HTTP error response was received" })).toBeVisible();
     await expect(page.getByRole("alert").filter({ hasText: "SoC completed its response, but it was not valid JSON" })).toBeVisible();
     await expect(page.getByRole("alert").filter({ hasText: "SoC reached the 2,000-token output limit before finishing" })).toBeVisible();
@@ -362,13 +387,13 @@ test("rough ideas become private AI drafts with undo and inline review", async (
     await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Remember filters when I return to the request list.");
     await page.getByLabel("Title", { exact: true }).fill("Remember my filters");
     await expect(saved(page)).toBeVisible();
-    await page.getByRole("button", { name: "Improve clarity", exact: true }).click();
+    await askAi(page, "Suggest a proposal for clearer wording.");
     const review = page.getByRole("region", { name: "Suggested ticket changes", exact: true });
     await expect(review).toBeVisible();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Remember my filters");
     await page.getByRole("button", { name: "Discard", exact: true }).click();
     await expect(review).toHaveCount(0);
-    await page.getByRole("button", { name: "Improve clarity", exact: true }).click();
+    await askAi(page, "Suggest a proposal for clearer wording.");
     await page.getByRole("button", { name: "Accept changes", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
     await expect(saved(page)).toBeVisible();
@@ -404,32 +429,25 @@ test("switching to manual writing during the first-draft freshness check prevent
   } finally { release?.(); await fixture.cleanup(); }
 });
 
-test("targeted writing preserves other sections and unanswered questions can stay open", async ({ page }) => {
+test("private discussion can leave an unanswered question open for review", async ({ page }) => {
   const { fixture } = await setupEditor(page);
   try {
     await page.getByLabel("Title", { exact: true }).fill("Remember my filters");
     const original = "## Problem description\n\nKeep my wording.\n\n## Out of scope\n\nNo cross-device sync.";
     await page.getByLabel("Description", { exact: true }).fill(original);
     await expect(saved(page)).toBeVisible();
-    await page.getByRole("button", { name: "Add acceptance criteria", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Suggested ticket changes", exact: true })).toBeVisible();
-    await page.screenshot({ path: "test-results/ticket-review-desktop.png", fullPage: true });
-    await page.getByRole("button", { name: "Accept changes", exact: true }).click();
-    await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Remember my filters");
-    await expect(page.getByLabel("Description", { exact: true })).toHaveValue(original + "\n\n## Acceptance criteria\n\n- Filters are restored when returning to the list.");
-    await expect(saved(page)).toBeVisible();
-    const before = await page.getByLabel("Description", { exact: true }).inputValue();
-    await page.getByRole("button", { name: "Find missing details", exact: true }).click();
+    await askAi(page, "What details are still missing?");
     await expect(page.getByRole("button", { name: "Leave undecided", exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Suggested ticket changes", exact: true })).toHaveCount(0);
-    await expect(page.getByLabel("Description", { exact: true })).toHaveValue(before);
+    await expect(page.getByLabel("Description", { exact: true })).toHaveValue(original);
     await page.getByLabel("AI instruction or question", { exact: true }).fill("Keep this instruction while I write.");
     await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
     await page.getByRole("button", { name: "Show AI assistant", exact: true }).click();
     await expect(page.getByLabel("AI instruction or question", { exact: true })).toHaveValue("Keep this instruction while I write.");
     await page.getByRole("button", { name: "Leave undecided", exact: true }).click();
     await expect(page.getByRole("region", { name: "Suggested ticket changes", exact: true })).toBeVisible();
-    await expect(page.getByLabel("Description", { exact: true })).toHaveValue(before);
+    await expect(page.getByLabel("Description", { exact: true })).toHaveValue(original);
+    await page.screenshot({ path: "test-results/ticket-review-desktop.png", fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     await expect(page.getByLabel("AI instruction or question", { exact: true })).toBeVisible();
@@ -453,8 +471,6 @@ test("a lost first-draft response preserves the rough idea and requires review a
       else await route.continue();
     });
     await page.getByRole("button", { name: "Draft ticket", exact: true }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "Refresh chat to reconcile" })).toBeVisible();
-    await page.getByRole("button", { name: "Refresh chat", exact: true }).click();
     await expect(page.getByRole("button", { name: "Review ticket changes", exact: true })).toBeVisible();
     await expect(page.getByLabel("What needs to change?", { exact: true })).toHaveValue("Keep my original idea after response loss.");
     await page.getByRole("button", { name: "Review ticket changes", exact: true }).click({ timeout: 10000 });
@@ -517,7 +533,7 @@ test("discarding during an acceptance freshness read cancels the pending edit", 
   const { fixture } = await setupEditor(page); let release!: () => void;
   try {
     await fill(page); await expect(saved(page)).toBeVisible();
-    await page.getByRole("button", { name: "Improve clarity", exact: true }).click();
+    await askAi(page, "Suggest a proposal for clearer wording.");
     await expect(page.getByRole("region", { name: "Suggested ticket changes", exact: true })).toBeVisible();
     let started!: () => void; const intercepted = new Promise<void>(resolve => { started = resolve; });
     const hold = new Promise<void>(resolve => { release = resolve; });

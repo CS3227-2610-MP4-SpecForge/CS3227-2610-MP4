@@ -110,7 +110,6 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .ticket-description-tabs .button[aria-selected="true"] { background: var(--brand-soft); color: var(--brand); border-color: var(--brand-border); }
 .ticket-description-preview { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
 .chat-panel { position: sticky; top: 24px; }
-.chat-panel .section-title { justify-content: space-between; flex-wrap: wrap; }
 .chat-panel > p { margin-bottom: 0; }
 .chat-transcript { max-height: 62vh; overflow-y: auto; overflow-wrap: anywhere; }
 .chat-turn { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
@@ -153,14 +152,10 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .read-only-fields dd { margin: 8px 0 0; overflow-wrap: anywhere; }
 .assignee-field summary { cursor: pointer; font-size: .85rem; font-weight: 650; padding: 6px 0; }
 .assignee-field > .hint { margin-block: 4px 12px; overflow-wrap: anywhere; }
-.assistance-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.assistance-toolbar .button { justify-content: flex-start; text-align: left; }
 .ticket-workspace .chat-panel { position: sticky; top: 24px; padding: 20px; max-height: calc(100dvh - 48px); overflow-y: auto; }
 .ticket-workspace .chat-panel > * { flex-shrink: 0; }
 .ticket-workspace .chat-panel .chat-transcript { max-height: none; overflow: visible; }
-.chat-panel .section-title { align-items: start; }
-.chat-panel .section-title h2 { margin-bottom: 0; }
-.chat-panel .section-title .button { min-height: 36px; padding: 6px 12px; }
+.chat-panel > h2 { margin-bottom: 0; }
 .idea-starter h2 { font-size: 1rem; margin-bottom: 8px; }
 .idea-starter .eyebrow { margin-bottom: 8px; }
 .idea-starter textarea { min-height: 130px; }
@@ -196,6 +191,7 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 }
 
 .assignee-picker { position: relative; min-width: 0; }
+.assignee-label { display: flex; align-items: baseline; gap: var(--space); }
 .assignee-box { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 46px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); cursor: text; }
 .assignee-box:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .assignee-box input { flex: 1 1 160px; width: 0; min-width: 0; min-height: 30px; padding: 4px; border: 0; outline: none; }

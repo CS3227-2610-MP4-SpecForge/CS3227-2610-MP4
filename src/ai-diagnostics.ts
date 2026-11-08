@@ -1,3 +1,7 @@
+export const aiResponseTimeoutMs = 90_000;
+// Give the server time to admit the turn and persist the result around the SoC call.
+export const aiBrowserTimeoutMs = aiResponseTimeoutMs + 20_000;
+
 export const invalidOutputReasons = ["truncated", "invalid_json", "invalid_schema", "invalid_envelope", "missing_content", "tool_calls", "unexpected_finish", "body_limit", "unsafe_section"] as const;
 export type InvalidOutputReason = typeof invalidOutputReasons[number];
 export type AiDiagnostic =
@@ -21,7 +25,10 @@ export function describeAiFailure(code: string | null, diagnostic?: AiDiagnostic
     };
     return reasons[diagnostic.reason];
   }
-  if (code === "local_timeout" && diagnostic?.source === "local_deadline") return `SpecForge stopped waiting for SoC after ${elapsed} s (local 60-second deadline). SoC may still be processing. Your message is saved.`;
+  if (code === "local_timeout" && diagnostic?.source === "local_deadline") {
+    const seconds = Math.round(Math.min(diagnostic.elapsed_ms, aiResponseTimeoutMs) / 1000);
+    return `AI response timed out after ${seconds} seconds.`;
+  }
   if (code === "upstream_http" && diagnostic?.source === "upstream_http") return `SoC returned HTTP ${diagnostic.http_status} after ${elapsed} s. An upstream HTTP error was received; this was not SpecForge's local deadline. Your message is saved.`;
   if (code === "network_error" && diagnostic?.source === "network") return `The connection to SoC failed after ${elapsed} s. No upstream HTTP error response was received. Your message is saved.`;
   const messages: Record<string, string> = {

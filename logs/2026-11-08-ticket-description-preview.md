@@ -82,3 +82,45 @@
   and 56 database tests skipped.
 - Independent code review approved the change. No resource measurements or
   live provider calls were recorded.
+
+## Inline assignee count
+
+- The user requested moving the selection count beside the editable Assignees
+  label and removing the help line beneath the picker. The count is also the
+  combobox's accessible description. Updated the picker spec and user guide.
+- RED reproduced missing inline counts at zero and five. Both focused browser
+  journeys passed after the change, including selection, removal, and the cap.
+  Checked the mobile screenshot. `npm run verify` passed with 74 tests and 56
+  database tests skipped. Independent code review approved the change.
+
+## AI response timeout
+
+- The user requested a 90-second SoC deadline and the notice “AI response timed
+  out after 90 seconds.” The browser now waits up to 110 seconds. Earlier
+  timeout notices use their recorded duration in whole seconds. Existing
+  120-second worker leases and explicit retry behavior still apply.
+- RED reproduced the former 60-second provider configuration and the old
+  browser copy. The final diff passed 15 chat integration tests, two focused
+  Chromium journeys, and `npm run verify` with 74 tests and 56 database tests
+  skipped in the ordinary test command.
+- Independent code and security reviewers approved the change. Security
+  preflight and post-review checked the fetch/body deadline, admission and
+  reconciliation. Tests used local fixtures and a deterministic AI adapter.
+
+## Simplified AI panel
+
+- Removed Refresh chat and the three preset writing actions at the user's
+  request, including their handlers, styling, prompts and preset-only server
+  proposal processing. Private Ask AI, draft generation, Leave undecided and
+  explicit suggestion review remain available. Historical diagnostics still load.
+- Lost sends now trigger an authorized read by turn key. The panel offers an
+  explicit resend when the turn is absent. Reopening can recover failed reads.
+  Review found a stale resend candidate could block recovery after a failed poll
+  with another active turn. The expanded browser regression reproduced that
+  failure. Clearing the candidate on read failure fixed it.
+- The initial panel regression failed before removal. Thirteen chat integration,
+  16 request browser and four layout browser tests passed. Three focused
+  recovery browser tests passed after the poll fix. `npm run verify` passed with
+  74 tests and 54 database tests skipped in ordinary Vitest.
+- Independent code and security review approved the final diff. Tests used the
+  local stack and deterministic AI adapter. Resource totals were not captured.

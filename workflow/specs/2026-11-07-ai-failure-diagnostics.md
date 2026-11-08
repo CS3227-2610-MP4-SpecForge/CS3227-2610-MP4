@@ -21,3 +21,12 @@ Tests: deterministic provider transport for local abort, receivedHTTP errors,
 network/stream failures and malformed output; real local RPC/HTTP roundtrip and
 strict diagnostic validation; browser checks for distinct durable messages. No
 live SoC calls. Security preflight and independent code/security review apply.
+
+## Follow-up: 90-second AI response timeout
+
+Increase the SoC adapter's local deadline to 90 seconds. Show **AI response
+timed out after 90 seconds.** for current local timeouts. Earlier timed-out
+turns retain their recorded duration. Let the browser wait up to 110 seconds
+to receive the persisted result. The 120-second worker lease, explicit retry,
+failure categories and admission limits still apply. Verify with the existing
+deterministic provider and browser seams and local persistence tests.

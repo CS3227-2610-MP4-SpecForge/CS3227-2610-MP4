@@ -358,7 +358,7 @@ small, empty-history cases do not establish reliability on full tickets or imple
 the fictional upload/expiry behavior used as test text.
 
 Application policy: full serialized messages (system, complete private history,
-current editor and message) <=48,000UTF-8bytes;2,000output tokens;60-second deadline;
+current editor and message) <=48,000UTF-8bytes;2,000output tokens;90-second deadline;
 64KiB response bytes;4,000-character user messages and no separate AI reply
 character ceiling. No context trimming, tools,
 automatic retry or fallback. Invalid/truncated/provider responses become durable
@@ -372,7 +372,7 @@ body_limit or unsafe_section. TypeScript and storage reject unknown reasons and
 extra keys. Parse exceptions, schema paths, raw provider content and hidden
 reasoning are never persisted. Historical invalid-output rows retain null metadata
 and remain readable. Empty tool-call lists are harmless; actual tool calls fail.
-Only the adapter's own aborted60-second signal establishes local_timeout, during
+Only the adapter's own 90-second abort signal establishes local_timeout during
 fetch or body read. Upstream errors retain numericHTTPstatus and monotonic
 app-observed elapsed milliseconds; transport errors carry no raw exception.
 Strict allowlisted metadata is persisted on author-private chat turns, validated
@@ -391,18 +391,13 @@ explicit published saves are unchanged. Only a direct, newly requested first-dra
 completion may fill the private editor automatically. Reconciled/polled/history
 results require review. `SuggestionReview` renders a literal text diff, never HTML.
 
-`src/assistance.ts` shares the user-visible action messages; these are persisted
-as ordinary immutable turn messages, so retries retain their action. No new
-client actor/history fields or worker privileges are introduced.
-`src/server/task-suggestions.ts` suppresses proposals for the exact missing-details
-action and merges only the Acceptance criteria section for that action. Supported
-ATX/colon headings are parsed outside backtick/tilde fences. Ambiguous sections,
-unsupported bold/setext section styles, missing generated criteria, unclosed
-fences and over-limit merges fail safely;
-all original title/outside-section bytes remain intact. Other AI edits retain
-whole-ticket review. Prompt guidance improves writing behaviour but authorization
-and edit scoping are runtime controls. No live-provider reliability claim follows
-from deterministic fake-model journeys.
+`src/assistance.ts` defines the Draft ticket and Leave undecided messages. They
+are persisted as ordinary immutable turn messages so retries retain their
+inputs. Free-form edits produce validated whole-ticket proposals for review.
+After an ambiguous send, `ChatPanel` reads the saved conversation and checks
+the original turn key. It offers explicit resend only when that key is absent.
+Reads and sends share an operation guard, and reopening the panel can recover a
+failed read. Recovered proposals use the explicit review flow.
 Markdown uses a small React text-only renderer for headings/lists/paragraphs/code;
 HTML, URLs and images are never executed or fetched.
 
@@ -426,7 +421,7 @@ select it. Tests pass the local worker key only to the server subprocess.
   (logout excluded). This does not coordinate multiple instances. Supabase Auth
   rate limits are the provider-wide control; hosted limits/abuse settings must
   be verified before release. Supabase HTTP requests have a10-second timeout; the separate SoC adapter has
-  a60-second deadline and browser chat waits75seconds.
+  a 90-second deadline and browser chat waits up to 110 seconds.
 - Keep all real keys and sensitive request contents out of logs. The SoC adapter is server-only; demo provisioning and privileged browser actions
   remain unimplemented.
 - Hosted verification needs custom SMTP: Supabase's default sender restricts

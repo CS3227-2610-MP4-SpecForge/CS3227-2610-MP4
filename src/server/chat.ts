@@ -1,4 +1,3 @@
-import { constrainSuggestion } from "./task-suggestions";
 import { aiDiagnostic, diagnosticSources } from "./ai-diagnostics";
 import type { AiDiagnostic } from "../ai-diagnostics";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -12,9 +11,9 @@ function failureResponse(failure: { code?: string } | null) {
   if (!failure) return null;
   if (failure.code === "42501") return error("Chat unavailable or access has changed.", 403);
   if (failure.code === "22023") return error("The message or task snapshot is invalid. Send a new message using the current task.", 400);
-  if (failure.code === "P0001") return error("The task or AI turn changed. Refresh chat and check the saved task before continuing.", 409);
-  if (failure.code === "PT429") return error("AI is busy or an account/conversation limit was reached. Refresh chat; wait for a running turn or continue editing manually.", 429);
-  return error("Chat service unavailable. Refresh chat before retrying; your task text is preserved.", 503);
+  if (failure.code === "P0001") return error("The task or AI turn changed. Check the saved task before continuing.", 409);
+  if (failure.code === "PT429") return error("AI is busy or an account/conversation limit was reached. Wait for a running turn or continue editing manually.", 429);
+  return error("Chat service unavailable. Your task text is preserved.", 503);
 }
 export async function handleChat(request: Request, client: SupabaseClient, actorId: string, dependencies?: ChatDependencies): Promise<Response | null> {
   const match = new URL(request.url).pathname.match(/^\/api\/organisations\/([^/]+)\/requests\/([^/]+)\/chat$/);
@@ -37,7 +36,7 @@ export async function handleChat(request: Request, client: SupabaseClient, actor
   const { data: admission, error: admissionError } = await worker.rpc("begin_chat_turn", { target_org: org, request_id: id, actor_id: actorId, turn_key: input.data.key, base_revision: input.data.revision, input_fields: input.data.fields, user_message: input.data.message, retry_failed: input.data.retry });
   const admissionFailure = failureResponse(admissionError); if (admissionFailure) return admissionFailure;
   const parsed = turnSchema.safeParse(admission?.turn);
-  if (!parsed.success || typeof admission.dispatch !== "boolean") return error("Chat service unavailable. Refresh before retrying.", 503);
+  if (!parsed.success || typeof admission.dispatch !== "boolean") return error("Chat service unavailable.", 503);
   const turn = parsed.data;
   if (!admission.dispatch) return json({ turn }, turn.status === "running" ? 202 : 200);
   let result: ReturnType<typeof validateAiReply> | null = null;
@@ -45,7 +44,7 @@ export async function handleChat(request: Request, client: SupabaseClient, actor
   let diagnostic: AiDiagnostic | null = null;
   try {
     const context = z.array(z.object({ message: z.string(), reply: z.string().nullable(), proposal: taskFields.nullable() })).parse(admission.history);
-    result = constrainSuggestion(turn.message, turn.input_fields, validateAiReply(await dependencies.provider({ fields: turn.input_fields, message: turn.message, history: context })));
+    result = validateAiReply(await dependencies.provider({ fields: turn.input_fields, message: turn.message, history: context }));
   } catch (failure) {
     code = failure instanceof AiFailure ? failure.code : "unavailable";
     if (diagnosticSources[code] && !(code === "invalid_output" && failure instanceof AiFailure && failure.diagnostic == null)) {
@@ -57,5 +56,5 @@ export async function handleChat(request: Request, client: SupabaseClient, actor
   const { data: completed, error: completionError } = await worker.rpc("finish_chat_turn", { target_org: org, request_id: id, actor_id: actorId, turn_id: turn.id, worker_generation: turn.generation, human_reply: result?.reply ?? null, task_proposal: result?.proposal ?? null, failure_code: code, failure_diagnostic: diagnostic });
   const completionFailure = failureResponse(completionError); if (completionFailure) return completionFailure;
   const final = turnSchema.safeParse(completed);
-  return final.success ? json({ turn: final.data }) : error("Chat service unavailable. Refresh before retrying.", 503);
+  return final.success ? json({ turn: final.data }) : error("Chat service unavailable.", 503);
 }
