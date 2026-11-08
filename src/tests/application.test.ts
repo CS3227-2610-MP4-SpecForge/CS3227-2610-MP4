@@ -50,17 +50,33 @@ describe("account and organisation HTTP interface", () => {
     expect(response.status).toBe(403);
     expect(requests).toEqual([]);
   });
-  it("registers a selected role and asks the user to verify their email", async () => {
+  it.each(["PM", "Developer"])("registers a %s with a lowercase username and asks for email verification", async role => {
     let submitted: unknown;
     const { app } = fixture(async (_input, init) => {
       submitted = JSON.parse(String(init?.body));
       return Response.json({ id: "11111111-1111-4111-8111-111111111111", email: "pm@example.com", identities: [], app_metadata: {}, user_metadata: { role: "PM" }, created_at: "2026-11-07T00:00:00Z" });
     });
-    const response = await app(post("/api/auth/signup", { email: "pm@example.com", password: "a-long-test-password", role: "PM" }));
+    const response = await app(post("/api/auth/signup", { email: "pm@example.com", password: "a-long-test-password", role, username: "Atlas_PM" }));
     expect(response.status).toBe(202);
-    expect(await response.json()).toEqual({ message: "Check your email for a verification code." });
-    expect(submitted).toMatchObject({ email: "pm@example.com", data: { role: "PM" } });
+    expect(await response.json()).toEqual({ message: "Check your email for a verification code. If no code arrives, try a different username or sign in if you already have an account." });
+    expect(submitted).toMatchObject({ email: "pm@example.com", data: { role, username: "atlas_pm" } });
     expect(submitted).not.toHaveProperty("email_confirm");
+  });
+  it.each([
+    [undefined], ["a b"], ["ab"], ["atlas\n"], ["équipe"], [123], ["Legacy_name", "Choose a different username."],
+  ])("requires a valid username before contacting Supabase: %j", async (username, message = "Choose a username with 3–24 letters, digits or underscores.") => {
+    const { app, requests } = fixture();
+    const response = await app(post("/api/auth/signup", { email: "pm@example.com", password: "a-long-test-password", role: "PM", username }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: message });
+    expect(requests).toEqual([]);
+  });
+  it.each([[500, "unexpected_failure"], [422, "user_already_exists"], [422, "email_exists"]])("keeps ambiguous signup responses neutral (%s %s)", async (status, code) => {
+    const { app } = fixture(async () => Response.json({ code, msg: "private provider diagnostic" }, { status, headers: { "x-supabase-api-version": "2024-01-01" } }));
+    const response = await app(post("/api/auth/signup", { email: "pm@example.com", password: "a-long-test-password", role: "PM", username: "atlas_pm" }));
+    expect(response.status).toBe(202);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(await response.json()).toEqual({ message: "Check your email for a verification code. If no code arrives, try a different username or sign in if you already have an account." });
   });
   it("rejects malformed verification codes without contacting Supabase", async () => {
     const { app, requests } = fixture();
@@ -92,9 +108,9 @@ describe("account and organisation HTTP interface", () => {
     expect(await response.json()).toEqual({ message: "If this account needs verification, a new code has been sent." });
   });
   it.each([
-    { email: "pm@example.com", password: "a-long-test-password", role: "Admin" },
-    { email: "pm@example.com", password: "a-long-test-password", role: "PM", email_confirm: true },
-    { email: "pm@example.com", password: "short", role: "PM" },
+    { email: "pm@example.com", password: "a-long-test-password", role: "Admin", username: "atlas_pm" },
+    { email: "pm@example.com", password: "a-long-test-password", role: "PM", username: "atlas_pm", email_confirm: true },
+    { email: "pm@example.com", password: "short", role: "PM", username: "atlas_pm" },
   ])("rejects invalid signup fields before contacting Supabase: %j", async body => {
     const { app, requests } = fixture();
     expect((await app(post("/api/auth/signup", body))).status).toBe(400);

@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { TicketActivity as Entry } from "@/delivery";
+import { assigneeUsernameLabel, formerAccountLabel } from "@/usernames";
 import { api, failureMessage } from "./http";
 import { Button, Notice, TextareaField } from "./ui";
 const eventLabels = { published: "Published this ticket", requirements_updated: "Updated the requirements", delivery_updated: "Updated delivery details", comment: "Commented" };
-const fieldLabels: Record<string, string> = { due_date: "Due date", priority: "Priority", status: "Status", assignee_ids: "Assignees" };
+const fieldLabels: Record<string, string> = { due_date: "Due date", priority: "Priority", status: "Status" };
 function valueLabel(value: unknown): string { return value === null ? "Unset" : Array.isArray(value) ? value.join(", ") || "Unassigned" : String(value).replaceAll("_", " "); }
 export function TicketActivity({ path }: { path: string }) {
   const [entries, setEntries] = useState<Entry[]>([]); const [cursor, setCursor] = useState<string | null>(null);
@@ -51,10 +52,16 @@ export function TicketActivity({ path }: { path: string }) {
     {loading && <p role="status">Loading activity…</p>}
     {!loading && !loadError && entries.length === 0 && <p className="muted">No activity yet.</p>}
     <ol className="organisation-list activity-list">{entries.map(entry => <li key={entry.id} className="activity-entry">
-      <p className="hint">{entry.actor_id ? `Account ${entry.actor_id}` : "System"} · {new Date(entry.created_at).toLocaleString()}</p>
+      <p className="hint">{entry.actor_id ? entry.actor_username ?? formerAccountLabel : "System"} · {new Date(entry.created_at).toLocaleString()}</p>
       <p><strong>{eventLabels[entry.kind]}</strong></p>
       {entry.kind === "comment" && <p className="request-text">{entry.body}</p>}
-      {entry.kind === "delivery_updated" && <ul>{Object.entries(entry.changes).map(([field,change]) => <li key={field}>{fieldLabels[field] ?? field}: {valueLabel(change.from)} → {valueLabel(change.to)}</li>)}</ul>}
+      {entry.kind === "delivery_updated" && <ul>{Object.entries(entry.changes).map(([field,change]) => {
+        if (field === "assignee_ids") {
+          const names = entry.assignment_usernames;
+          return <li key={field}>Assignees: {names ? `${assigneeUsernameLabel(names.from)} → ${assigneeUsernameLabel(names.to)}` : "Unavailable"}</li>;
+        }
+        return <li key={field}>{fieldLabels[field] ?? field}: {valueLabel(change.from)} → {valueLabel(change.to)}</li>;
+      })}</ul>}
     </li>)}</ol>
     {cursor && <Button type="button" className="secondary" disabled={loading} onClick={more}>Load older activity</Button>}
   </section>;

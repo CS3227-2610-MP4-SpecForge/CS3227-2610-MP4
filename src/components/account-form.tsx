@@ -2,23 +2,31 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { legacyUsernamePrefix, reservedUsernameMessage, usernameHint, usernamePattern } from "@/usernames";
 import { api, failureMessage } from "./http";
-import { BackLink, Button, Field, Notice } from "./ui";
+import { BackLink, Button, Dropdown, Field, Notice } from "./ui";
+
+const signupRoles = [
+  { value: "PM", label: "Product Manager", tone: "purple" },
+  { value: "Developer", label: "Developer", tone: "blue" },
+] as const;
 export function AccountForm({ mode }: { mode: "signup" | "signin" | "verify" }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [token, setToken] = useState("");
-  const [role, setRole] = useState("PM");
+  const [role, setRole] = useState<(typeof signupRoles)[number]["value"]>("PM");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
+    if (mode === "signup" && username.toLowerCase().startsWith(legacyUsernamePrefix)) { setError(reservedUsernameMessage); setMessage(""); return; }
     setPending(true); setError(""); setMessage("");
     try {
-      const body = mode === "verify" ? { email, token } : mode === "signup" ? { email, password, role } : { email, password };
+      const body = mode === "verify" ? { email, token } : mode === "signup" ? { email, password, role, username } : { email, password };
       const result = await api(`/api/auth/${mode}`, body);
       setPassword(""); setToken("");
       if (mode === "signup") setMessage(result.message);
@@ -38,9 +46,13 @@ export function AccountForm({ mode }: { mode: "signup" | "signin" | "verify" }) 
     <div className="card auth-card">
       {error && <Notice danger>{error}</Notice>}{message && <Notice>{message} {mode === "signup" && <Link href="/verify-email">Enter your verification code</Link>}</Notice>}
       <form onSubmit={submit} className="stack" aria-busy={pending}>
+        {mode === "signup" && <Field id="username" label="Username" autoComplete="username" autoCapitalize="none" spellCheck={false} pattern={usernamePattern} minLength={3} maxLength={24} required value={username} onChange={e => setUsername(e.target.value)} disabled={pending} hint={usernameHint} />}
         <Field id="email" label="Email address" type="email" autoComplete="email" maxLength={254} required value={email} onChange={e => setEmail(e.target.value)} disabled={pending} />
-        {mode !== "verify" && <Field id="password" label="Password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={mode === "signup" ? 12 : 1} maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} disabled={pending} hint={mode === "signup" ? "Use 12–128 characters. Password recovery is not available in this version." : undefined} />}
-        {mode === "signup" && <div className="field"><label htmlFor="role">Application role</label><select id="role" value={role} onChange={e => setRole(e.target.value)} disabled={pending}><option value="PM">Product Manager</option><option value="Developer">Developer</option></select><p className="hint">Your role cannot be changed after signup. Organisation admin permissions are separate.</p></div>}
+        {mode !== "verify" && <Field id="password" label="Password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={mode === "signup" ? 12 : 1} maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} disabled={pending} hint={mode === "signup" ? "Use 12–128 characters." : undefined} />}
+        {mode === "signup" && <div className="field">
+          <Dropdown id="role" label="Application role" value={role} options={signupRoles} onChange={setRole} disabled={pending} />
+          <p className="hint">Your role cannot be changed after signup.</p>
+        </div>}
         {mode === "verify" && <Field id="token" label="Verification code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6,10}" minLength={6} maxLength={10} required value={token} onChange={e => setToken(e.target.value)} disabled={pending} />}
         <Button disabled={pending}>{pending ? "Please wait…" : mode === "signup" ? "Create account" : mode === "signin" ? "Sign in" : "Verify email"}</Button>
       </form>

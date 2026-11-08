@@ -96,12 +96,28 @@ describe.skipIf(!localEnabled)("ticket delivery storage interface", () => {
     const feed = await dev.client.rpc("read_ticket_activity", args);
     expect(feed.error).toBeNull();
     expect(feed.data.entries.map((entry: { kind: string }) => entry.kind)).toEqual(["comment", "published"]);
-    expect(feed.data.entries[0]).toMatchObject({ actor_id: dev.id, body: "<script>alert(1)</script>" });
+    expect(feed.data.entries[0]).toMatchObject({ actor_id: dev.id, actor_username: dev.username, body: "<script>alert(1)</script>" });
     expect(JSON.stringify(feed.data)).not.toContain("A shared ticket");
     expect((await dev.client.from("ticket_activity").insert({ request_id: draft.id, actor_id: dev.id, kind: "comment", body: "bypass" })).error).not.toBeNull();
     for (let i = 0; i < 19; i++) expect((await comment("Comment " + i, randomUUID())).error).toBeNull();
     expect((await comment("Over quota", randomUUID())).error?.code).toBe("P0002");
     expect((await comment("<script>alert(1)</script>")).error).toBeNull();
+    expect((await author.client.rpc("change_member", { target_org: org, target_user: dev.id, decision: "remove" })).error).toBeNull();
+    const app = createApplication({ origin: "http://localhost:3000", client: () => author.client });
+    const path = `http://localhost:3000/api/organisations/${org}/requests/${draft.id}/activity`;
+    const readActivity = async () => {
+      const response = await app(new Request(path));
+      expect(response.status).toBe(200);
+      return (await response.json()).entries;
+    };
+    let entries = await readActivity();
+    expect(entries).toContainEqual(expect.objectContaining({ actor_id: dev.id, actor_username: dev.username }));
+    expect(entries).toContainEqual(expect.objectContaining({ kind: "delivery_updated", assignment_usernames: { from: [dev.username], to: [] } }));
+    expect((await dev.client.rpc("read_ticket_activity", args)).error?.code).toBe("42501");
+    await fixture.deleteActor(dev.id);
+    entries = await readActivity();
+    expect(entries).toContainEqual(expect.objectContaining({ actor_id: dev.id, actor_username: null }));
+    expect(entries).toContainEqual(expect.objectContaining({ kind: "delivery_updated", assignment_usernames: { from: [null], to: [] } }));
   });
 
   it("filters before paging and exposes current member emails", async () => {
@@ -112,11 +128,15 @@ describe.skipIf(!localEnabled)("ticket delivery storage interface", () => {
     await pm.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: 1, changes: { due_date: "2026-12-20", priority: "high", assignee_ids: [pm.id] } });
     const page = await pm.client.rpc("list_ticket_page", { target_org: org, filters: { search: "SF-1", assignee: pm.id, priority: "high", sort: "due" } });
     expect(page.error).toBeNull();
-    expect(page.data.items.map((r: { id: string }) => r.id)).toEqual([draft.id]);
+    expect(page.data.items).toMatchObject([{ id: draft.id, author_username: pm.username, assignee_usernames: [pm.username] }]);
+    const app = createApplication({ origin: "http://localhost:3000", client: () => pm.client });
+    const path = `http://localhost:3000/api/organisations/${org}/requests`;
+    expect(await (await app(new Request(path))).json()).toMatchObject({ requests: [{ id: draft.id, author_username: pm.username, assignee_usernames: [pm.username] }] });
+    expect(await (await app(new Request(`${path}/${draft.id}`))).json()).toMatchObject({ request: { id: draft.id, author_username: pm.username, assignee_usernames: [pm.username] } });
     expect((await pm.client.rpc("list_ticket_page", { target_org: org, filters: { assignee: "unassigned" } })).data.items).toEqual([]);
     const members = await pm.client.rpc("ticket_members", { target_org: org });
     expect(members.error).toBeNull();
-    expect(members.data.members).toEqual([{ user_id: pm.id, email: pm.email, app_role: "PM" }]);
+    expect(members.data.members).toEqual([{ user_id: pm.id, email: pm.email, app_role: "PM", username: pm.username }]);
     expect((await pm.client.rpc("list_ticket_page", { target_org: org, filters: { today: "infinity" } })).error?.code).toBe("22023");
   });
 
@@ -128,8 +148,8 @@ describe.skipIf(!localEnabled)("ticket delivery storage interface", () => {
     const args = { target_org: org, member_search: dev.email.slice(5, 20).toUpperCase(), selected_users: [pm.id, outsider.id] };
     const result = await pm.client.rpc("ticket_members", args);
     expect(result.error).toBeNull();
-    expect(result.data.members).toEqual([{ user_id: dev.id, email: dev.email, app_role: "Developer" }]);
-    expect(result.data.selected_members).toEqual([{ user_id: pm.id, email: pm.email, app_role: "PM" }]);
+    expect(result.data.members).toEqual([{ user_id: dev.id, email: dev.email, app_role: "Developer", username: dev.username }]);
+    expect(result.data.selected_members).toEqual([{ user_id: pm.id, email: pm.email, app_role: "PM", username: pm.username }]);
     for (const search of ["%", "_", "no-match"]) expect((await pm.client.rpc("ticket_members", { ...args, member_search: search })).data.members).toEqual([]);
     for (const selected_users of [Array(6).fill(pm.id), [null], null]) expect((await pm.client.rpc("ticket_members", { ...args, selected_users })).error?.code).toBe("22023");
     expect((await pm.client.rpc("ticket_members", { ...args, member_search: "x".repeat(161) })).error?.code).toBe("22023");

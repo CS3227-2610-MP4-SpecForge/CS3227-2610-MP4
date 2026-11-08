@@ -5,10 +5,11 @@ import { BackLink, Button, Notice, Pill } from "./ui";
 import { deadlineLabel, localDay, ticketPriorities, ticketStatuses, type TicketMember } from "@/delivery";
 import { PriorityPill, StatusPill } from "./ticket-pills";
 import { TicketMembers } from "./ticket-members";
-import type { FeatureRequest } from "@/requests";
+import type { TicketRead } from "@/requests";
+import { assigneeUsernameLabel } from "@/usernames";
 
 export function RequestList({ organisationId }: { organisationId: string }) {
-  const [items, setItems] = useState<FeatureRequest[]>([]);
+  const [items, setItems] = useState<TicketRead[]>([]);
   const [organisation, setOrganisation] = useState("");
   const [role, setRole] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -39,7 +40,7 @@ export function RequestList({ organisationId }: { organisationId: string }) {
     try {
       const params = new URLSearchParams(query); params.set("offset", String(nextOffset));
       const result = await api(path + "?" + params.toString());
-      setItems(current => [...current, ...result.requests.filter((item: FeatureRequest) => !current.some(old => old.id === item.id))]); setNextOffset(result.nextOffset); setError("");
+      setItems(current => [...current, ...result.requests.filter((item: TicketRead) => !current.some(old => old.id === item.id))]); setNextOffset(result.nextOffset); setError("");
     } catch (failure) { setError(failureMessage(failure)); } finally { setPending(false); }
   }
   async function create() {
@@ -63,7 +64,7 @@ export function RequestList({ organisationId }: { organisationId: string }) {
         <div className="field"><label htmlFor="ticket-search">Search tickets</label><input id="ticket-search" maxLength={160} value={filters.search} onChange={event => setFilters({ ...filters, search: event.target.value })} placeholder="Search by title" /></div>
         <div className="field"><label htmlFor="filter-status">Status filter</label><select id="filter-status" value={filters.status} onChange={event => setFilters({ ...filters, status: event.target.value })}><option value="">All statuses</option><option value="draft">Private drafts</option>{Object.entries(ticketStatuses).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div>
         <div className="field"><label htmlFor="filter-priority">Priority filter</label><select id="filter-priority" value={filters.priority} onChange={event => setFilters({ ...filters, priority: event.target.value })}><option value="">All priorities</option>{Object.entries(ticketPriorities).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-        <div className="field"><label htmlFor="filter-assignee">Assignee filter</label><select id="filter-assignee" value={filters.assignee} onChange={event => setFilters({ ...filters, assignee: event.target.value })}><option value="">Anyone</option><option value="me">Assigned to me</option><option value="unassigned">Unassigned</option>{members.map(member => <option key={member.user_id} value={member.user_id}>{member.user_id} ({member.app_role})</option>)}</select></div>
+        <div className="field"><label htmlFor="filter-assignee">Assignee filter</label><select id="filter-assignee" value={filters.assignee} onChange={event => setFilters({ ...filters, assignee: event.target.value })}><option value="">Anyone</option><option value="me">Assigned to me</option><option value="unassigned">Unassigned</option>{members.map(member => <option key={member.user_id} value={member.user_id}>{member.username} ({member.app_role})</option>)}</select></div>
         <div className="field"><label htmlFor="filter-sort">Sort tickets</label><select id="filter-sort" value={filters.sort} onChange={event => setFilters({ ...filters, sort: event.target.value })}><option value="updated">Recently updated</option><option value="due">Due date</option></select></div>
       </div>
       <label className="checkbox-field"><input type="checkbox" checked={filters.overdue} onChange={event => setFilters({ ...filters, overdue: event.target.checked })} />Overdue only</label>
@@ -73,7 +74,7 @@ export function RequestList({ organisationId }: { organisationId: string }) {
     {!loaded ? <Notice>Loading requests…</Notice> : <>
       <Button className="secondary" disabled={pending} onClick={() => { setError(""); setReload(n => n + 1); }}>Refresh requests</Button>
       {!error && items.length === 0 && <div className="card"><p className="muted">{query ? "No tickets match these filters." : "No requests yet."}</p></div>}
-      <ul className="organisation-list">{items.map(item => <li className="card request-summary" key={item.id}><div className="ticket-badges">{item.submitted_at ? <StatusPill value={item.status} /> : <Pill>Private draft</Pill>}<PriorityPill value={item.priority} /><span>{deadlineLabel(item)}</span></div><h2><a href={`/organisations/${organisationId}/requests/${item.id}`}>{item.fields.title || "Untitled draft"}</a></h2><p className="muted">Assignees: {item.assignee_ids.length ? item.assignee_ids.join(", ") : "Unassigned"}</p><p className="muted">Author account: {item.author_id}</p><p className="muted">Last modified: {new Date(item.updated_at).toLocaleString()}</p></li>)}</ul>
+      <ul className="organisation-list">{items.map(item => <li className="card request-summary" key={item.id}><div className="ticket-badges">{item.submitted_at ? <StatusPill value={item.status} /> : <Pill>Private draft</Pill>}<PriorityPill value={item.priority} /><span>{deadlineLabel(item)}</span></div><h2><a href={`/organisations/${organisationId}/requests/${item.id}`}>{item.fields.title || "Untitled draft"}</a></h2><p className="muted">Assignees: {assigneeUsernameLabel(item.assignee_usernames)}</p><p className="muted">Author: {item.author_username}</p><p className="muted">Last modified: {new Date(item.updated_at).toLocaleString()}</p></li>)}</ul>
       {nextOffset !== null && <Button className="secondary" disabled={pending} onClick={more}>Load more tickets</Button>}
     </>}
   </section>;

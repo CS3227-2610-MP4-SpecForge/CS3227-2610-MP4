@@ -1,12 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { requestRecord, date, priority, status } from "./ticket-schemas";
+import { assigneeUsernames, requestRecord, date, priority, status } from "./ticket-schemas";
 import { error, json, readBody } from "./http";
 
 const revision = z.number().int().positive().max(2147483647);
 const changes = z.strictObject({ due_date: date.nullable().optional(), priority: priority.optional(), status: status.optional(), assignee_ids: z.array(z.uuid()).max(5).refine(ids => new Set(ids).size === ids.length).optional() }).refine(value => Object.keys(value).length > 0);
 const cursor = z.string().regex(/^[1-9]\d{0,18}$/).refine(value => BigInt(value) <= 9223372036854775807n);
 const activity = z.object({ id: cursor, request_id: z.uuid(), actor_id: z.uuid().nullable(), kind: z.enum(["published", "delivery_updated", "requirements_updated", "comment"]), body: z.string().nullable(), changes: z.record(z.string(), z.object({ from: z.unknown(), to: z.unknown() })), created_at: z.string() });
+const activityRead = activity.extend({ actor_username: z.string().nullable(), assignment_usernames: z.object({ from: assigneeUsernames, to: assigneeUsernames }).nullable() });
 export async function handleDelivery(request: Request, client: SupabaseClient): Promise<Response | null> {
   const url = new URL(request.url);
   const members = url.pathname.match(/^\/api\/organisations\/([^/]+)\/ticket-members$/);
@@ -19,7 +20,7 @@ export async function handleDelivery(request: Request, client: SupabaseClient): 
     const input = z.strictObject({ after: z.uuid().optional(), search: z.string().max(160).default(""), selected: z.string().max(184).transform(value => value.split(",")).pipe(z.array(z.uuid()).max(5)).optional() }).safeParse(Object.fromEntries(url.searchParams));
     if (!input.success) return error("Invalid member page.", 400);
     rpc = "ticket_members"; args.after_user = input.data.after ?? null; args.member_search = input.data.search; args.selected_users = input.data.selected ?? [];
-    const member = z.object({ user_id: z.uuid(), email: z.string().min(1).max(320), app_role: z.enum(["PM", "Developer"]) });
+    const member = z.object({ user_id: z.uuid(), email: z.string().min(1).max(320), app_role: z.enum(["PM", "Developer"]), username: z.string() });
     schema = z.object({ members: z.array(member).max(50), selected_members: z.array(member).max(5), next_cursor: z.uuid().nullable() });
   } else if (match) {
     args.request_id = match[2];
@@ -35,7 +36,7 @@ export async function handleDelivery(request: Request, client: SupabaseClient): 
       const input = z.strictObject({ before: cursor.optional() }).safeParse(Object.fromEntries(url.searchParams));
       if (!input.success) return error("Invalid activity page.", 400);
       rpc = "read_ticket_activity"; args.before_id = input.data.before ?? null;
-      schema = z.object({ entries: z.array(activity), next_cursor: cursor.nullable() });
+      schema = z.object({ entries: z.array(activityRead), next_cursor: cursor.nullable() });
     } else return error("Not found.", 404);
   } else return error("Not found.", 404);
   const { data, error: failure } = await client.rpc(rpc, args);

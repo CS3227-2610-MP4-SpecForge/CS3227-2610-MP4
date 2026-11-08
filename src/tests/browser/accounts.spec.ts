@@ -14,16 +14,46 @@ async function codeFor(email: string) {
 for (const role of ["PM", "Developer"] as const) {
   test(`${role} signs up, verifies email, creates an organisation and signs in again`, async ({ page }) => {
     const email = `browser-${randomUUID()}@example.com`;
+    const username = `Tester_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const password = "Disposable-browser-password-2026";
     const fixture = localFixture();
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.name));
     try {
       await page.goto("/sign-up");
-      await page.getByLabel("Email address").fill(email);
-      await page.getByLabel("Password", { exact: true }).fill(password);
-      await page.getByLabel("Application role").selectOption(role);
-      await page.getByRole("button", { name: "Create account", exact: true }).click();
+      const usernameInput = page.getByLabel("Username", { exact: true });
+      const emailInput = page.getByLabel("Email address", { exact: true });
+      const passwordInput = page.getByLabel("Password", { exact: true });
+      const rolePicker = page.getByRole("combobox", { name: "Application role" });
+      const createAccount = page.getByRole("button", { name: "Create account", exact: true });
+      await usernameInput.focus();
+      await page.keyboard.press("Tab");
+      await expect(emailInput).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(passwordInput).toBeFocused();
+      await emailInput.fill(email);
+      await passwordInput.fill(password);
+      await expect(usernameInput).toHaveAttribute("required", "");
+      await expect(usernameInput).toHaveAccessibleDescription("Choose a username with 3–24 letters, digits or underscores.");
+      await expect(passwordInput).toHaveAccessibleDescription("Use 12–128 characters.");
+      await expect(page.getByText("Your role cannot be changed after signup.", { exact: true })).toBeVisible();
+      const roleLabel = role === "PM" ? "Product Manager" : "Developer";
+      await rolePicker.press(role === "PM" ? "Home" : "End");
+      await expect(page.getByRole("listbox", { name: "Application role options" })).toBeVisible();
+      await rolePicker.press("Enter");
+      await expect(rolePicker).toHaveText(roleLabel);
+      await createAccount.click();
+      await expect(usernameInput).toBeFocused();
+      await usernameInput.fill("Legacy_reserved");
+      await createAccount.click();
+      await expect(page.getByRole("alert").filter({ hasText: "Choose a different username." })).toBeVisible();
+      await expect(usernameInput).toHaveValue("Legacy_reserved");
+      if (role === "Developer") {
+        await page.setViewportSize({ width: 390, height: 844 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      }
+      await usernameInput.fill(username);
+      await createAccount.click();
       await expect(page.getByRole("status")).toContainText("Check your email");
       const denied = await page.request.post("/api/organisations", { headers: { origin }, data: { name: "Unverified team" } });
       expect(denied.status()).toBe(401);
@@ -37,6 +67,7 @@ for (const role of ["PM", "Developer"] as const) {
       await page.getByRole("button", { name: "Verify email", exact: true }).click();
       await expect(page).toHaveURL(/\/workspace$/);
       await expect(page.getByRole("heading", { name: "Organisations", exact: true })).toBeVisible();
+      expect(await (await page.request.get("/api/account")).json()).toMatchObject({ account: { role, username: username.toLowerCase() } });
       await expect(page.getByText("Your team starts here")).toBeVisible();
       await page.getByLabel("Organisation name").fill(`${role} test team`);
       await page.getByRole("button", { name: "Create organisation", exact: true }).click();

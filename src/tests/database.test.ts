@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { localEnabled, localFixture } from "./local.fixture";
 import { createApplication } from "../server/application";
@@ -5,6 +6,42 @@ import { createApplication } from "../server/application";
 describe.skipIf(!localEnabled)("local Supabase organisation interface", () => {
   let fixture: ReturnType<typeof localFixture>;
   afterEach(async () => { await fixture?.cleanup(); });
+  it("rejects direct Auth bypass and allows only one cross-role signup for a username", async () => {
+    fixture = localFixture();
+    const tag = randomUUID().replaceAll("-", "").slice(0, 16);
+    const password = "Disposable-test-password-2026";
+    const name = `claim_${tag}`;
+    const signup = (index: number, role: string, username: unknown) => fixture.client().auth.signUp({
+      email: `username-${tag}-${index}@example.com`, password, options: { data: { role, username } },
+    });
+    const invalid = await Promise.all([undefined, 123, "a b", "Legacy_claim", "atlas\n"].map((username, index) => signup(index, "PM", username)));
+    const contenders = await Promise.all([signup(5, "PM", name.toUpperCase()), signup(6, "Developer", name)]);
+    const users = await fixture.admin.auth.admin.listUsers({ perPage: 1000 });
+    const accounts = users.data.users.filter(user => user.email?.startsWith(`username-${tag}-`));
+    try {
+      expect(invalid.every(result => Boolean(result.error))).toBe(true);
+      expect(contenders.filter(result => !result.error)).toHaveLength(1);
+      expect(users.error).toBeNull();
+      expect(accounts).toHaveLength(1);
+      const account = accounts[0];
+      expect(account.email_confirmed_at).toBeUndefined();
+      const profiles = await fixture.admin.from("profiles").select("id,username").eq("username", name);
+      expect(profiles.data).toEqual([{ id: account.id, username: name }]);
+      expect((await fixture.unverifiedSession(account.id).from("profiles").select("username")).data).toEqual([]);
+      const existing = await fixture.actor("Developer");
+      const app = createApplication({ origin: "http://localhost:3000", client: fixture.client });
+      const register = (email: string) => app(new Request("http://localhost:3000/api/auth/signup", {
+        method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" },
+        body: JSON.stringify({ email, password, role: "Developer", username: name }),
+      }));
+      const [duplicate, repeated] = await Promise.all([register(`username-${tag}-7@example.com`), register(existing.email)]);
+      expect(duplicate.status).toBe(202);
+      expect(repeated.status).toBe(202);
+      expect(await duplicate.json()).toEqual(await repeated.json());
+    } finally {
+      for (const account of accounts) expect((await fixture.admin.auth.admin.deleteUser(account.id)).error).toBeNull();
+    }
+  });
   it("invites only the intended recipient and atomically accepts ordinary membership", async () => {
     fixture = localFixture();
     const admin = await fixture.actor("PM");
@@ -209,14 +246,14 @@ describe.skipIf(!localEnabled)("local Supabase organisation interface", () => {
     expect((await app(new Request("http://localhost:3000/api/organisations"))).status).toBe(200);
     expect((await fixture.client().from("organisations").select("id")).error).not.toBeNull();
   });
-  it("preserves the fixed role despite Auth metadata and direct profile-write attempts", async () => {
+  it("preserves the fixed role and username despite Auth metadata and direct profile-write attempts", async () => {
     fixture = localFixture();
     const user = await fixture.actor("PM");
-    expect((await user.client.auth.updateUser({ data: { role: "Developer", is_admin: true } })).error).toBeNull();
-    expect((await user.client.from("profiles").select("app_role").eq("id", user.id).single()).data).toEqual({ app_role: "PM" });
-    expect((await user.client.from("profiles").update({ app_role: "Developer" }).eq("id", user.id)).error).not.toBeNull();
+    expect((await user.client.auth.updateUser({ data: { role: "Developer", username: "fake_name", is_admin: true } })).error).toBeNull();
+    expect((await user.client.from("profiles").select("app_role,username").eq("id", user.id).single()).data).toEqual({ app_role: "PM", username: user.username });
+    expect((await user.client.from("profiles").update({ app_role: "Developer", username: "fake_name" }).eq("id", user.id)).error).not.toBeNull();
     const app = createApplication({ origin: "http://localhost:3000", client: () => user.client });
-    expect(await (await app(new Request("http://localhost:3000/api/account"))).json()).toMatchObject({ account: { role: "PM" } });
+    expect(await (await app(new Request("http://localhost:3000/api/account"))).json()).toMatchObject({ account: { role: "PM", username: user.username } });
   });
   it("denies direct writes that could bypass creator membership or revoke the last admin", async () => {
     fixture = localFixture();

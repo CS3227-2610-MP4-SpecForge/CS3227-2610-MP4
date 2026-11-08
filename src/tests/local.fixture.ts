@@ -7,10 +7,15 @@ export function localFixture() {
   if (url !== "http://127.0.0.1:55321") throw new Error("Only disposable local Supabase is allowed.");
   const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
   const admin = createClient(url, process.env.LOCAL_SUPABASE_SERVICE_KEY!, options);
-  const ids: string[] = [];
+  const ids = new Set<string>();
   const client = () => createClient(url, process.env.LOCAL_SUPABASE_ANON_KEY!, options);
+  async function deleteActor(id: string) {
+    const { error } = await admin.auth.admin.deleteUser(id);
+    if (error) throw new Error("Local fixture cleanup failed.");
+    ids.delete(id);
+  }
   return {
-    admin, client,
+    admin, client, deleteActor,
     unverifiedSession(id: string) {
       const encoded = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
       const now = Math.floor(Date.now() / 1000);
@@ -20,22 +25,20 @@ export function localFixture() {
     },
     async actor(role: "PM" | "Developer", confirmed = true) {
       const email = `test-${randomUUID()}@example.com`;
+      const username = `member_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
       const password = "Disposable-test-password-2026";
-      const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: confirmed, user_metadata: { role } });
+      const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: confirmed, user_metadata: { role, username } });
       if (error || !data.user) throw new Error("Local fixture identity creation failed.");
-      ids.push(data.user.id);
+      ids.add(data.user.id);
       const session = client();
       if (confirmed) {
         const { error: failure } = await session.auth.signInWithPassword({ email, password });
         if (failure) throw new Error("Local fixture login failed.");
       }
-      return { client: session, id: data.user.id, email, password };
+      return { client: session, id: data.user.id, email, password, username };
     },
     async cleanup() {
-      for (const id of ids) {
-        const { error } = await admin.auth.admin.deleteUser(id);
-        if (error) throw new Error("Local fixture cleanup failed.");
-      }
+      for (const id of ids) await deleteActor(id);
     },
   };
 }

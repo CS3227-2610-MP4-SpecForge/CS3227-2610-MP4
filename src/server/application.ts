@@ -4,6 +4,7 @@ import { handleRequests } from "./requests";
 import { error, json, InputError, readBody } from "./http";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { legacyUsernamePrefix, reservedUsernameMessage, usernameHint, usernamePattern } from "../usernames";
 
 type Options = { origin: string; client(): SupabaseClient; admitAuth?: () => boolean; chat?: ChatDependencies };
 export function createAuthAdmission() {
@@ -17,7 +18,9 @@ export function createAuthAdmission() {
 }
 const email = z.email().max(254);
 const password = z.string().min(12).max(128);
-const signup = z.strictObject({ email, password, role: z.enum(["PM", "Developer"]) });
+const signupUsername = z.string(usernameHint).regex(new RegExp(`^${usernamePattern}$`), usernameHint).toLowerCase()
+  .refine(value => !value.startsWith(legacyUsernamePrefix), reservedUsernameMessage);
+const signup = z.strictObject({ email, password, role: z.enum(["PM", "Developer"]), username: signupUsername });
 const verification = z.strictObject({ email, token: z.string().regex(/^\d{6,10}$/) });
 const credentials = z.strictObject({ email, password: z.string().min(1).max(128) });
 const organisationInput = z.strictObject({ name: z.string().trim().min(1).max(80) });
@@ -37,11 +40,15 @@ export function createApplication(options: Options) {
       }
       if (path === "/api/auth/signup" && request.method === "POST") {
         const input = signup.safeParse(await readBody(request));
-        if (!input.success) return error("Check the account fields and try again.", 400);
-        const { error: failure } = await options.client().auth.signUp({ email: input.data.email, password: input.data.password, options: { data: { role: input.data.role } } });
-        if (unavailable(failure)) return error("Service temporarily unavailable. Try again later.", 503);
-        if (failure) return error("Unable to create the account. Try again later.", failure.status === 429 ? 429 : 400);
-        return json({ message: "Check your email for a verification code." }, 202);
+        if (!input.success) return error(input.error.issues.find(issue => issue.path[0] === "username")?.message ?? "Check the account fields and try again.", 400);
+        const { email, password, role, username } = input.data;
+        const { error: failure } = await options.client().auth.signUp({ email, password, options: { data: { role, username } } });
+        // Auth can mask existing accounts as success and surface username collisions as opaque 500s.
+        if (failure && failure.status !== 500 && failure.code !== "user_already_exists" && failure.code !== "email_exists") {
+          if (unavailable(failure)) return error("Service temporarily unavailable. Try again later.", 503);
+          return error("Unable to create the account. Try again later.", failure.status === 429 ? 429 : 400);
+        }
+        return json({ message: "Check your email for a verification code. If no code arrives, try a different username or sign in if you already have an account." }, 202);
       }
       if (path === "/api/auth/verify" && request.method === "POST") {
         const input = verification.safeParse(await readBody(request));
@@ -128,10 +135,10 @@ export function createApplication(options: Options) {
           return json({ message: inviting ? "If this account can be invited, its invitation is available in their workspace." : "Membership updated." }, inviting ? 202 : 200);
         }
         if (path === "/api/account" && request.method === "GET") {
-          const { data: profile, error: profileError } = await client.from("profiles").select("app_role").eq("id", data.user.id).single();
-          const role = z.enum(["PM", "Developer"]).safeParse(profile?.app_role);
-          if (profileError || !role.success) return error("Account unavailable. Try again later.", 503);
-          return json({ account: { id: data.user.id, email: data.user.email, role: role.data } });
+          const { data: profile, error: profileError } = await client.from("profiles").select("app_role,username").eq("id", data.user.id).single();
+          const identity = z.object({ app_role: z.enum(["PM", "Developer"]), username: z.string() }).safeParse(profile);
+          if (profileError || !identity.success) return error("Account unavailable. Try again later.", 503);
+          return json({ account: { id: data.user.id, email: data.user.email, role: identity.data.app_role, username: identity.data.username } });
         }
         if (path === "/api/organisations" && request.method === "POST") {
           const input = organisationInput.safeParse(await readBody(request));

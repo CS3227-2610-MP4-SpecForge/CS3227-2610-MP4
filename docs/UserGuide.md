@@ -16,8 +16,14 @@ No public application URL is available yet.
 Follow the [developer setup](DeveloperGuide.md#local-setup), then open
 <http://localhost:3000>. Use disposable test information, not production data.
 
-1. Choose **Create an account**. Enter an email, a password of 12–128 characters
-   and either **Product Manager** or **Developer**. Your application role is fixed.
+1. Choose **Create an account**. Enter a username, an email address, and a
+   password of 12–128 characters. Select **Product Manager** or **Developer**
+   from the **Application role** dropdown. Usernames
+   use 3–24 letters, digits, or underscores and are stored in lowercase. Each
+   username is unique across SpecForge. If no verification code arrives, try a
+   different username or sign in if you already have an account. Your username
+   and application role are fixed after signup. Accounts created before this
+   change have a generated username beginning with `legacy_`.
 2. Choose **Enter your verification code** after signup. For local testing, open
    <http://127.0.0.1:55324> and find the email addressed to your disposable account.
    Enter its eight-digit code and email on the verification screen. This local
@@ -180,7 +186,9 @@ Only the original PM author can edit ticket requirements; assigned Developers ca
 
 **Delete draft** asks confirmation; submitted tasks cannot be deleted. Leaving
 or removal ends access; submitted work remains visible to members and rejoining
-restores author access. Dates and stable author-account IDs remain visible.
+restores author access. Ticket lists and details show the author's username.
+Ticket summaries, assignee filters and activity history also use usernames.
+The ticket's assignee picker still searches by email.
 
 On ticket save failure, local text and delivery edits are preserved and automatic saving stops. Use
 **Check saved version** before retrying, or explicitly reload/discard after a
