@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { requestFields, sameFields, type FeatureRequest, type RequestFields } from "@/requests";
+import { requestFields, sameFields, type FeatureRequest, type RequestFields, type TicketRead } from "@/requests";
 import { api, ApiError, failureMessage } from "./http";
 import type { ChatTurn } from "@/chat";
 import { SuggestionReview } from "./suggestion-review";
@@ -16,7 +16,7 @@ type Problem = { kind: "conflict" | "ambiguous" | "retry" | "denied"; message: s
 type Action = "save_draft" | "submit" | "save_published" | "delete_draft";
 
 export function RequestScreen({ organisationId, requestId }: { organisationId: string; requestId: string }) {
-  const [item, setItem] = useState<FeatureRequest>();
+  const [item, setItem] = useState<TicketRead>();
   const [organisationName, setOrganisationName] = useState<string>();
   const [account, setAccount] = useState<{ id: string; role: string }>();
   const [error, setError] = useState("");
@@ -42,22 +42,22 @@ export function RequestScreen({ organisationId, requestId }: { organisationId: s
       <TicketDelivery item={item} accountId={account.id} path={path} onSaved={delivery => setItem(current => current ? { ...current, ...deliveryOf(delivery) } : current)} />
       <div className="stack"><h2>Description</h2><Markdown text={item.fields.description} /></div>
       <Button className="secondary" onClick={() => setReload(n => n + 1)}>Refresh saved request</Button>
-      <RequestMetadata item={item} />
+      <RequestMetadata item={item} author={item.author_username} />
     </div>
     <TicketActivity path={path + "/activity"} />
   </section>;
 }
 
-function RequestMetadata({ item, children }: { item: FeatureRequest; children?: ReactNode }) {
+function RequestMetadata({ item, author, children }: { item: FeatureRequest; author: string; children?: ReactNode }) {
   return <section className="request-metadata ticket-about" aria-labelledby="ticket-about-heading">
     <h2 id="ticket-about-heading">About this ticket</h2>
-    <p>Author account: {item.author_id}</p>
+    <p>Author: {author}</p>
     {item.submitted_at && <p>Published: {new Date(item.submitted_at).toLocaleString()}</p>}
     <p>Last modified: {new Date(item.updated_at).toLocaleString()}</p>
     {children}
   </section>;
 }
-function RequestEditor({ initial, path, listPath, accountId, organisationName }: { initial: FeatureRequest; path: string; listPath: string; accountId: string; organisationName: string }) {
+function RequestEditor({ initial, path, listPath, accountId, organisationName }: { initial: TicketRead; path: string; listPath: string; accountId: string; organisationName: string }) {
   const [starting, setStarting] = useState(!initial.submitted_at && !initial.fields.title.trim());
   const [suggestion, setSuggestion] = useState<ChatTurn | null>(null);
   const suggestionLive = useRef<ChatTurn | null>(null);
@@ -66,7 +66,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
   const [applying, setApplying] = useState(false);
   const startingLive = useRef(!initial.submitted_at && !initial.fields.title.trim());
   const problemLive = useRef<Problem | null>(null);
-  const [stored, setStored] = useState(initial);
+  const [stored, setStored] = useState<FeatureRequest>(initial);
   const [fields, setFields] = useState(initial.fields);
   const [descriptionMode, setDescriptionMode] = useState<"write" | "preview">("write");
   const [validation, setValidation] = useState("");
@@ -283,7 +283,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
             {!published && <Button type="button" className="secondary" disabled={Boolean(busy) || applying || blocked} onClick={() => { if (window.confirm("Delete this private draft? This cannot be undone.")) void save("delete_draft"); }}>Delete draft</Button>}
           </div>
         </form>
-        <RequestMetadata item={stored}>
+        <RequestMetadata item={stored} author={initial.author_username}>
           <p className="ticket-save-status" role="status">
             {pendingStatus ?? (savedAt
               ? <>{autosavedAt ? "Last autosaved: " : "Last saved: "}<time dateTime={savedAt}>{new Date(savedAt).toLocaleString()}</time></>

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { taskFields, requestRecord, ticketListQuery, date, priority, status } from "./ticket-schemas";
+import { taskFields, requestRecord, ticketListQuery, ticketReadRecord, date, priority, status } from "./ticket-schemas";
 export { taskFields } from "./ticket-schemas";
 import { error, json, readBody } from "./http";
 
@@ -67,8 +67,12 @@ export async function handleRequests(request: Request, client: SupabaseClient): 
   if (failure?.code === "P0001") return error("The saved request changed. Your text is preserved; reload the saved version before continuing.", 409);
   if (failure) return error("Request service unavailable. Your text is preserved; check the saved version before retrying.", 503);
   if (deleted) return json({ message: "Draft deleted." });
-  const parsed = (rpc === "list_ticket_page" ? z.object({ items: z.array(requestRecord), next_offset: z.number().int().nonnegative().nullable() }) : requestRecord).safeParse(data);
+  if (rpc === "list_ticket_page") {
+    const page = z.object({ items: z.array(ticketReadRecord), next_offset: z.number().int().nonnegative().nullable() }).safeParse(data);
+    if (!page.success) return error("Request service unavailable. Check the saved version before retrying.", 503);
+    return json({ requests: page.data.items, nextOffset: page.data.next_offset });
+  }
+  const parsed = (rpc === "read_request" ? ticketReadRecord : requestRecord).safeParse(data);
   if (!parsed.success) return error("Request service unavailable. Check the saved version before retrying.", 503);
-  if (rpc === "list_ticket_page") { const page = parsed.data as { items: unknown[]; next_offset: number | null }; return json({ requests: page.items, nextOffset: page.next_offset }); }
   return json({ request: parsed.data }, rpc === "create_request" ? 201 : 200);
 }

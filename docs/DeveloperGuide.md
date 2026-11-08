@@ -55,7 +55,20 @@ is captured once into the protected profile, not trusted on later requests.
 
 Account POSTs are `/api/auth/signup`, `/verify`, `/signin`, `/signout`, `/resend`.
 The complete routes have the `/api/auth/` prefix. JSON is bounded to 8 KiB.
-`GET /api/account` returns verified account identity and its protected role.
+Signup requires `username` for both roles. The app passes the lowercase value
+through Supabase Auth signup metadata. The existing account-creation trigger
+validates it and writes `profiles.username` in the signup transaction. PostgreSQL
+`NOT NULL` and `UNIQUE` constraints enforce the requirement across all profiles.
+The additive migration assigns reserved `legacy_` usernames to existing profiles.
+Sign-in and verification use email. `GET /api/account` returns verified account
+identity, role and username from the protected profile.
+
+The app gives the same signup response for accepted requests and ambiguous
+Auth provisioning failures, with guidance to try a different username if no
+code arrives. The raw Supabase Auth signup endpoint may return different statuses
+for a username collision and an existing email because repeat signups can skip
+the profile trigger. This difference remains visible to callers of that endpoint.
+
 `GET/POST /api/organisations` list/create; `GET /api/organisations/[id]`
 selects a member-visible organisation. The membership slice adds the routes below.
 
@@ -112,7 +125,7 @@ creation order without changing existing content revisions or timestamps.
   then ticket, checks current identity/membership and author/assignee permissions,
   and conditionally increments delivery revision without changing content revision.
 - `GET /api/organisations/[org]/ticket-members?search=&after=&selected=`:
-  `ticket_members` returns up to 50 current-member IDs/emails/roles,
+  `ticket_members` returns up to 50 current-member IDs/emails/roles/usernames,
   `next_cursor`, and up to five independently resolved `selected_members`.
   Email search runs before paging. All organisation members can use this lookup;
   membership management remains admin-only.
@@ -130,6 +143,10 @@ activity is append-only and excludes draft/AI events. A membership-delete trigge
 removes assignments atomically and increments affected delivery revisions.
 Activity actor IDs intentionally survive membership departure. Activity records
 metadata deltas, never old requirement text. Historical activity is not invented.
+Ticket reads supply `author_username` and ordered `assignee_usernames` on visible
+records. Activity reads supply `actor_username` and resolve before/after assignment
+labels from the referenced IDs, including departed members. Deleted accounts
+display as **Former account**. Assignment, access and activity storage keep UUIDs.
 
 Focused checks: `node src/tooling/test-local.mjs delivery`,
 `SPECFORGE_BROWSER_ORIGIN=http://localhost:3001 node src/tooling/test-local.mjs delivery-browser`,
@@ -489,7 +506,7 @@ follow autosave; published changes require Update.
 Apply `20261108017000_email_assignees.sql` with
 `npx supabase migration up --local --workdir src`. The session-authorized
 `ticket_members` RPC now returns `{members, selected_members, next_cursor}` with
-only `{user_id, email, app_role}` per member. Email search is case-insensitive,
+`{user_id, email, app_role, username}` per member. Email search is case-insensitive,
 literal substring matching, capped at 160 characters and 50 results per page.
 The HTTP lookup accepts optional `selected` (comma-separated UUIDs, maximum five)
 so selected labels resolve independently of search/cursor. Both result groups

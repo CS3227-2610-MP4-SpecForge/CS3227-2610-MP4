@@ -9,4 +9,5 @@ export type FeatureRequest = Delivery & {
   fields: RequestFields; submitted_at: string | null; created_at: string; updated_at: string;
   last_autosaved_at: string | null;
 };
+export type TicketRead = FeatureRequest & { author_username: string; assignee_usernames: (string | null)[] };
 export function sameFields(a: RequestFields, b: RequestFields) { return requestFields.every(field => a[field.key] === b[field.key]); }

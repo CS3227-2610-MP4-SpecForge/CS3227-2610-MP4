@@ -55,7 +55,7 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await reader.getByRole("link", { name: content.Title, exact: true }).click();
     await expect(reader.getByRole("heading", { name: content.Title, exact: true })).toBeVisible();
     const about = reader.getByRole("region", { name: "About this ticket", exact: true });
-    await expect(about.getByText(`Author account: ${pm.id}`, { exact: true })).toBeVisible();
+    await expect(about.getByText(`Author: ${pm.username}`, { exact: true })).toBeVisible();
     await expect(reader.getByLabel("Title", { exact: true })).toHaveCount(0);
     await expect(reader.getByRole("heading", { name: "Problem description", exact: true })).toBeVisible();
     await expect(reader.locator("script").filter({ hasText: "window.requestInjected = true" })).toHaveCount(0);

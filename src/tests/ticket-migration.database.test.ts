@@ -20,6 +20,7 @@ it.skipIf(process.env.SPECFORGE_TICKET_MIGRATION_TEST !== "1")("migrates existin
       create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
       ${contents(files.filter(file => file < "20261108010000"))}
       insert into auth.users values('11111111-1111-4111-8111-111111111111','fixture@example.com',now(),'{"role":"PM"}');
+      insert into auth.users values('22222222-2222-4222-8222-222222222222','reader@example.com',now(),'{"role":"Developer","username":"untrusted"}');
       select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',false);
       do $$declare org uuid; draft jsonb; published jsonb; begin
         org := public.create_organisation('Migration team');
@@ -31,9 +32,11 @@ it.skipIf(process.env.SPECFORGE_TICKET_MIGRATION_TEST !== "1")("migrates existin
     const result = sql(database, `${contents(files.filter(file => file >= "20261108010000"))}
       select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',false);
       do $$declare org uuid; draft jsonb; begin
+        if (select count(distinct username) from public.profiles where username ~ '^legacy_[0-9a-f]+$') <> 2 then raise exception 'Missing legacy usernames'; end if;
+        if not exists(select 1 from public.profiles where id = '22222222-2222-4222-8222-222222222222' and app_role = 'Developer') then raise exception 'Changed legacy account'; end if;
         if exists(select 1 from public.feature_requests r join private.migration_snapshot s using(id)
-          where to_jsonb(r) - array['ticket_number','delivery_revision','due_date','priority','status','assignee_ids'] is distinct from s.document) then raise exception 'Changed legacy data'; end if;
-        if exists(select 1 from public.feature_requests where due_date is not null or priority <> 'medium' or status <> 'to_do' or delivery_revision <> 1 or cardinality(assignee_ids) <> 0) then raise exception 'Invented metadata'; end if;
+          where to_jsonb(r) - array['ticket_number','delivery_revision','due_date','priority','status','assignee_ids','last_autosaved_at'] is distinct from s.document) then raise exception 'Changed legacy data'; end if;
+        if exists(select 1 from public.feature_requests where due_date is not null or priority <> 'medium' or status <> 'to_do' or delivery_revision <> 1 or cardinality(assignee_ids) <> 0 or last_autosaved_at is not null) then raise exception 'Invented metadata'; end if;
         if (select count(distinct ticket_number) from public.feature_requests) <> 2 then raise exception 'Missing references'; end if;
         select organisation_id into org from public.feature_requests limit 1;
         draft := public.create_request(org,gen_random_uuid());
@@ -79,14 +82,15 @@ it.skipIf(process.env.SPECFORGE_TICKET_MIGRATION_TEST !== "1")("normalizes legac
         if exists(select 1 from public.feature_requests where priority = 'urgent') then raise exception 'Unmapped priority'; end if;
         for old_item in select document from private.priority_snapshot loop
           select * into item from public.feature_requests where id = (old_item->>'id')::uuid;
+          if item.last_autosaved_at is not null then raise exception 'Invented autosave timestamp'; end if;
           if old_item->>'priority' = 'urgent' then
             if item.priority <> 'high' or item.delivery_revision <> (old_item->>'delivery_revision')::integer + 1 then raise exception 'Missing mapping or revision'; end if;
-            if to_jsonb(item) - array['priority','delivery_revision','updated_at'] is distinct from old_item - array['priority','delivery_revision','updated_at'] then raise exception 'Changed content'; end if;
+            if to_jsonb(item) - array['priority','delivery_revision','updated_at','last_autosaved_at'] is distinct from old_item - array['priority','delivery_revision','updated_at'] then raise exception 'Changed content'; end if;
             begin
               perform public.update_delivery(item.organisation_id,item.id,(old_item->>'delivery_revision')::integer,'{"priority":"low"}');
               raise exception 'Accepted stale delivery';
             exception when raise_exception then if sqlerrm <> 'Delivery changed' then raise; end if; end;
-          elsif to_jsonb(item) is distinct from old_item then raise exception 'Changed unaffected ticket'; end if;
+          elsif to_jsonb(item) - 'last_autosaved_at' is distinct from old_item then raise exception 'Changed unaffected ticket'; end if;
         end loop;
         if exists((select * from public.ticket_activity except select * from private.activity_snapshot) union all
           (select * from private.activity_snapshot except select * from public.ticket_activity)) then raise exception 'Rewrote history'; end if;

@@ -16,8 +16,8 @@ export function deliveryChanges(next: Delivery, saved: Delivery) {
   return changes;
 }
 export function sameDelivery(a: Delivery, b: Delivery) { return Object.keys(deliveryChanges(a, b)).length === 0; }
-export type TicketMember = { user_id: string; email: string; app_role: "PM" | "Developer" };
-export type TicketActivity = { id: string; request_id: string; actor_id: string | null; kind: "published" | "delivery_updated" | "requirements_updated" | "comment"; body: string | null; changes: Record<string, { from: unknown; to: unknown }>; created_at: string };
+export type TicketMember = { user_id: string; email: string; app_role: "PM" | "Developer"; username: string };
+export type TicketActivity = { id: string; request_id: string; actor_id: string | null; actor_username: string | null; kind: "published" | "delivery_updated" | "requirements_updated" | "comment"; body: string | null; changes: Record<string, { from: unknown; to: unknown }>; assignment_usernames: { from: (string | null)[]; to: (string | null)[] } | null; created_at: string };
 export function localDay(now = new Date()) { return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`; }
 export function deadlineLabel(item: Delivery & { submitted_at: string | null }, today = localDay()) {
   if (!item.due_date) return "Unscheduled";

@@ -27,7 +27,7 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
     const about = card.getByRole("region", { name: "About this ticket", exact: true });
     await expect(about).toBeVisible();
     expect((await about.boundingBox())!.y).toBeGreaterThan((await page.getByRole("button", { name: "Publish", exact: true }).boundingBox())!.y);
-    await expect(about.getByText(`Author account: ${pm.id}`, { exact: true })).toBeVisible();
+    await expect(about.getByText(`Author: ${pm.username}`, { exact: true })).toBeVisible();
     const saveStatus = about.getByRole("status");
     await expect(saveStatus).toHaveText(/^Last autosaved: .+/);
     await expect(saveStatus.locator("time")).toHaveAttribute("datetime", savedDraft.updated_at);
@@ -180,7 +180,7 @@ test("a new ticket is editable with AI collapsed and a Developer reads the same 
     const aboutReader = reader.getByRole("region", { name: "About this ticket", exact: true });
     expect((await aboutReader.boundingBox())!.y).toBeGreaterThan((await reader.getByRole("button", { name: "Refresh saved request", exact: true }).boundingBox())!.y);
     expect((await aboutReader.boundingBox())!.y).toBeLessThan((await reader.getByRole("heading", { name: "Team discussion & activity", exact: true }).boundingBox())!.y);
-    await expect(aboutReader.getByText(`Author account: ${pm.id}`, { exact: true })).toBeVisible();
+    await expect(aboutReader.getByText(`Author: ${pm.username}`, { exact: true })).toBeVisible();
     await expect(reader.locator(".ticket-content").getByRole("region", { name: "Task visibility", exact: true })).toBeVisible();
     expect((await visibility(reader).boundingBox())!.y).toBeGreaterThan((await reader.getByRole("link", { name: "Back to requests", exact: true }).boundingBox())!.y);
     const title = reader.getByRole("heading", { name: "Write the ticket directly", exact: true });
