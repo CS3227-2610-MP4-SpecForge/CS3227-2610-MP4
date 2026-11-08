@@ -91,6 +91,53 @@ For an existing local stack, apply additive migrations without resetting data:
 local testing. `db:start` is for starting the stack; it is not a migration runner
 for an already-running database.
 
+## Ticket delivery interfaces
+
+The approved [ticket delivery spec](../workflow/specs/2026-11-08-ticket-delivery.md)
+adds typed metadata outside `{title, description}`: `ticket_number`, `due_date`,
+`priority`, `status`, `assignee_ids`, and independent `delivery_revision`.
+New publication requires a due date; existing published records are preserved
+with null deadlines. Additive migrations assign organisation-scoped numbers in
+creation order without changing existing content revisions or timestamps.
+
+- `GET /api/organisations/[org]/requests` now uses `list_ticket_page`: 50 entries,
+  `nextOffset`, filters `search/status/priority/assignee/overdue/today/sort` and
+  `offset`. Filtering occurs before pagination; `today` is the viewer's ISO
+  calendar day for overdue filtering. Offset pages reflect live updates, so a
+  refresh is needed if concurrent edits reorder results. Legacy `list_requests`
+  remains a capped compatibility RPC; the UI does not use it.
+- `POST .../requests/[id]/delivery`: `{revision, changes}`; strict optional change
+  keys `due_date/priority/assignee_ids/status`. `update_delivery` locks organisation
+  then ticket, checks current identity/membership and author/assignee permissions,
+  and conditionally increments delivery revision without changing content revision.
+- `GET /api/organisations/[org]/ticket-members?search=&after=`:
+  `ticket_members` returns up to 50 current-member IDs/roles and `next_cursor`.
+  Search runs before paging. Admin-only membership management/email access is
+  unchanged.
+- `GET .../requests/[id]/activity?before=`: `read_ticket_activity` uses descending
+  bigint IDs serialized as strings, 50 entries and `next_cursor`.
+- `POST .../requests/[id]/activity`: `{creationKey, body}`; `comment_ticket` derives
+  actor, requires publication/current membership, enforces 4,000 code points and
+  20 creations/member/minute/org. Identical idempotency retries do not consume
+  quota; changed text with the same key conflicts. Bodies are capped at 32 KiB.
+
+`src/server/delivery.ts` owns delivery HTTP validation/safe errors;
+`ticket-schemas.ts` shares request output/filter schemas. Normal operations use
+session-bound clients. RPCs and RLS prevent direct unauthorized reads/writes;
+activity is append-only and excludes draft/AI events. A membership-delete trigger
+removes assignments atomically and increments affected delivery revisions.
+Activity actor IDs intentionally survive membership departure. Activity records
+metadata deltas, never old requirement text. Historical activity is not invented.
+
+Focused checks: `node src/tooling/test-local.mjs delivery`,
+`SPECFORGE_BROWSER_ORIGIN=http://localhost:3001 node src/tooling/test-local.mjs delivery-browser`,
+and `node src/tooling/test-local.mjs ticket-migration`. The last creates and drops
+one uniquely named throwaway database inside `supabase_db_specforge`, replays all
+migrations with minimal Auth compatibility fixtures, and checks legacy data,
+reference counters and new-deadline enforcement. Real Auth/RLS is exercised by
+ordinary integration tests. It does not reset the app database or contact hosted
+services. Run generated-type/build checks sequentially with browser checks.
+
 ## Two-field tasks and private AI chat
 
 The approved [two-field AI spec](../workflow/specs/2026-11-07-two-field-ai-workspace.md)

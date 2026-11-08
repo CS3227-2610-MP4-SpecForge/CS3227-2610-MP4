@@ -28,6 +28,7 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
     const pm = await fixture.actor("PM");
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "Draft saves" })).data;
     const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    await pm.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
     const save = (title: string) => pm.client.rpc("save_draft", { target_org: org, request_id: draft.id, expected_revision: 1, content: { ...fields, title } });
     const competing = await Promise.all([save("First writer"), save("Second writer")]);
     expect(competing.filter(result => !result.error)).toHaveLength(1);
@@ -48,6 +49,7 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
     const invite = (await reader.client.rpc("list_invitations")).data[0].id;
     await reader.client.rpc("respond_invitation", { invitation_id: invite, decision: "accept" });
     const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    await pm.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
     const publish = (content: unknown, acknowledged: boolean | null) => pm.client.rpc("publish_request", { target_org: org, request_id: draft.id, expected_revision: 1, content, acknowledged, first_submission: true });
     expect((await publish(fields, null)).error?.code).toBe("22023");
     expect((await publish({ ...fields, description: " \n\t" }, true)).error?.code).toBe("22023");
@@ -69,10 +71,12 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
     const pm = await fixture.actor("PM");
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "Draft deletion" })).data;
     const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    await pm.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
     expect((await pm.client.rpc("delete_draft", { target_org: org, request_id: draft.id, expected_revision: 2 })).error?.code).toBe("P0001");
     expect((await pm.client.rpc("delete_draft", { target_org: org, request_id: draft.id, expected_revision: 1 })).error).toBeNull();
     expect((await pm.client.rpc("list_requests", { target_org: org })).data).toEqual([]);
     const published = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    await pm.client.rpc("update_delivery", { target_org: org, request_id: published.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
     await pm.client.rpc("publish_request", { target_org: org, request_id: published.id, expected_revision: 1, content: fields, acknowledged: true, first_submission: true });
     expect((await pm.client.rpc("delete_draft", { target_org: org, request_id: published.id, expected_revision: 2 })).error?.code).toBe("P0001");
   });
@@ -87,6 +91,7 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
     const created = await post(path, { creationKey: randomUUID() });
     expect(created.status).toBe(201);
     const draft = (await created.json()).request;
+    await pm.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
     const long = { ...fields, description: "x".repeat(24000) };
     expect((await post(path + "/" + draft.id, { action: "save_draft", revision: 1, fields: long })).status).toBe(200);
     expect((await post(path + "/" + draft.id, { action: "save_draft", revision: 1, fields })).status).toBe(409);
@@ -116,7 +121,9 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
     await join(author); await join(otherPM);
     await admin.client.rpc("change_member", { target_org: org, target_user: otherPM.id, decision: "promote" });
     const draft = (await author.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    await author.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
     const published = (await author.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    await author.client.rpc("update_delivery", { target_org: org, request_id: published.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
     const read = (actor: typeof author, id = draft.id, target = org) => actor.client.rpc("read_request", { target_org: target, request_id: id });
     for (const peer of [admin, otherPM]) {
       expect((await peer.client.rpc("list_requests", { target_org: org })).data).toEqual([]);
@@ -156,11 +163,13 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
     };
     await join();
     const draft = (await author.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    await author.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
     const args = { target_org: org, request_id: draft.id, expected_revision: 1, content: fields };
     const race = await Promise.all([author.client.rpc("save_draft", args), author.client.rpc("publish_request", { ...args, acknowledged: true, first_submission: true })]);
     expect(race.filter(result => !result.error)).toHaveLength(1);
     expect(race.find(result => result.error)?.error?.code).toBe("P0001");
     const second = (await author.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    await author.client.rpc("update_delivery", { target_org: org, request_id: second.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
     const removal = await Promise.all([
       admin.client.rpc("change_member", { target_org: org, target_user: author.id, decision: "remove" }),
       author.client.rpc("save_draft", { ...args, request_id: second.id }),
@@ -178,6 +187,7 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
     const pm = await fixture.actor("PM");
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "Blank content" })).data;
     const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+    await pm.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
     expect((await pm.client.rpc("publish_request", { target_org: org, request_id: draft.id, expected_revision: 1, content: { ...fields, description: blank }, acknowledged: true, first_submission: true })).error?.code).toBe("22023");
   });
 

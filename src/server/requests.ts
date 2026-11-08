@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { taskFields, requestRecord, ticketListQuery } from "./ticket-schemas";
+export { taskFields } from "./ticket-schemas";
 import { error, json, readBody } from "./http";
 
-export const taskFields = z.strictObject({ title: z.string().refine(value => [...value].length <= 160), description: z.string().refine(value => [...value].length <= 24000) });
 const fields = taskFields;
 const revision = z.number().int().min(1).max(2147483647);
 const mutation = z.discriminatedUnion("action", [
@@ -11,7 +12,6 @@ const mutation = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("save_published"), revision, fields, acknowledged: z.literal(true) }),
   z.strictObject({ action: z.literal("delete_draft"), revision }),
 ]);
-const record = z.object({ id: z.uuid(), organisation_id: z.uuid(), author_id: z.uuid(), revision, fields, submitted_at: z.string().nullable(), created_at: z.string(), updated_at: z.string() });
 export async function handleRequests(request: Request, client: SupabaseClient): Promise<Response | null> {
   const match = new URL(request.url).pathname.match(/^\/api\/organisations\/([^/]+)\/requests(?:\/([^/]+))?$/);
   if (!match) return null;
@@ -23,6 +23,12 @@ export async function handleRequests(request: Request, client: SupabaseClient): 
   if (request.method === "GET") {
     rpc = id ? "read_request" : "list_requests";
     if (id) args.request_id = id;
+    else {
+      const query = ticketListQuery.safeParse(Object.fromEntries(new URL(request.url).searchParams));
+      if (!query.success) return error("Invalid ticket filters.", 400);
+      const { offset, ...filters } = query.data;
+      rpc = "list_ticket_page"; args = { target_org: org, filters, page_offset: offset };
+    }
   } else if (request.method === "POST") {
     const body = await readBody(request, 196608);
     if (!id) {
@@ -46,11 +52,12 @@ export async function handleRequests(request: Request, client: SupabaseClient): 
   } else return error("Not found.", 404);
   const { data, error: failure } = await client.rpc(rpc, args);
   if (failure?.code === "42501") return error("Request unavailable or access has changed.", 403);
-  if (failure?.code === "22023") return error("Complete title and description and acknowledge your review before publishing. Check field limits.", 400);
+  if (failure?.code === "22023") return error("Complete title and description, save a due date, and acknowledge your review before publishing. Check field limits.", 400);
   if (failure?.code === "P0001") return error("The saved request changed. Your text is preserved; reload the saved version before continuing.", 409);
   if (failure) return error("Request service unavailable. Your text is preserved; check the saved version before retrying.", 503);
   if (deleted) return json({ message: "Draft deleted." });
-  const parsed = (rpc === "list_requests" ? z.array(record) : record).safeParse(data);
+  const parsed = (rpc === "list_ticket_page" ? z.object({ items: z.array(requestRecord), next_offset: z.number().int().nonnegative().nullable() }) : requestRecord).safeParse(data);
   if (!parsed.success) return error("Request service unavailable. Check the saved version before retrying.", 503);
-  return json({ [rpc === "list_requests" ? "requests" : "request"]: parsed.data }, rpc === "create_request" ? 201 : 200);
+  if (rpc === "list_ticket_page") { const page = parsed.data as { items: unknown[]; next_offset: number | null }; return json({ requests: page.items, nextOffset: page.next_offset }); }
+  return json({ request: parsed.data }, rpc === "create_request" ? 201 : 200);
 }

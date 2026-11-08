@@ -1,4 +1,5 @@
 import { handleChat, type ChatDependencies } from "./chat";
+import { handleDelivery } from "./delivery";
 import { handleRequests } from "./requests";
 import { error, json, InputError, readBody } from "./http";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -81,6 +82,8 @@ export function createApplication(options: Options) {
         if (!data.user.email_confirmed_at) return error("Verify your email to continue.", 403);
         const chatResponse = await handleChat(request, client, data.user.id, options.chat);
         if (chatResponse) return chatResponse;
+        const deliveryResponse = await handleDelivery(request, client);
+        if (deliveryResponse) return deliveryResponse;
         const requestResponse = await handleRequests(request, client);
         if (requestResponse) return requestResponse;
         const inbox = path === "/api/invitations";

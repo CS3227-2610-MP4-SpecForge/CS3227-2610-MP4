@@ -24,6 +24,8 @@ Next.js/React and Supabase scaffold with verified accounts and initial
 organisation workflow, including invitations and membership/admin management, plus the manual request
 lifecycle (private drafts, publication and author-only editing), a two-field
 Markdown task editor, ticket-first AI drafting/inline suggestions and collapsible private SoC discussion.
+Tickets also support due dates, up to five assignees, delivery status/priority,
+organisation-scoped references, filtered/paged lists, shared comments and activity.
 Read `docs/DeveloperGuide.md` for setup/check commands.
 PM AI reliability/provider-wide quotas and hosted deployment remain unverified;
 the partner-owned Developer AI remains unfinished.

@@ -4,7 +4,7 @@
 
 This version supports email/password signup, email-code verification, login,
 logout, creating/listing/selecting your organisations, invitations and membership
-management, and the manual request lifecycle. Both Product Managers and
+management, ticket drafting/publication, delivery tracking and team comments. Both Product Managers and
 Developers use the same workspace. Organisation creators become admins.
 
 Demo kits and the partner-owned Developer AI remain future work. PM task chat
@@ -61,6 +61,47 @@ permissions always use current membership. Invitations and member lists currentl
 display at most 100 entries. New invitations and resends share a limit of 20
 attempts per hour per organisation, including unknown addresses and duplicates.
 
+## Ticket delivery and team discussion
+
+Each ticket has a stable organisation-scoped reference such as **SF-42** and a
+**Copy ticket link** action. References can have gaps. Links still require current
+organisation membership; drafts remain private even when someone is assigned.
+
+The author uses **Delivery details** to set a date-only **Due date**, **Priority**
+(Low, Medium, High or Urgent), and zero to five assignees. Open **Assignees** to
+search current members by account ID or role. Either PMs or Developers can be
+assigned; no email directory is exposed. Use **Save delivery details** explicitly:
+these fields save independently of ticket text. Save a deadline before first
+publication. Existing published tickets without a deadline remain unscheduled
+until their author sets one. A departed member is unassigned automatically;
+rejoining does not restore old assignments.
+
+Published tickets have a **Delivery status**: To do, In progress, In review, Done
+or Cancelled. The author and current assignees can change it, including reopening
+completed work. Only the author changes scheduling, priority and assignments.
+Other members can read and comment. Draft/publication state remains separate from
+delivery status. Overdue and due-today indicators use your browser's local date;
+Done and Cancelled tickets are excluded from overdue work.
+
+The request list supports title/reference search, status, priority and assignee
+filters, including **Assigned to me**, **Unassigned** and **Overdue only**. Choose
+recently updated or due-date sorting, then **Apply filters**. Filters run across
+all visible tickets; **Load more tickets** fetches another page. Refresh after
+teammates make changes; pages are a live list, not a frozen snapshot.
+
+**Team discussion & activity** is shared with current organisation members on
+published tickets. Post plain-text comments up to 4,000 Unicode characters;
+comments cannot be edited or deleted. Each member can post 20 comments per minute
+per organisation. A lost response preserves your comment and offers **Retry
+comment**, which safely repeats the same attempt. Check activity before starting
+a new attempt. **Load older activity** reads another 50 entries.
+
+Activity records publication, requirements edits and delivery changes with actor
+and time. It does not include old description text, private draft changes or AI
+conversations. Existing changes from before this feature have no backfilled
+activity. On a delivery conflict, your local input remains visible; use **Reload
+delivery details** to discard those edits and load current values before retrying.
+
 ## Tasks and AI chat
 
 Select an organisation and choose **View requests**. PM authors can create/edit
@@ -111,7 +152,7 @@ Drafts autosave750ms after a pause. Accepting AI changes in a draft follows that
 same autosave. Submission requires a nonempty title/description, acknowledgement
 and **Submit request**. Published edits, including accepted AI changes, remain local
 until acknowledged **Save changes**. Readers see only the last saved task.
-Only the original PM author can edit; Developers cannot edit even when admins.
+Only the original PM author can edit ticket requirements; assigned Developers can update delivery status. Admin status grants no additional ticket-editing rights.
 
 **Delete draft** asks confirmation; submitted tasks cannot be deleted. Leaving
 or removal ends access; submitted work remains visible to members and rejoining
@@ -160,7 +201,7 @@ truncated AI responses fail safely; ask for a concise proposal or edit manually.
 
 Markdown display supports headings, lists, paragraphs and fenced code. Raw HTML,
 images and links remain literal text; they do not execute or fetch remote media.
-Lists show at most100requests. No hosted application URL is available yet.
+Ticket lists use 50-item pages with **Load more tickets**. No hosted application URL is available yet.
 
 ## Failures
 

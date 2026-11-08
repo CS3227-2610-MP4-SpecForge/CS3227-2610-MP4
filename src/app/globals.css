@@ -144,3 +144,32 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .compact-metadata { display: flex; align-items: start; gap: 16px; font-size: .85rem; }
 .compact-metadata summary { cursor: pointer; color: var(--muted); }
 .ticket-save-status { margin: 0; font-size: .85rem; color: var(--muted); }
+
+.delivery-panel, .activity-panel { min-width: 0; overflow-wrap: anywhere; }
+.delivery-panel .section-title, .activity-panel .section-title { justify-content: space-between; flex-wrap: wrap; }
+.delivery-panel summary { cursor: pointer; font-weight: 650; padding: 8px 0; }
+.delivery-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.ticket-badges { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: .85rem; }
+.ticket-reference { font-weight: 700; color: var(--muted); }
+.member-picker { margin-top: 12px; gap: 12px; }
+.member-options { max-height: 240px; overflow: auto; display: grid; gap: 12px; }
+.member-options .checkbox-field { font-size: .85rem; }
+.account-id { overflow-wrap: anywhere; }
+.ticket-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.activity-entry { border-top: 1px solid var(--border); padding: 16px 0; }
+.activity-entry p { margin-bottom: 8px; }
+.activity-entry ul { padding-left: 20px; }
+@media (max-width: 800px) {
+  .delivery-fields, .ticket-filters { grid-template-columns: minmax(0, 1fr); }
+  .delivery-panel, .activity-panel { padding: 20px; }
+}
+.ticket-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+.ticket-layout > .delivery-panel { grid-column: 2; grid-row: 1; padding: 20px; }
+.ticket-layout > .ticket-body { grid-column: 1; grid-row: 1; min-width: 0; }
+.ticket-layout .delivery-fields { grid-template-columns: minmax(0, 1fr); }
+.ticket-layout .ticket-workspace.discussion-open { grid-template-columns: minmax(0, 1fr); }
+.ticket-layout .chat-panel { position: static; }
+@media (max-width: 1000px) {
+  .ticket-layout { grid-template-columns: minmax(0, 1fr); }
+  .ticket-layout > .delivery-panel, .ticket-layout > .ticket-body { grid-column: auto; grid-row: auto; }
+}

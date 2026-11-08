@@ -6,6 +6,9 @@ import type { ChatTurn } from "@/chat";
 import { SuggestionReview } from "./suggestion-review";
 import { ChatPanel } from "./chat-panel";
 import { Markdown } from "./markdown";
+import { deliveryOf } from "@/delivery";
+import { TicketDelivery } from "./ticket-delivery";
+import { TicketActivity } from "./ticket-activity";
 import { Button, Field, Notice, TextareaField } from "./ui";
 
 type Problem = { kind: "conflict" | "ambiguous" | "retry" | "denied"; message: string };
@@ -25,19 +28,22 @@ export function RequestScreen({ organisationId, requestId }: { organisationId: s
     }).catch(failure => { if (active) setError(failureMessage(failure)); });
     return () => { active = false; };
   }, [path, reload]);
-  if (error) return <section className="stack"><a href={listPath}>Back to requests</a><Notice danger>{error}</Notice><Button onClick={() => { setError(""); setReload(n => n + 1); }}>Retry loading request</Button></section>;
+  if (error && (!item || !account)) return <section className="stack"><a href={listPath}>Back to requests</a><Notice danger>{error}</Notice><Button onClick={() => { setError(""); setReload(n => n + 1); }}>Retry loading request</Button></section>;
   if (!item || !account) return <Notice>Loading request…</Notice>;
-  if (item.author_id === account.id && account.role === "PM") return <RequestEditor key={item.id} initial={item} path={path} listPath={listPath} />;
+  if (item.author_id === account.id && account.role === "PM") return <RequestEditor key={item.id} initial={item} path={path} listPath={listPath} accountId={account.id} />;
   return <section className="stack request-page"><a href={listPath}>Back to requests</a><h1>{item.fields.title}</h1><RequestMetadata item={item} />
+    {error && <Notice danger>{error} Your local input is preserved; retry Refresh saved request.</Notice>}
     <Button className="secondary" onClick={() => setReload(n => n + 1)}>Refresh saved request</Button>
+    <TicketDelivery item={item} accountId={account.id} path={path} onSaved={delivery => setItem(current => current ? { ...current, ...deliveryOf(delivery) } : current)} />
     <div className="card"><Markdown text={item.fields.description} /></div>
+    <TicketActivity path={path + "/activity"} />
   </section>;
 }
 function RequestMetadata({ item, compact = false }: { item: FeatureRequest; compact?: boolean }) {
   const details = <><p>Author account: {item.author_id}</p>{item.submitted_at && <p>Submitted: {new Date(item.submitted_at).toLocaleString()}</p>}<p>Last modified: {new Date(item.updated_at).toLocaleString()}</p></>;
   return <div className={`request-metadata ${compact ? "compact-metadata" : ""}`}><span className="badge">{item.submitted_at ? "Submitted" : "Private draft"}</span>{compact ? <details><summary>Ticket details</summary>{details}</details> : details}</div>;
 }
-function RequestEditor({ initial, path, listPath }: { initial: FeatureRequest; path: string; listPath: string }) {
+function RequestEditor({ initial, path, listPath, accountId }: { initial: FeatureRequest; path: string; listPath: string; accountId: string }) {
   const [starting, setStarting] = useState(!initial.submitted_at && !initial.fields.title.trim());
   const [suggestion, setSuggestion] = useState<ChatTurn | null>(null);
   const suggestionLive = useRef<ChatTurn | null>(null);
@@ -62,14 +68,20 @@ function RequestEditor({ initial, path, listPath }: { initial: FeatureRequest; p
   const withinLimits = requestFields.every(field => [...fields[field.key]].length <= field.max);
   const complete = withinLimits && requestFields.every(field => fields[field.key].trim().length > 0);
   const published = stored.submitted_at !== null;
-  function adopt(item: FeatureRequest) { persisted.current = item; setStored(item); }
+  function adopt(item: FeatureRequest) {
+    // Content responses can arrive after an independent delivery write. Keep
+    // the newest delivery snapshot without advancing the content revision.
+    const next = item.delivery_revision < persisted.current.delivery_revision
+      ? { ...item, ...deliveryOf(persisted.current) } : item;
+    persisted.current = next; setStored(next);
+  }
   function edit(key: keyof RequestFields, value: string) {
     const next = { ...latest.current, [key]: value };
     latest.current = next; setFields(next); setAcknowledged(false); setMessage("");
   }
   async function save(action: Action) {
     if (operation.current || (problem && problem.kind !== "retry")) return;
-    if ((action === "submit" || action === "save_published") && (!complete || !acknowledged)) return;
+    if ((action === "submit" || action === "save_published") && (!complete || !acknowledged) || action === "submit" && !persisted.current.due_date) return;
     operation.current = true; setBusy(action === "save_draft" ? "autosave" : "explicit"); setMessage("");
     const snapshot = latest.current;
     const revision = persisted.current.revision;
@@ -185,6 +197,9 @@ function RequestEditor({ initial, path, listPath }: { initial: FeatureRequest; p
   const blocked = Boolean(problem && problem.kind !== "retry");
   return <section className="stack request-page ticket-editor">
     <a href={listPath}>Back to requests</a><h1>{stored.fields.title || "New ticket"}</h1><RequestMetadata item={stored} compact />
+    <div className="ticket-layout">
+    <TicketDelivery item={stored} accountId={accountId} path={path} onSaved={delivery => adopt({ ...persisted.current, ...deliveryOf(delivery) })} />
+    <div className="stack ticket-body">
     <p className="ticket-save-status" role="status">{busy ? "Saving…" : problem ? "Save failed — local text preserved" : dirty ? "Unsaved changes" : "Saved"}</p>
     {problem && <div className="stack"><Notice danger>{problem.message}</Notice><div className="actions">
       {problem.kind === "ambiguous" && <Button className="secondary" disabled={Boolean(busy)} onClick={reconcile}>Check saved version</Button>}
@@ -199,13 +214,15 @@ function RequestEditor({ initial, path, listPath }: { initial: FeatureRequest; p
     <div hidden={starting}>
     <form className="card stack" aria-label="Request editor" onSubmit={event => { event.preventDefault(); void save(published ? "save_published" : "submit"); }} aria-busy={Boolean(busy)}>
       {requestFields.map(field => field.key === "title" ? <Field key={field.key} id={`request-${field.key}`} label={field.label} maxLength={field.max * 2} value={fields[field.key]} disabled={busy === "explicit"} onChange={event => edit(field.key, event.target.value)} /> : <TextareaField key={field.key} id={`request-${field.key}`} label={field.label} maxLength={field.max * 2} value={fields[field.key]} disabled={busy === "explicit"} onChange={event => edit(field.key, event.target.value)} />)}
-      <p className="hint">{published ? "Published edits are saved only when you choose Save changes." : "Drafts autosave after a short pause. Only you can read this draft."} Title and description need content to publish. Section headings are optional.</p>
+      <p className="hint">{published ? "Published edits are saved only when you choose Save changes." : "Drafts autosave after a short pause. Only you can read this draft."} Title and description need content to publish. Save a due date in delivery details before first publication. Section headings are optional.</p>
       <label className="checkbox-field"><input type="checkbox" checked={acknowledged} disabled={Boolean(busy)} onChange={event => setAcknowledged(event.target.checked)} />I acknowledge the assumptions and unresolved questions.</label>
-      <div className="actions"><Button disabled={Boolean(busy) || applying || blocked || !complete || !acknowledged || (published ? !dirty : dirty)}>{published ? "Save changes" : "Submit request"}</Button>
+      <div className="actions"><Button disabled={Boolean(busy) || applying || blocked || !complete || !acknowledged || (published ? !dirty : dirty || !stored.due_date)}>{published ? "Save changes" : "Submit request"}</Button>
         {!published && <Button type="button" className="secondary" disabled={Boolean(busy) || applying || blocked} onClick={() => { if (window.confirm("Delete this private draft? This cannot be undone.")) void save("delete_draft"); }}>Delete draft</Button>}
       </div>
     </form>
     </div>
     </ChatPanel>
+    </div></div>
+    {published && <TicketActivity path={path + "/activity"} />}
   </section>;
 }

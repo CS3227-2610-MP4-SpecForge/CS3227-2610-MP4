@@ -40,6 +40,9 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await expect(reader.getByText("No requests yet.")).toBeVisible();
     await expect(reader.getByRole("button", { name: "New draft", exact: true })).toHaveCount(0);
     await page.getByLabel("I acknowledge the assumptions and unresolved questions.").check();
+    await page.getByLabel("Due date", { exact: true }).fill("2026-12-20");
+    await page.getByRole("button", { name: "Save delivery details", exact: true }).click();
+    await expect(page.getByText("Delivery details saved.", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Submit request", exact: true }).click();
     await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
     await reader.reload();
@@ -276,6 +279,9 @@ test("applying a proposal to a published task remains local until explicit Save 
   try {
     await fill(page); await expect(saved(page)).toBeVisible();
     await page.getByLabel("I acknowledge the assumptions and unresolved questions.").check();
+    await page.getByLabel("Due date", { exact: true }).fill("2026-12-20");
+    await page.getByRole("button", { name: "Save delivery details", exact: true }).click();
+    await expect(page.getByText("Delivery details saved.", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Submit request", exact: true }).click();
     await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
     const before = (await pm.client.rpc("read_request", { target_org: org, request_id: id })).data;
