@@ -1,0 +1,28 @@
+title: SpecForge
+description: >-
+  A shared workspace where product managers turn rough client requests into
+  clear, AI-assisted feature tickets and developers deliver against them.
+theme: jekyll-theme-primer
+
+# The guides are copied in from docs/ at build time, so relative links such as
+# DeveloperGuide.md#local-setup keep working on the published site.
+plugins:
+  - jekyll-relative-links
+
+relative_links:
+  enabled: true
+  collections: false
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+# Set by the Pages workflow; a local build without it still renders.
+baseurl: ""

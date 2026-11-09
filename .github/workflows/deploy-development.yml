@@ -1,0 +1,25 @@
+name: Deploy development
+
+# The dev branch is the development environment: its own Supabase project, its
+# own Vercel preview configuration and its own secrets.
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-development
+  cancel-in-progress: false
+
+jobs:
+  development:
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: development
+      vercel-environment: preview
+      production: false
+    secrets: inherit

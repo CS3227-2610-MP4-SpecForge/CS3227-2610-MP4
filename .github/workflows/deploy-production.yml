@@ -1,0 +1,30 @@
+name: Deploy production
+
+# main is production. The same gates CI applies to a pull request run again on
+# the merge commit, and the production GitHub Environment requires a reviewer, so
+# reaching production is always an explicit human decision.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  production:
+    needs: checks
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+      vercel-environment: production
+      production: true
+    secrets: inherit
