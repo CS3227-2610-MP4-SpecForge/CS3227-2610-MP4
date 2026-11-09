@@ -139,9 +139,44 @@ test("priority and delivery status use accessible colored pill dropdowns", async
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: "test-results/pill-dropdowns-mobile.png", fullPage: true });
     await priority.press("Escape"); await page.goto(`/organisations/${org}/requests`);
-    await expect(page.locator(".ticket-badges").getByText("High", { exact: true })).toBeVisible();
-    await expect(page.locator(".ticket-badges").getByText("Done", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Priority filter", { exact: true }).getByRole("option")).toHaveText(["All priorities", "Low", "Medium", "High"]);
+    const table = page.getByRole("table", { name: "Requests", exact: true });
+    await expect(table.getByRole("columnheader")).toHaveText(["Title", "Owner", "Assignees", "Status", "Priority"]);
+    const row = table.getByRole("row").filter({ has: page.getByRole("link", { name: "Colored work", exact: true }) });
+    await expect(row.getByRole("cell")).toHaveText(["Colored work", pm.username, "Unassigned", "Done", "High"]);
+    await selectPill(page, "Status for Colored work", "In review");
+    await expect(row.getByRole("combobox", { name: "Status for Colored work" })).toHaveText("In review");
+    const tablePriority = row.getByRole("combobox", { name: "Priority for Colored work" });
+    await tablePriority.press("Home"); await tablePriority.press("Enter");
+    await expect(tablePriority).toHaveText("Low");
+    await expect(tablePriority).toBeFocused();
+    await expect(page.getByText("Delivery updated.", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Submitted requests are shared with your team. Drafts are private to their author.")).toHaveCount(0);
+    await expect(page.getByRole("checkbox", { name: "Overdue only" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Refresh requests" })).toHaveCount(0);
+    const filters = page.getByRole("form", { name: "Ticket filters" });
+    await expect(filters.getByRole("combobox")).toHaveCount(4);
+    const priorityFilter = filters.getByRole("combobox", { name: "Priority filter" });
+    await priorityFilter.press("Enter");
+    await expect(filters.getByRole("listbox").getByRole("option")).toHaveText(["All priorities", "Low", "Medium", "High"]);
+    await priorityFilter.press("End"); await priorityFilter.press("Enter");
+    await expect(priorityFilter).toHaveText("High");
+    await filters.getByRole("searchbox", { name: "Search by title" }).fill("nonmatching title");
+    await filters.getByRole("button", { name: "Apply search" }).click();
+    await expect(page.getByText("No tickets match these filters.", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(row.getByRole("combobox", { name: "Priority for Colored work" })).toHaveText("Low");
+    await expect(row.getByRole("combobox", { name: "Status for Colored work" })).toHaveText("In review");
+    await expect(page.getByText("Loading members…", { exact: true })).toHaveCount(0);
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const heading = (await page.getByRole("heading", { name: "Requests", exact: true }).boundingBox())!;
+      const newTask = (await page.getByRole("button", { name: "New task", exact: true }).boundingBox())!;
+      const headingCenter = heading.y + heading.height / 2;
+      const buttonCenter = newTask.y + newTask.height / 2;
+      expect(Math.abs(headingCenter - buttonCenter)).toBeLessThan(1);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: "test-results/requests-pm-mobile.png", fullPage: true });
   } finally { await fixture.cleanup(); }
 });
 
@@ -260,17 +295,69 @@ test("author schedules work; assignee updates status and comments; list filters 
     await reader.screenshot({ path: "test-results/delivery-mobile.png", fullPage: true });
     await page.screenshot({ path: "test-results/delivery-author.png", fullPage: true });
     await reader.goto(`/organisations/${org}/requests`);
-    const filter = reader.getByLabel("Assignee filter", { exact: true });
-    await expect(filter.getByRole("option", { name: `${dev.username} (Developer)`, exact: true })).toHaveAttribute("value", dev.id);
-    await expect(reader.getByText(`Assignees: ${dev.username}, ${pm.username}`, { exact: true })).toBeVisible();
-    await expect(reader.getByText(`Author: ${pm.username}`, { exact: true })).toBeVisible();
-    await reader.getByLabel("Assignee filter", { exact: true }).selectOption("me");
+    const filter = reader.getByRole("combobox", { name: "Assignee filter", exact: true });
+    await expect(reader.getByText("Loading members…", { exact: true })).toHaveCount(0);
+    await filter.click();
+    const assignees = reader.getByRole("listbox", { name: "Assignee filter options", exact: true });
+    await expect(assignees.getByRole("option", { name: `${dev.username} (Developer)`, exact: true })).toBeVisible();
+    await filter.press("a"); await filter.press("s"); await filter.press("Enter");
+    await expect(filter).toHaveText("Assigned to me");
+    const row = reader.getByRole("row").filter({ has: reader.getByRole("link", { name: "Release search", exact: true }) });
+    await expect(row.getByRole("cell", { name: `${dev.username}, ${pm.username}`, exact: true })).toBeVisible();
+    await expect(row.getByRole("cell", { name: pm.username, exact: true })).toBeVisible();
+    await expect(row.getByRole("combobox", { name: "Priority for Release search" })).toHaveCount(0);
+    await expect(row.getByRole("cell", { name: "High", exact: true })).toBeVisible();
     await reader.getByRole("button", { name: "Apply filters", exact: true }).click();
     await expect(reader.getByRole("link", { name: "Release search", exact: true })).toBeVisible();
-    await reader.getByLabel("Status filter", { exact: true }).selectOption("done");
+    await reader.setViewportSize({ width: 1280, height: 800 });
+    await reader.screenshot({ path: "test-results/requests-developer-desktop.png", fullPage: true });
+    await selectPill(reader, "Sort tickets", "Status");
+    await reader.getByRole("combobox", { name: "Status filter", exact: true }).click();
+    await reader.getByRole("option", { name: "In progress", exact: true }).click();
     await reader.getByRole("button", { name: "Apply filters", exact: true }).click();
+    await expect(row).toBeVisible();
+    await selectPill(reader, "Status for Release search", "Done");
     await expect(reader.getByText("No tickets match these filters.", { exact: true })).toBeVisible();
+    expect((await dev.client.rpc("read_request", args)).data.status).toBe("done");
   } finally { await context.close(); await fixture.cleanup(); }
+});
+
+test("Requests table reconciles conflicts and lost priority responses without replay", async ({ page }) => {
+  const fixture = localFixture(); const pm = await fixture.actor("PM");
+  const org = (await pm.client.rpc("create_organisation", { organisation_name: "Table delivery recovery" })).data;
+  const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+  const args = { target_org: org, request_id: draft.id };
+  try {
+    await login(page, pm); await page.goto(`/organisations/${org}/requests`);
+    const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "Untitled draft" }) });
+    const priority = row.getByRole("combobox", { name: "Priority for Untitled draft" });
+    await expect(priority).toHaveText("Medium");
+    await expect(row.getByRole("cell", { name: "Private draft" })).toBeVisible();
+    await expect(row.getByRole("combobox")).toHaveCount(1);
+    const updated = await pm.client.rpc("update_delivery", { ...args, expected_revision: draft.delivery_revision, changes: { priority: "high" } });
+    expect(updated.error).toBeNull();
+    let attempts = 0;
+    await page.route(`**/api/organisations/${org}/requests/${draft.id}/delivery`, async route => {
+      attempts++;
+      if (attempts === 2) { expect((await route.fetch()).ok()).toBe(true); await route.abort(); }
+      else await route.continue();
+    });
+    await selectPill(page, "Priority for Untitled draft", "Low");
+    await expect(page.getByRole("alert").filter({ hasText: "changed before" })).toBeVisible();
+    await expect(priority).toHaveText("High");
+    expect(attempts).toBe(1);
+    await selectPill(page, "Priority for Untitled draft", "Low");
+    await expect(page.getByRole("alert").filter({ hasText: "Could not confirm" })).toBeVisible();
+    await expect(priority).toHaveText("Low");
+    expect(attempts).toBe(2);
+    await page.route(`**/api/organisations/${org}/requests`, route => route.abort(), { times: 1 });
+    await selectPill(page, "Priority for Untitled draft", "Medium");
+    await expect(page.getByRole("alert").filter({ hasText: "Could not reload requests" })).toBeVisible();
+    await expect(priority).toHaveCount(0);
+    await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+    await expect(priority).toHaveText("Medium");
+    expect(attempts).toBe(3);
+  } finally { await fixture.cleanup(); }
 });
 
 test("delivery conflicts preserve edits and a lost comment response retries without duplication", async ({ page }) => {

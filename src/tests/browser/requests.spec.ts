@@ -33,7 +33,7 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await login(page, pm);
     await page.getByRole("button", { name: /Requirements team Admin/ }).click();
     await page.getByRole("link", { name: "View requests", exact: true }).click();
-    await page.getByRole("button", { name: "New draft", exact: true }).click();
+    await page.getByRole("button", { name: "New task", exact: true }).click();
     await page.getByRole("button", { name: "Start manually", exact: true }).click();
     await page.getByLabel("Title", { exact: true }).focus();
     await page.keyboard.press("Tab");
@@ -46,12 +46,15 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await login(reader, developer);
     await reader.goto(`/organisations/${org}/requests`);
     await expect(reader.getByText("No requests yet.")).toBeVisible();
-    await expect(reader.getByRole("button", { name: "New draft", exact: true })).toHaveCount(0);
+    await expect(reader.getByRole("button", { name: "New task", exact: true })).toHaveCount(0);
     await setDueDate(page, "2026-12-20");
     await expect(saved(page)).toBeVisible();
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toContainText("This task is visible to members of the");
     await reader.reload();
+    const requestRow = reader.getByRole("row").filter({ has: reader.getByRole("link", { name: content.Title, exact: true }) });
+    await expect(requestRow).toBeVisible();
+    await expect(requestRow.getByRole("combobox")).toHaveCount(0);
     await reader.getByRole("link", { name: content.Title, exact: true }).click();
     await expect(reader.getByRole("heading", { name: content.Title, exact: true })).toBeVisible();
     const about = reader.getByRole("region", { name: "About this ticket", exact: true });
@@ -84,7 +87,7 @@ async function setupEditor(page: Page) {
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Save recovery" })).data;
   await login(page, pm);
   await page.goto(`/organisations/${org}/requests`);
-  await page.getByRole("button", { name: "New draft", exact: true }).click();
+  await page.getByRole("button", { name: "New task", exact: true }).click();
   await page.getByRole("button", { name: "Start manually", exact: true }).click();
   await openAi(page);
   await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
@@ -103,9 +106,9 @@ test("lost creation/save responses reconcile without duplicate drafts or automat
       if (route.request().method() === "POST" && loseCreation) { loseCreation = false; await route.fetch(); await route.abort(); }
       else await route.continue();
     });
-    await page.getByRole("button", { name: "New draft", exact: true }).click();
+    await page.getByRole("button", { name: "New task", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: "retrying uses the same creation key" })).toBeVisible();
-    await page.getByRole("button", { name: "New draft", exact: true }).click();
+    await page.getByRole("button", { name: "New task", exact: true }).click();
     await page.getByRole("button", { name: "Start manually", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     expect((await pm.client.rpc("list_requests", { target_org: org })).data).toHaveLength(1);
@@ -376,7 +379,7 @@ test("rough ideas become private AI drafts with undo and inline review", async (
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Ticket writing" })).data;
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests`);
-    await page.getByRole("button", { name: "New draft", exact: true }).click();
+    await page.getByRole("button", { name: "New task", exact: true }).click();
     await page.getByLabel("What needs to change?", { exact: true }).fill("Remember filters when I return to the request list.");
     await expect(saved(page)).toBeVisible();
     await page.getByRole("button", { name: "Draft ticket", exact: true }).click();
@@ -409,7 +412,7 @@ test("switching to manual writing during the first-draft freshness check prevent
   let release!: () => void;
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests`);
-    await page.getByRole("button", { name: "New draft", exact: true }).click();
+    await page.getByRole("button", { name: "New task", exact: true }).click();
     await page.getByLabel("What needs to change?", { exact: true }).fill("Keep this original rough idea.");
     await expect(saved(page)).toBeVisible();
     const id = page.url().split("/").at(-1)!;
@@ -461,7 +464,7 @@ test("a lost first-draft response preserves the rough idea and requires review a
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Draft response recovery" })).data;
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests`);
-    await page.getByRole("button", { name: "New draft", exact: true }).click();
+    await page.getByRole("button", { name: "New task", exact: true }).click();
     await page.getByLabel("What needs to change?", { exact: true }).fill("Keep my original idea after response loss.");
     await expect(saved(page)).toBeVisible();
     const id = page.url().split("/").at(-1)!;
@@ -486,7 +489,7 @@ test("undo cannot replace manual edits or a newer remotely saved ticket", async 
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Safe draft undo" })).data;
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests`);
-    await page.getByRole("button", { name: "New draft", exact: true }).click();
+    await page.getByRole("button", { name: "New task", exact: true }).click();
     await page.getByLabel("What needs to change?", { exact: true }).fill("Original idea.");
     await expect(saved(page)).toBeVisible();
     await page.getByRole("button", { name: "Draft ticket", exact: true }).click();
@@ -512,7 +515,7 @@ test("a failed first-draft freshness check opens review with a usable manual edi
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Freshness read recovery" })).data;
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests`);
-    await page.getByRole("button", { name: "New draft", exact: true }).click();
+    await page.getByRole("button", { name: "New task", exact: true }).click();
     await page.getByLabel("What needs to change?", { exact: true }).fill("Keep my rough idea on read failure.");
     await expect(saved(page)).toBeVisible();
     const id = page.url().split("/").at(-1)!; let fail = true;

@@ -117,7 +117,10 @@ creation order without changing existing content revisions or timestamps.
 - `GET /api/organisations/[org]/requests` now uses `list_ticket_page`: 50 entries,
   `nextOffset`, filters `search/status/priority/assignee/overdue/today/sort` and
   `offset`. Filtering occurs before pagination; `today` is the viewer's ISO
-  calendar day for overdue filtering. Offset pages reflect live updates, so a
+  calendar day for overdue filtering. Sort accepts `updated`, `due`, or `status`.
+  Migration `20261110000000_ticket_status_sort.sql` groups statuses before
+  pagination and places Done last. Apply it before deploying the updated UI.
+  Offset pages reflect live updates, so a
   refresh is needed if concurrent edits reorder results. Legacy `list_requests`
   remains a capped compatibility RPC; the UI does not use it.
 - `POST .../requests/[id]/delivery`: `{revision, changes}`; strict optional change
