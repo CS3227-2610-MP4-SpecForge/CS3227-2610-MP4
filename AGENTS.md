@@ -30,8 +30,18 @@ comments and activity. Ticket fields sit beneath the editable title; AI tools,
 discussion and suggestion review occupy a collapsible right panel. Ticket
 references are hidden from the user interface.
 Read `docs/DeveloperGuide.md` for setup/check commands.
-PM AI reliability/provider-wide quotas and hosted deployment remain unverified;
-the partner-owned Developer AI remains unfinished.
+Deployment automation and the GitHub Pages product website now exist under
+`.github/workflows/` and `website/`: CI gates, a reusable deploy workflow and
+separate development (`dev`) and production (`main`) environments. No workflow
+has run against a hosting account yet, so no live deployment is claimed.
+The Developer role now has its own AI feature: generated test plans on published
+tickets, reviewed then saved to the ticket for the organisation. It reuses the
+shared bounded SoC transport in `src/server/soc.ts`; see the developer guide.
+PM AI reliability/provider-wide quotas and hosted deployment remain unverified.
+`npm run verify` (lint, typecheck, unit tests, `next build`) passes on Node 24.
+The test plan panel has no browser check, the database tests and the new
+migration have not run against any database, and nothing in this slice has been
+executed against SoC LLM.
 Do not invent passing checks or treat future product scope as implemented.
 
 <!-- BEGIN:nextjs-agent-rules -->

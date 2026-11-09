@@ -1,8 +1,8 @@
-export async function api(path: string, body?: unknown, timeoutMs = 30000) {
+export async function api(path: string, body?: unknown, timeoutMs = 30000, method?: "PUT") {
   const deadline = AbortSignal.timeout(timeoutMs);
   try {
     const response = await fetch(path, {
-      method: body === undefined ? "GET" : "POST", cache: "no-store",
+      method: method ?? (body === undefined ? "GET" : "POST"), cache: "no-store",
       headers: body === undefined ? {} : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body), signal: deadline,
     });
