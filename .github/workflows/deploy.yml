@@ -107,14 +107,19 @@ jobs:
       - name: Build
         run: vercel build ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
 
-      # Deployed from a copy of .vercel outside the checkout, so no .git is
-      # reachable from the working directory. The Vercel CLI otherwise reads the
-      # commit author out of the repository and the platform refuses to deploy a
-      # commit whose author is not the account owner, which is every commit from
-      # a teammate. Vercel is deliberately not connected to this repository, so
-      # it is not the authority on who may change it; the repository's own
-      # required checks and environment reviewers are. The commit and run are
-      # still recorded as deployment metadata so a deployment stays traceable.
+      # The repository's git metadata is moved aside for the duration of the
+      # deploy. The Vercel CLI otherwise reads the commit author out of it, and
+      # the platform refuses to deploy a commit whose author is not the account
+      # owner, which is every commit from a teammate. Vercel is deliberately not
+      # connected to this repository, so it is not the authority on who may
+      # change it; the repository's own required checks and environment
+      # reviewers are. The commit and run are still recorded as deployment
+      # metadata so a deployment stays traceable.
+      #
+      # The deploy runs in the checkout rather than a copy, because the CLI
+      # checks the project's installed dependencies even for a prebuilt
+      # deployment. The metadata is restored on the way out, including on
+      # failure, so the checkout action's own cleanup still finds it.
       #
       # A blocked deployment never leaves the "Building" state, and the CLI waits
       # on it indefinitely, so the deploy carries its own deadline. Without one
@@ -122,11 +127,11 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          workdir="$(mktemp -d)"
-          cp -R .vercel "$workdir/.vercel"
+          stash="$RUNNER_TEMP/git-metadata"
+          mv .git "$stash"
+          trap 'mv "$stash" .git' EXIT
           status=0
           url="$(timeout 600 vercel deploy --prebuilt ${{ inputs.production && '--prod' || '' }} \
-            --cwd "$workdir" \
             --meta commit="$GITHUB_SHA" \
             --meta run="$GITHUB_RUN_ID" \
             --token=${{ secrets.VERCEL_TOKEN }})" || status=$?
