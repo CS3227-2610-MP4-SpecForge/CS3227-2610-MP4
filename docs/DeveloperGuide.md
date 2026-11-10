@@ -76,6 +76,23 @@ the profile trigger. This difference remains visible to callers of that endpoint
 `GET/POST /api/organisations` list/create; `GET /api/organisations/[id]`
 selects a member-visible organisation. The membership slice adds the routes below.
 
+## Shared action notifications
+
+RootLayout mounts the client NotificationProvider from `src/components/notifications.tsx`.
+Call `useNotifications().notify(message, danger?)` for transient action feedback.
+`useNotificationState` adapts string state that must still gate recovery controls;
+expiry removes the global banner only, not the local recovery state. Do not use
+this adapter for text input or ongoing field validation. NotificationBanner owns
+presentation; the provider owns event identity, replacement and three-second timer
+cleanup. Error events use red alert styling and informational events use polite
+status styling. Repeated identical events restart the timer without overlap.
+
+ManagementDialog registers its native top-layer element explicitly so notifications
+from anywhere remain visible above the modal. Host changes preserve the deadline.
+Keep persistent save/conflict state, field guidance and saved AI history contextual.
+Browser coverage checks last-admin error expiry, signup verification navigation,
+invitation repeat timing, and developer test-plan content/retry preservation.
+
 ## Membership interfaces
 
 The approved [membership slice](../workflow/specs/2026-11-07-organisation-membership.md)
@@ -90,14 +107,19 @@ uses the same authenticated HTTP and session-bound database test seams:
 PostgreSQL RPCs `invite_member`, `list_invitations`, `respond_invitation`,
 `manage_invitation`, `list_members` and `change_member` derive verified identity
 and current permissions in storage. All transitions acquire the organisation
-row lock before checking current privileges or admin counts. Invitations bind
-to account IDs; acceptance consumes the invitation and inserts ordinary membership
-atomically. No authenticated direct writes are granted. RLS restricts invitation
-reads to recipients/current admins. Expiry uses database time, not the browser.
+row lock before checking current privileges or admin counts. Invitations persist against canonical email addresses, including unregistered ones.
+Only the current verified Auth email owner can read pending recipient invitations
+or accept/decline; acceptance binds the account ID and inserts ordinary membership
+atomically. Email-based RLS is limited to pending rows so a reused address cannot
+read another account's accepted history. No authenticated direct writes are granted.
+Admins read their own organisation's outgoing rows, including declined entries.
+Expiry uses database time, not the browser.
 
 A private persistent admission window bounds invite/resend attempts to 20/hour
-per organisation, including unknown addresses/duplicates. A throttled RPC returns
-false so the attempt counter commits; HTTP maps it to a sanitized 429. Other
+per organisation, including unknown addresses/duplicates. Invite/manage RPCs return structured status outcomes (`created`, `pending`,
+`member`, `limited`, `resent`, `cancelled`) so expected validation preserves quota
+increments. HTTP maps `limited` to 429 and `member` to 409. Creation/duplicate
+responses return truthful messages at 202; withdrawal returns its message at 200. Other
 RPC failures map to 400 (validation), 403 (permission), 409 (transition conflict)
 or 503 (service failure), without raw error messages. Admin rosters and invitation
 lists are capped at 100; pagination is still a release/scale limitation.

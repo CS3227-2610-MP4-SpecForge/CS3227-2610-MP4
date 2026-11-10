@@ -4,7 +4,7 @@ import { aiBrowserTimeoutMs, describeAiFailure } from "@/ai-diagnostics";
 import { sameFields, type RequestFields } from "@/requests";
 import { countKinds, testCaseKindLabels, testPlanLimits, type SavedTestPlan, type TestPlan, type TestPlanTurn } from "@/test-plans";
 import { api, ApiWaitTimeout, failureMessage } from "./http";
-import { Button, Notice, Pill, TextareaField, type PillTone } from "./ui";
+import { Button, Notice, Pill, TextareaField, type PillTone, useNotificationState } from "./ui";
 
 const tones: Record<string, PillTone> = { happy: "green", edge: "yellow", failure: "red" };
 
@@ -33,8 +33,8 @@ export function TestPlanPanel({ path, fields, ticketRevision, canGenerate }: {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [, setError] = useNotificationState(true);
+  const [, setMessage] = useNotificationState(false);
   const [discarded, setDiscarded] = useState<string[]>([]);
   const operation = useRef(false);
 
@@ -48,7 +48,7 @@ export function TestPlanPanel({ path, fields, ticketRevision, canGenerate }: {
     } catch (failure) {
       setError(failureMessage(failure) + " Reopen the test plan to check again.");
     } finally { operation.current = false; setLoading(false); }
-  }, [path]);
+  }, [path, setError]);
   // Defer the first read out of the effect body, as the chat panel does, so the
   // initial load does not set state synchronously during the effect.
   useEffect(() => {
@@ -115,8 +115,8 @@ export function TestPlanPanel({ path, fields, ticketRevision, canGenerate }: {
     </div>
     <div id="test-plan-body" className="stack" hidden={!open}>
       {loading && !saved && turns.length === 0 && <Notice>Loading test plan…</Notice>}
-      {error && <Notice danger>{error}</Notice>}
-      {message && <Notice>{message}</Notice>}
+
+
       {(busy || running) && <span role="status">AI is drafting test cases… You can keep reading the ticket.</span>}
 
       {saved && <section className="stack" aria-label="Saved test plan">

@@ -31,8 +31,7 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
   const reader = await context.newPage();
   try {
     await login(page, pm);
-    await page.getByRole("button", { name: /Requirements team Admin/ }).click();
-    await page.getByRole("link", { name: "View requests", exact: true }).click();
+    await page.getByRole("link", { name: /Requirements team Admin/ }).click();
     await page.getByRole("button", { name: "New task", exact: true }).click();
     await page.getByRole("button", { name: "Start manually", exact: true }).click();
     await page.getByLabel("Title", { exact: true }).focus();
@@ -89,6 +88,7 @@ async function setupEditor(page: Page) {
   await page.goto(`/organisations/${org}/requests`);
   await page.getByRole("button", { name: "New task", exact: true }).click();
   await page.getByRole("button", { name: "Start manually", exact: true }).click();
+  await expect(page.getByLabel("Title", { exact: true })).toBeFocused();
   await openAi(page);
   await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
   return { fixture, pm, org, id: page.url().split("/").at(-1)! };

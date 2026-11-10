@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { deadlineLabel, type Delivery } from "@/delivery";
 import type { FeatureRequest } from "@/requests";
 import { api, ApiError, failureMessage } from "./http";
-import { Button, DatePicker, Dropdown, Notice } from "./ui";
+import { Button, DatePicker, Dropdown, useNotificationState } from "./ui";
 import { PriorityPill, StatusPill, priorityOptions, statusOptions } from "./ticket-pills";
 import { TicketMembers } from "./ticket-members";
 export function TicketDelivery({ item, accountId, path, onSaved }: { item: FeatureRequest; accountId: string; path: string; onSaved: (delivery: Delivery) => void }) {
@@ -11,7 +11,7 @@ export function TicketDelivery({ item, accountId, path, onSaved }: { item: Featu
   const [dueDate, setDueDate] = useState(item.due_date ?? ""); const [priority, setPriority] = useState(item.priority);
   const [status, setStatus] = useState(item.status); const [assigned, setAssigned] = useState(item.assignee_ids);
   const [busy, setBusy] = useState(false); const operation = useRef(false);
-  const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [blocked, setBlocked] = useState(false);
+  const [error, setError] = useNotificationState(true); const [, setMessage] = useNotificationState(false); const [blocked, setBlocked] = useState(false);
   const author = item.author_id === accountId;
   const published = Boolean(item.submitted_at);
   const canStatus = published && (author || saved.assignee_ids.includes(accountId));
@@ -48,7 +48,7 @@ export function TicketDelivery({ item, accountId, path, onSaved }: { item: Featu
     catch (failure) { setError(failureMessage(failure)); } finally { operation.current = false; setBusy(false); }
   }
   return <div className="stack">
-    {error && <Notice danger>{error}</Notice>}{message && <Notice>{message}</Notice>}
+
     {author || canStatus ? <form className="stack" aria-label="Delivery fields" onSubmit={event => { event.preventDefault(); void save(); }}>
       <TicketDeliveryFields item={item} accountId={accountId} value={{ ...saved, due_date: dueDate || null, priority, status, assignee_ids: assigned }} disabled={busy || blocked} onChange={value => { setDueDate(value.due_date ?? ""); setPriority(value.priority); setStatus(value.status); setAssigned(value.assignee_ids); }} />
       <p className="hint">{dirty ? "Unsaved delivery changes." : ""}</p>
@@ -79,10 +79,10 @@ export function TicketDeliveryFields({ item, accountId, value, disabled, onChang
 }
 
 export function CopyTicketLink() {
-  const [message, setMessage] = useState("");
+  const [, setMessage] = useNotificationState(false);
   async function copy() {
     try { await navigator.clipboard.writeText(window.location.href); setMessage("Ticket link copied."); }
-    catch { setMessage("Could not copy the link. Copy this page’s address from your browser."); }
+    catch { setMessage("Could not copy the link. Copy this page’s address from your browser.", true); }
   }
-  return <div className="copy-ticket-link"><Button type="button" className="secondary" onClick={copy}>Copy ticket link</Button>{message && <span className="hint" role="status">{message}</span>}</div>;
+  return <div className="copy-ticket-link"><Button type="button" className="secondary" onClick={copy}>Copy ticket link</Button></div>;
 }

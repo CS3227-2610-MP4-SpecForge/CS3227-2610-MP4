@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import type { TicketActivity as Entry } from "@/delivery";
 import { assigneeUsernameLabel, formerAccountLabel } from "@/usernames";
 import { api, failureMessage } from "./http";
-import { Button, Notice, TextareaField } from "./ui";
+import { Button, Notice, TextareaField, useNotificationState } from "./ui";
 const eventLabels = { published: "Published this ticket", requirements_updated: "Updated the requirements", delivery_updated: "Updated delivery details", comment: "Commented" };
 const fieldLabels: Record<string, string> = { due_date: "Due date", priority: "Priority", status: "Status" };
 function valueLabel(value: unknown): string { return value === null ? "Unset" : Array.isArray(value) ? value.join(", ") || "Unassigned" : String(value).replaceAll("_", " "); }
 export function TicketActivity({ path }: { path: string }) {
   const [entries, setEntries] = useState<Entry[]>([]); const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true); const [loadError, setLoadError] = useState(""); const [reload, setReload] = useState(0);
-  const [body, setBody] = useState(""); const [posting, setPosting] = useState(false); const [error, setError] = useState(""); const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true); const [loadError, setLoadError] = useNotificationState(true); const [reload, setReload] = useState(0);
+  const [body, setBody] = useState(""); const [posting, setPosting] = useState(false); const [, setError] = useNotificationState(true); const [, setMessage] = useNotificationState(false);
   const generation = useRef(0);
   const [attempt, setAttempt] = useState<{ creationKey: string; body: string } | null>(null); const operation = useRef(false);
   useEffect(() => {
@@ -18,7 +18,7 @@ export function TicketActivity({ path }: { path: string }) {
     api(path).then(result => { if (active) { setEntries(result.entries); setCursor(result.next_cursor); setLoadError(""); } })
       .catch(failure => { if (active) setLoadError(failureMessage(failure)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [path, reload]);
+  }, [path, reload, setLoadError]);
   useEffect(() => {
     if (!body) return;
     const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -42,13 +42,13 @@ export function TicketActivity({ path }: { path: string }) {
     <p className="hint">Visible to current organisation members. AI discussions remain private.</p>
     <form className="stack" onSubmit={event => { event.preventDefault(); void post(); }}>
       <TextareaField id="ticket-comment" label="Comment" value={body} maxLength={8000} disabled={posting || Boolean(attempt)} onChange={event => setBody(event.target.value)} />
-      {error && <Notice danger>{error}</Notice>}{message && <Notice>{message}</Notice>}
+
       {[...body].length > 4000 && <Notice danger>Comments are limited to 4,000 characters. Your text is preserved.</Notice>}
       <div className="actions"><Button disabled={posting || !body.trim() || [...body].length > 4000}>{attempt ? "Retry comment" : "Post comment"}</Button>
         {attempt && <Button type="button" className="secondary" disabled={posting} onClick={() => { if (window.confirm("The previous attempt may already be posted. Check activity before starting a new comment attempt.")) { setAttempt(null); setError(""); } }}>Start a new comment attempt</Button>}
       </div>
     </form>
-    {loadError && <Notice danger>{loadError} Use Refresh activity to retry.</Notice>}
+    {loadError && <p className="hint">Use Refresh activity to retry.</p>}
     {loading && <p role="status">Loading activity…</p>}
     {!loading && !loadError && entries.length === 0 && <p className="muted">No activity yet.</p>}
     <ol className="organisation-list activity-list">{entries.map(entry => <li key={entry.id} className="activity-entry">

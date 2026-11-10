@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { api, ApiError, failureMessage } from "./http";
-import { BackLink, Button, Dropdown, Notice, Pill } from "./ui";
+import { BackLink, Button, Dropdown, Notice, Pill, useNotificationState } from "./ui";
 import { ticketPriorities, ticketStatuses, type TicketMember, type TicketPriority, type TicketStatus } from "@/delivery";
 import { PriorityPill, StatusPill, priorityOptions, statusOptions } from "./ticket-pills";
 import { TicketMembers } from "./ticket-members";
@@ -37,8 +37,8 @@ export function RequestList({ organisationId }: { organisationId: string }) {
   const [loaded, setLoaded] = useState(false);
   const [pending, setPending] = useState(false);
   const [savingDelivery, setSavingDelivery] = useState(false);
-  const [deliveryError, setDeliveryError] = useState("");
-  const [error, setError] = useState("");
+  const [, setDeliveryError] = useNotificationState(true);
+  const [error, setError] = useNotificationState(true);
   const [reload, setReload] = useState(0);
   const [members, setMembers] = useState<TicketMember[]>([]);
   const [filters, setFilters] = useState({ search: "", status: "", priority: "", assignee: "", sort: "updated" });
@@ -64,7 +64,7 @@ export function RequestList({ organisationId }: { organisationId: string }) {
       setError(failureMessage(failure));
     }).finally(() => { if (active) setLoaded(true); });
     return () => { active = false; };
-  }, [path, organisationId, reload, query]);
+  }, [path, organisationId, reload, query, setError]);
   function applyFilters() {
     if (busy || deliveryOperation.current) return;
     const params = new URLSearchParams();
@@ -139,8 +139,8 @@ export function RequestList({ organisationId }: { organisationId: string }) {
         {account?.role === "PM" && <Button disabled={busy} onClick={create}>{pending ? "Creating…" : "New task"}</Button>}
       </div>
     </div>
-    {error && <Notice danger>{error}</Notice>}
-    {deliveryError && <Notice danger>{deliveryError}</Notice>}
+
+
     <form className="card stack request-filters" aria-label="Ticket filters" onSubmit={event => { event.preventDefault(); applyFilters(); }}>
       <div className="field request-search">
         <input type="search" aria-label="Search by title" maxLength={160} value={filters.search} onChange={event => setFilters({ ...filters, search: event.target.value })} placeholder="Search by title" />

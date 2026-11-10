@@ -59,6 +59,10 @@ for (const role of ["PM", "Developer"] as const) {
       expect(denied.status()).toBe(401);
       let token = "";
       await expect.poll(async () => { token = await codeFor(email); return Boolean(token); }).toBe(true);
+      if (role === "PM") {
+        await expect(page.getByRole("status").filter({ hasText: "Check your email" })).toHaveCount(0, { timeout: 4500 });
+        await expect(page.getByRole("link", { name: "Enter your verification code" })).toBeVisible();
+      }
       await page.getByRole("link", { name: "Enter your verification code" }).click();
       await expect(page).toHaveURL(/\/verify-email$/);
       await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
@@ -71,10 +75,10 @@ for (const role of ["PM", "Developer"] as const) {
       await expect(page.getByText("Your team starts here")).toBeVisible();
       await page.getByLabel("Organisation name").fill(`${role} test team`);
       await page.getByRole("button", { name: "Create organisation", exact: true }).click();
-      await expect(page.getByRole("status").filter({ hasText: "Organisation created" })).toContainText("Organisation created");
-      await expect(page.getByRole("heading", { name: `${role} test team`, exact: true })).toBeVisible();
-      await page.getByRole("button", { name: new RegExp(`${role} test team Admin`) }).click();
-      await expect(page.getByText("You have admin access to this organisation.")).toBeVisible();
+      await expect(page.getByRole("dialog", { name: `Manage ${role} test team`, exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Close management", exact: true }).click();
+      await expect(page.getByText("Active organisation", { exact: true })).toHaveCount(0);
+
       const cookies = await page.context().cookies();
       const authCookies = cookies.filter(cookie => cookie.name.includes("auth-token"));
       expect(authCookies.length).toBeGreaterThan(0);
@@ -94,7 +98,7 @@ for (const role of ["PM", "Developer"] as const) {
       const headingRow = page.getByRole("heading", { name: "Organisations", exact: true }).locator("../..");
       await expect(headingRow).not.toContainText(email);
       await expect(headingRow.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(0);
-      await page.getByRole("link", { name: "View requests", exact: true }).click();
+      await page.getByRole("link", { name: new RegExp(`${role} test team Admin`) }).press("Enter");
       await expect(page).toHaveURL(/\/requests$/);
       await expect(accountControl).toContainText(username.toLowerCase());
       await page.getByRole("link", { name: "SpecForge home" }).click();
@@ -123,7 +127,7 @@ for (const role of ["PM", "Developer"] as const) {
       await accountControl.click();
       await page.route("**/api/auth/signout", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Please try signing out again." }) }));
       await signout.click();
-      await expect(navigation.getByRole("alert")).toHaveText("Please try signing out again.");
+      await expect(page.getByRole("alert").filter({ hasText: "Please try signing out again." })).toHaveText("Please try signing out again.");
       await expect(signout).toBeEnabled();
       await page.unroute("**/api/auth/signout");
       await signout.click();
@@ -137,7 +141,7 @@ for (const role of ["PM", "Developer"] as const) {
       if (role === "PM") await page.screenshot({ path: "test-results/signin-mobile.png", fullPage: true, caret: "initial" });
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(page).toHaveURL(/\/workspace$/);
-      await expect(page.getByRole("button", { name: new RegExp(`${role} test team Admin`) })).toBeVisible();
+      await expect(page.getByRole("link", { name: new RegExp(`${role} test team Admin`) })).toBeVisible();
       await expect(accountControl).toContainText(username.toLowerCase());
       expect(errors).toEqual([]);
     } finally {
@@ -197,5 +201,54 @@ test("signing out respects unsaved ticket edits before ending the session", asyn
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(page).toHaveURL(/\/sign-in$/);
     expect((await page.request.get("/api/account")).status()).toBe(401);
+  } finally { await fixture.cleanup(); }
+});
+
+test("organisation links navigate directly and Manage switches team context", async ({ page }) => {
+  const fixture = localFixture();
+  const actor = await fixture.actor("PM");
+  const first = (await actor.client.rpc("create_organisation", { organisation_name: "First team" })).data;
+  await actor.client.rpc("create_organisation", { organisation_name: "Second team" });
+  try {
+    await page.goto("/sign-in");
+    await page.getByLabel("Email address").fill(actor.email);
+    await page.getByLabel("Password", { exact: true }).fill(actor.password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByRole("button", { name: "Manage First team", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Manage First team", exact: true })).toBeVisible();
+    const initialClose = page.getByRole("button", { name: "Close management", exact: true });
+    await expect(initialClose).not.toBeFocused();
+    await expect(page.getByRole("region", { name: "Management content", exact: true })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(initialClose).toBeFocused();
+    await expect(page.getByRole("dialog", { name: "Manage First team", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Close management", exact: true }).press("Escape");
+    await expect(page.getByRole("button", { name: "Manage First team", exact: true })).toBeFocused();
+    await page.getByRole("button", { name: "Manage Second team", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Manage Second team", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/workspace$/);
+    await expect(page.getByText("Active organisation", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "View requests", exact: true })).toHaveCount(0);
+    const bounds = await page.getByRole("dialog").boundingBox();
+    expect(bounds!.width).toBeCloseTo(1280 * 0.7, -1);
+    expect(bounds!.height).toBeCloseTo(720 * 0.7, -1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const modal = page.getByRole("dialog");
+    await expect(modal.getByRole("heading", { name: "Invite Member", exact: true })).toBeVisible();
+    await expect(modal.getByRole("heading", { name: "Existing members", exact: true })).toBeVisible();
+    await expect(modal.getByRole("heading", { name: "Membership", exact: true })).toHaveCount(0);
+    await expect(modal.getByRole("button", { name: "Refresh membership", exact: true })).toHaveCount(0);
+    const close = page.getByRole("button", { name: "Close management", exact: true });
+    await expect(close.locator("svg")).toHaveAttribute("aria-hidden", "true");
+    const closeBefore = await close.boundingBox();
+    const content = page.getByRole("region", { name: "Management content", exact: true });
+    await content.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    expect(await content.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    expect((await close.boundingBox())!.y).toBe(closeBefore!.y);
+    await close.click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.getByRole("link", { name: /First team Admin/ }).click();
+    await expect(page).toHaveURL(`/organisations/${first}/requests`);
   } finally { await fixture.cleanup(); }
 });

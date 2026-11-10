@@ -4,7 +4,7 @@ import Link from "next/link";
 import { accountUpdatedEvent, type AccountIdentity } from "./account-events";
 import { usePathname, useRouter } from "next/navigation";
 import { api, failureMessage } from "./http";
-import { Button, Notice } from "./ui";
+import { Button, useNotificationState } from "./ui";
 import { requestDeparture } from "./departure-guard";
 
 export function AccountMenu() {
@@ -13,7 +13,7 @@ export function AccountMenu() {
   const [identity, setIdentity] = useState<{ pathname: string; account: AccountIdentity }>();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useNotificationState(true);
   const container = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const submitting = useRef(false);
@@ -36,7 +36,7 @@ export function AccountMenu() {
     refresh();
     window.addEventListener(accountUpdatedEvent, updated);
     return () => { active = false; window.removeEventListener(accountUpdatedEvent, updated); };
-  }, [pathname]);
+  }, [pathname, setError]);
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +75,7 @@ export function AccountMenu() {
       <span id="account-identity" className="account-identity"><span className="account-username">{account.username}</span><span className="account-email">{account.email}</span></span>
     </button>
     {open && <div className="account-popup" id="account-options">
-      {error && <Notice danger>{error}</Notice>}
+
       <Link className="account-profile-link" href="/profile" onClick={() => setOpen(false)}>Profile</Link>
       <Button className="secondary" onClick={signout} disabled={pending}>{pending ? "Signing out…" : "Sign out"}</Button>
     </div>}

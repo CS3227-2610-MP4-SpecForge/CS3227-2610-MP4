@@ -53,7 +53,7 @@ test("profile handles loading failures, validation, save failures and cancelled 
     await expect(page).toHaveURL(/\/workspace$/);
     await page.route("**/api/account", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Profile temporarily unavailable." }) }));
     await page.goto("/profile");
-    await expect(page.getByRole("main").getByRole("alert")).toHaveText("Profile temporarily unavailable.");
+    await expect(page.getByRole("alert").filter({ hasText: "Profile temporarily unavailable." })).toHaveText("Profile temporarily unavailable.");
     await page.unroute("**/api/account");
     await page.getByRole("button", { name: "Retry loading profile" }).click();
     const username = page.getByLabel("Username", { exact: true });
@@ -77,7 +77,7 @@ test("profile handles loading failures, validation, save failures and cancelled 
       else await route.continue();
     });
     await save.click();
-    await expect(page.getByRole("main").getByRole("alert")).toHaveText("Unable to save. Please retry.");
+    await expect(page.getByRole("alert").filter({ hasText: "Unable to save. Please retry." })).toHaveText("Unable to save. Please retry.");
     await expect(username).toHaveValue("local_unsaved_name");
     page.once("dialog", dialog => dialog.dismiss());
     await page.getByRole("link", { name: "SpecForge home" }).click();

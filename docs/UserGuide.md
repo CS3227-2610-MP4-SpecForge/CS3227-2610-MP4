@@ -43,7 +43,7 @@ Follow the [developer setup](DeveloperGuide.md#local-setup), then open
    cannot be reused after verification.
 4. Enter a name of 1–80 characters and choose **Create organisation**. You become
    its first admin. Either application role can create multiple organisations.
-5. Select an organisation card to make it active. Only organisations you belong
+5. Select an organisation card to open its requests page. Only organisations you belong
    to appear. This version's selection lasts until the page reloads.
 6. Hover over your username and email in the navbar (or select them by click or
    keyboard), then choose **Sign out**. If a ticket has unsaved work, cancel the
@@ -71,26 +71,55 @@ If saving fails, your typed name stays available for retry. Leaving with unsaved
 changes, including signing out, asks for confirmation. A profile loading failure
 has a **Retry loading profile** action.
 
+## Notifications
+
+Action feedback appears at the top centre of the screen for three seconds.
+Success/information uses purple styling; errors use red. New notifications replace
+older ones and restart the timer. Banners float above an open modal without
+moving its content or changing keyboard focus.
+
+Loading indicators, field guidance, save/conflict state and saved AI failure
+history stay beside their related controls. Retry/reconciliation controls and
+unsaved input remain available after an error banner disappears. Signup's
+verification link also remains available after its notification expires.
+
 ## Invitations and membership
 
-Select an organisation to manage it. Admins can use **Invite by registered
-email** for an existing account. The invitation appears under **Your invitations**
-in that account's workspace; no invitation email is sent. Addresses are matched
-without case sensitivity. Sending shows a generic result; check outgoing
-invitations to see eligible recipients. There is no global account directory.
+The management overlay groups invitation controls in a light-purple **Invite Member** panel. **Existing members** lists usernames with an Admin pill where applicable and their application role underneath. Admins appear first; each group is sorted alphabetically by username. Promote/demote controls appear beside each member.
 
-Recipients must verify their account, then choose **Accept** or **Decline**.
-Accepting grants ordinary membership, never admin access. Invitations expire
-seven days after creation/resend. Admins can cancel pending invitations or
-**Resend** expired ones. Completed invitations cannot be reused.
+Choose **Manage** beside an organisation to open its management overlay. Close it
+with the **X** in the fixed header or Escape. The header stays visible while the
+management content scrolls. On opening, Shift+Tab reaches the X; Tab moves
+through the management controls. Admins use **Invite by email** for any email address,
+including one that has not registered. The invitation immediately appears in
+**Outgoing invitations**. No invitation email is sent.
 
-Admins see members and their fixed application roles. Use **Promote to admin**,
+After registering and verifying that email, the recipient finds the invitation
+under **Your invitations** in their workspace and can **Accept** or **Decline**.
+Email matching ignores case and surrounding spaces. Accepting grants ordinary
+membership, never admin access. Invitations expire seven days after creation or
+resend. Duplicate sends reuse the outstanding invite without extending expiry;
+use **Resend** on an expired invite. Existing members cannot be invited again.
+
+Outgoing invitations include pending, expired and declined entries. Use **Cancel
+invitation** on the right of the row to withdraw any unaccepted invite. Accepted
+and cancelled entries disappear; accepted membership cannot be cancelled through
+an invitation. Declined recipients need a fresh invitation to try again.
+
+Creation shows **Invitation created.** and cancellation shows **The invitation has
+been withdrawn** in a top-centre overlay for three seconds. These banners float
+above the modal without moving content. Duplicate sends show **Invitation already
+pending.** Error/failure notifications also use three-second overlays, with a red
+background. Retry controls and blocked-save state remain available after the
+notification disappears.
+
+Admins see members and their fixed application roles. Use **Promote admin**,
 **Demote admin** or **Remove member** after confirming. Members can **Leave
 organisation**. The last admin must promote someone else before leaving, being
 removed or being demoted. Admin access does not change application roles.
 
 Removal/leaving immediately ends access. Rejoining requires a fresh invitation.
-Use **Refresh membership** to pick up changes made in another browser; server
+Close and reopen **Manage** to pick up management changes made in another browser; use **Refresh membership** in the workspace for incoming invitations; server
 permissions always use current membership. Invitations and member lists currently
 display at most 100 entries. New invitations and resends share a limit of 20
 attempts per hour per organisation, including unknown addresses and duplicates.
@@ -169,7 +198,7 @@ delivery details**. These recovery controls appear only when needed.
 
 ## Tasks and AI chat
 
-Select an organisation and choose **View requests**. PMs select **New task**
+Select an organisation card to open its requests page. PMs select **New task**
 to create a private draft. Current members can read published tasks. The two
 task fields are **Title** (up to 160 Unicode characters) and **Description**
 (up to 24,000).

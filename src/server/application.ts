@@ -114,7 +114,7 @@ export function createApplication(options: Options) {
             const body = await readBody(request);
             if (management?.[2] === "invitations" && !management[3]) {
               const input = z.strictObject({ email: z.string().trim().pipe(email) }).safeParse(body);
-              if (!input.success) return error("Enter a valid registered email address.", 400);
+              if (!input.success) return error("Enter a valid email address.", 400);
               rpc = "invite_member"; args = { target_org: management[1], target_email: input.data.email }; inviting = true;
             } else {
               const actions = responseMatch ? ["accept", "decline"] as const : management?.[2] === "members" ? ["remove", "promote", "demote", "leave"] as const : ["cancel", "resend"] as const;
@@ -130,12 +130,13 @@ export function createApplication(options: Options) {
           if (rpcError?.code === "22023") return error("Invalid membership action.", 400);
           if (rpcError?.code === "P0001") return error(rpc === "change_member" ? "This change is unavailable. Keep at least one admin; promote another member first if needed." : "Invitation changed or expired. Refresh and try again.", 409);
           if (rpcError) return error("Membership service unavailable. Try again later.", 503);
-          if (result === false) return error("Invitation limit reached. Try again in an hour.", 429);
+          if (result?.status === "limited") return error("Invitation limit reached. Try again in an hour.", 429);
+          if (result?.status === "member") return error("This account is already a member of the organisation.", 409);
           if (resultKey) {
             if (!Array.isArray(result)) return error("Membership service unavailable. Try again later.", 503);
             return json({ [resultKey]: result });
           }
-          return json({ message: inviting ? "If this account can be invited, its invitation is available in their workspace." : "Membership updated." }, inviting ? 202 : 200);
+          return json({ message: inviting ? (result?.status === "pending" ? "Invitation already pending." : "Invitation created.") : result?.status === "cancelled" ? "The invitation has been withdrawn" : "Membership updated." }, inviting ? 202 : 200);
         }
         if (path === "/api/account" && ["GET", "POST"].includes(request.method)) {
           if (request.method === "POST") {

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { legacyUsernamePrefix, reservedUsernameMessage, usernameHint, usernamePattern } from "@/usernames";
 import { api, failureMessage } from "./http";
-import { BackLink, Button, Dropdown, Field, Notice } from "./ui";
+import { BackLink, Button, Dropdown, Field, useNotificationState } from "./ui";
 
 const signupRoles = [
   { value: "PM", label: "Product Manager", tone: "purple" },
@@ -18,8 +18,8 @@ export function AccountForm({ mode }: { mode: "signup" | "signin" | "verify" }) 
   const [token, setToken] = useState("");
   const [role, setRole] = useState<(typeof signupRoles)[number]["value"]>("PM");
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [, setError] = useNotificationState(true);
+  const [message, setMessage] = useNotificationState(false);
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
@@ -44,7 +44,7 @@ export function AccountForm({ mode }: { mode: "signup" | "signin" | "verify" }) 
   const title = mode === "signup" ? "Create your account" : mode === "signin" ? "Welcome back" : "Verify your email";
   return <section className="auth-layout"><div className="auth-intro"><p className="eyebrow">Your shared workspace</p><h1>{title}</h1><p className="muted">{mode === "signup" ? "Choose your perspective. Build a shared understanding." : mode === "signin" ? "Pick up where your team left off." : "Enter the one-time code sent to your email address."}</p></div>
     <div className="card auth-card">
-      {error && <Notice danger>{error}</Notice>}{message && <Notice>{message} {mode === "signup" && <Link href="/verify-email">Enter your verification code</Link>}</Notice>}
+      {message && mode === "signup" && <p><Link href="/verify-email">Enter your verification code</Link></p>}
       <form onSubmit={submit} className="stack" aria-busy={pending}>
         {mode === "signup" && <Field id="username" label="Username" autoComplete="username" autoCapitalize="none" spellCheck={false} pattern={usernamePattern} minLength={3} maxLength={24} required value={username} onChange={e => setUsername(e.target.value)} disabled={pending} hint={usernameHint} />}
         <Field id="email" label="Email address" type="email" autoComplete="email" maxLength={254} required value={email} onChange={e => setEmail(e.target.value)} disabled={pending} />
