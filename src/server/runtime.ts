@@ -5,6 +5,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createApplication, createAuthAdmission } from "./application";
+import { createTestPlanProvider } from "./test-plan-ai";
 const admitAuth = createAuthAdmission();
 
 // Each external HTTP request has one deadline and no automatic transport retries.
@@ -23,21 +24,32 @@ export async function handleRequest(request: Request) {
   const jar = await cookies();
   const staged = new Map<string, { name: string; value: string; options: import("@supabase/ssr").CookieOptions }>();
   let client: ReturnType<typeof createServerClient> | undefined;
+  // One worker factory and one fake-adapter gate for every AI feature.
+  const worker = () => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SECRET_KEY;
+    if (!url || !key) throw new Error("AI worker not configured.");
+    return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }, global: { fetch: boundedFetch }, db: { retry: false } });
+  };
+  // Test adapter is allowed only in a development process on the isolated local
+  // test origin/database. Never selects a fake in production.
+  const fakeRequested = () => {
+    if (process.env.SPECFORGE_LOCAL_AI_FAKE !== "1") return false;
+    if (process.env.NODE_ENV !== "development" || !["http://localhost:3000", "http://localhost:3001"].includes(origin) || process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:55321") throw new AiFailure("configuration");
+    return true;
+  };
+  const socConfiguration = () => ({ baseUrl: process.env.SOCLAAS_BASE_URL ?? "", key: process.env.SOCLAAS_API_KEY ?? "", model: process.env.SOCLAAS_CHAT_MODEL ?? "" });
   const response = await createApplication({ origin, admitAuth, chat: {
-    worker() {
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const key = process.env.SUPABASE_SECRET_KEY;
-      if (!url || !key) throw new Error("AI worker not configured.");
-      return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }, global: { fetch: boundedFetch }, db: { retry: false } });
-    },
+    worker,
     async provider(input) {
-      // Test adapter is allowed only in a development process on the isolated
-      // local test origin/database. Never selects a fake in production.
-      if (process.env.SPECFORGE_LOCAL_AI_FAKE === "1") {
-        if (process.env.NODE_ENV !== "development" || !["http://localhost:3000", "http://localhost:3001"].includes(origin) || process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:55321") throw new AiFailure("configuration");
-        return (await import("../tests/fake-ai")).localFakeAi(input);
-      }
-      return createSocProvider({ baseUrl: process.env.SOCLAAS_BASE_URL ?? "", key: process.env.SOCLAAS_API_KEY ?? "", model: process.env.SOCLAAS_CHAT_MODEL ?? "" })(input);
+      if (fakeRequested()) return (await import("../tests/fake-ai")).localFakeAi(input);
+      return createSocProvider(socConfiguration())(input);
+    },
+  }, testPlans: {
+    worker,
+    async provider(input) {
+      if (fakeRequested()) return (await import("../tests/fake-ai")).localFakeTestPlanAi(input);
+      return createTestPlanProvider(socConfiguration())(input);
     },
   }, client() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

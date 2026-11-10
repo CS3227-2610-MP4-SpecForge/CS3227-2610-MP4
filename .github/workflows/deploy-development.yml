@@ -1,0 +1,32 @@
+name: Deploy development
+
+# The dev branch is the development environment: its own Supabase project, its
+# own Vercel project and its own secrets.
+#
+# Development deploys to the production target of a SEPARATE Vercel project,
+# not to a preview of the production one. A Vercel preview URL is unique per
+# deployment, and APP_ORIGIN has to be one fixed origin the server can compare
+# against, so a preview target would leave the development app with an origin
+# that changes on every push. VERCEL_PROJECT_ID is an environment secret, so
+# the two environments simply name different Vercel projects.
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-development
+  cancel-in-progress: false
+
+jobs:
+  development:
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: development
+      vercel-environment: production
+      production: true
+    secrets: inherit

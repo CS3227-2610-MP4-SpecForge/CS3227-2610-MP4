@@ -2,7 +2,9 @@
 
 ## Local setup
 
-Requirements: Node.js 24, npm, Docker Desktop running. Dependencies are locked
+Requirements: Node.js 22, npm, Docker Desktop running. Node 22 is the version
+the deployment target supports, so local, CI and both environments run the same
+major; Vercel rejects a project whose `engines` ask for Node 24. Dependencies are locked
 in `package-lock.json`. Supabase CLI is pinned to the compatible 2.121.0 line;
 CLI 3 rejected the legacy inbox configuration during setup.
 
@@ -18,7 +20,9 @@ Studio 55323 and captured email inbox 55324. Source/configuration/migrations liv
 under `src/supabase/`. `db:start` applies migrations to a fresh local stack;
 `npm run db:reset` reapplies them by clearing **only disposable local data**.
 `npm run db:stop` stops the local stack. Wrappers refuse additional arguments and
-suppress CLI output that can contain generated local credentials.
+suppress CLI output that can contain generated local credentials. When a
+command fails, the tail of that output is relayed with credential-shaped values
+redacted, because a failure with no reason at all cannot be diagnosed in CI.
 
 `db:env` updates ignored `.env.local` with local Supabase public values, the
 server-only local AI worker key and `APP_ORIGIN`, preserving unrelated settings
@@ -426,6 +430,76 @@ mode, allowlisted localhost origin and disposable Supabase URL. Any invalid fake
 configuration fails closed instead of falling through to SoC. Production cannot
 select it. Tests pass the local worker key only to the server subprocess.
 
+## Developer test plans
+
+The Developer role's AI feature generates test cases for a published ticket. It
+reuses the PM chat's safety structure rather than inventing a second one.
+
+**Shared transport.** `requestSocJson` in `src/server/soc.ts` owns the whole
+bounded SoC request: configuration allowlist, 48,000-byte context bound, one
+90-second deadline with no transport retry, the 64 KiB response cap and every
+envelope check. A feature supplies only its instructions, its completion budget
+and its validator. `createSocProvider` (PM chat, 2,000 tokens) and
+`createTestPlanProvider` (test plans, 3,000 tokens) are both thin callers, so
+failure mapping and diagnostics cannot drift between the two features.
+
+**Plan shape.** `src/test-plans.ts` holds the caps and labels once for client,
+server and instructions: at most 12 cases; a case has a title (160), a kind of
+`happy`, `edge` or `failure`, optional preconditions (500), 1 to 10 steps (300
+each) and an expected result (500). `private.valid_test_plan` in the migration is
+the storage-side authority and must agree with those numbers.
+
+**Tables.** `public.test_plan_turns` mirrors `chat_turns`: idempotent
+`(request_id, turn_key)`, one running turn per developer, 120-second leases with
+generation fencing, allowlisted `error_code` and a `diagnostic` validated by the
+existing `private.valid_ai_diagnostic`. `public.ticket_test_plans` holds one
+saved plan per ticket with its own `revision` and the `ticket_revision` it was
+generated against.
+
+**Authorization.** `private.is_ticket_developer` requires organisation
+membership, `app_role = 'Developer'` and a published ticket. Turn rows are
+selectable only by their own developer; a saved plan is selectable by any member,
+so a PM sees the shared plan but never another account's generations.
+`begin_test_plan_turn` and `finish_test_plan_turn` are granted to `service_role`
+only; `save_test_plan` runs under the developer's own session because saving is
+their decision. `handleTestPlans` authorizes through the user's session with
+`read_test_plan` before it constructs worker access or contacts SoC.
+
+**Untrusted output.** Ticket content and the focus note travel as a separate JSON
+payload, never interpolated into the instruction text, and the instructions state
+they are reference material. Provider extras are stripped before storage, and an
+absent optional is dropped rather than stored as an empty key, because the
+storage check counts keys. The panel renders every generated field as plain text,
+never as Markdown or HTML, so a case cannot inject formatting or links into a
+ticket view.
+
+**Staleness.** `save_test_plan` compares the submitted ticket revision with the
+locked row and refuses a mismatch, and compares the expected plan revision with
+the stored one so two developers saving at once cannot silently clobber.
+
+### Observed provider behaviour
+
+Measured on 2026-11-10 against `https://soclaas-api.comp.nus.edu.sg/v1`, so
+treat the figures as one sample, not a service level:
+
+- `GET /models` listed 20 models. `qwen3.5:9b` and `gemma4:26b` are both
+  listed, but a chat completion on `gemma4:26b` returned HTTP 503 with
+  `no healthy provider backends` in about 30ms. A model appearing in `/models`
+  therefore does not mean it will serve a request, and the configured
+  `SOCLAAS_CHAT_MODEL` is `qwen3.5:9b`.
+- A successful call took 6.6s to 9.1s for a chat turn or a 12-case plan budget.
+  One attempt returned HTTP 502 after 60.1s, which looks like a gateway
+  deadline shorter than our own 90s `aiResponseTimeoutMs`. Both were mapped to
+  `upstream_http` with the status and elapsed time in the diagnostic, and
+  neither was retried automatically, which is the intended behaviour: a retry
+  here would spend a second admission against the hourly cap on a backend that
+  is already failing.
+- A 12-case plan request cost 472 prompt tokens and 490 completion tokens, so
+  the 3,000-token completion budget is not the binding constraint.
+- The model regularly writes one case that overruns a stored limit, usually the
+  expected result. Validation discards that case and keeps the rest; see the
+  plan shape above.
+
 ## Security and deployment gates
 
 - All mutations require exact configured `APP_ORIGIN`; never infer it from Host
@@ -451,10 +525,135 @@ select it. Tests pass the local worker key only to the server subprocess.
   framework scripts/styles. It is not a strict nonce-based injection defence.
   Organisation lists currently return at most the local PostgREST cap (100);
   pagination remains necessary before expanding beyond peer-testing scale.
-- Free hosting remains undecided. Verify SoC reachability, request deadlines,
-  Node/Next support, SMTP, public organisation-repository deployment and separate
-  dev/prod Supabase capacity. Deployments must be team-controlled automation;
-  no deployment workflow, live migrations or hosting changes were made here.
+- Deployment is team-controlled automation under `.github/workflows/`; see
+  [Deployment and environments](#deployment-and-environments). Hosting accounts
+  and environment secrets are not yet created, so no live deployment, hosted
+  migration or hosting change has been performed. SoC reachability from the host,
+  hosted request deadlines and custom SMTP still require verification against the
+  real environments before claiming online signup and AI features work.
+
+## Deployment and environments
+
+### Shape
+
+| | Development | Production |
+| --- | --- | --- |
+| Branch | `dev` | `main` |
+| Workflow | `deploy-development.yml` | `deploy-production.yml` |
+| GitHub Environment | `development` | `production` (reviewer required) |
+| Vercel project | `specforge-dev` | `specforge` |
+| Vercel target | production target of that project | production target |
+| Supabase project | development project | production project |
+
+Both callers delegate to the reusable `deploy.yml`, so the steps and their order
+exist once: apply migrations, pull that scope's configuration, build, deploy,
+record the URL. The production caller first runs the whole of `ci.yml` on the
+merge commit, and the `production` environment requires a reviewer, so production
+is never reached without a passing suite and an explicit human approval.
+
+Vercel's own Git integration is deliberately not connected. The repository owns
+the trigger and the gates, and the Vercel CLI is invoked as a step, which keeps
+the automation team-managed as the course requires.
+
+Migrations run before the deployment, so the schema cannot trail the code that
+expects it. A failed `supabase db push` stops the run before anything is
+deployed. CLI output is suppressed because it can carry credentials; only the
+outcome is reported.
+
+### Configuration boundary
+
+GitHub holds only what the pipeline itself needs, per environment, as
+GitHub Environment secrets rather than repository-wide secrets:
+
+`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SUPABASE_ACCESS_TOKEN`,
+`SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`.
+
+Application runtime configuration — `APP_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SOCLAAS_BASE_URL`,
+`SOCLAAS_API_KEY`, `SOCLAAS_CHAT_MODEL` — is set in each Vercel project's
+Production scope, pointing each environment at its own Supabase project.
+`APP_ORIGIN` must be the exact HTTPS origin of that environment: the server fails
+closed on a missing or non-HTTPS origin in production rather than inferring one
+from request headers.
+
+### First-time setup
+
+1. Create the `dev` branch from `main` and protect both: pull requests into
+   `dev`, no direct pushes to `main`.
+2. Create two Supabase projects, development and production, and keep their
+   service keys out of the repository and out of local `.env`.
+
+   Set each project's **Site URL** (Authentication, URL Configuration) to that
+   environment's deployed origin. A hosted project defaults to
+   `http://localhost:3000`, and the application does not pass an explicit
+   `emailRedirectTo`, so the default is what verification emails link to: a
+   deployed sign-up otherwise sends the user to their own machine. Note that
+   `src/supabase/config.toml` is the local stack's configuration and correctly
+   says `localhost`; `supabase db push` never touches hosted auth settings, but
+   `supabase config push` would overwrite them, so do not run it against a
+   deployed project.
+3. Create two empty Vercel projects, `specforge-dev` and `specforge`, without
+   connecting a Git repository: Vercel's own Git deployments would take the
+   automation out of the team's hands and race with `deploy.yml`. Set the
+   runtime variables above in each project's Production scope.
+
+   `vercel.json` at the repository root declares `framework: nextjs`. An empty
+   Vercel project defaults to no framework and then looks for a static `public`
+   directory, so the build fails after Next.js has already built successfully.
+   Declaring it in the repository keeps the setting in version control rather
+   than in a dashboard checkbox.
+
+   Each environment deploys to its own project's production target rather than
+   to a preview. A Vercel preview URL is unique per deployment, while
+   `APP_ORIGIN` has to be one fixed origin, so a preview target would give the
+   development app an origin that changes on every push. `VERCEL_PROJECT_ID` is
+   an environment secret, so the two environments name different projects.
+4. Create the `development` and `production` GitHub Environments, add the six
+   secrets to each, and add a required reviewer to `production`.
+5. In repository settings, set Pages to build from GitHub Actions.
+6. Push to `dev` and confirm the development deployment, then open a pull request
+   to `main`.
+7. Configure custom SMTP on both Supabase projects and test the confirmation
+   email before telling peer testers that signup works. Supabase's default sender
+   restricts recipients.
+
+### Product website
+
+`website/` holds the Jekyll source for the GitHub Pages product website.
+`pages.yml` copies `docs/*.md` into that source at build time and adds the front
+matter Jekyll needs, so the guides stay single-source in `docs/` and the
+published site cannot drift from them. The copies are ignored by Git.
+
+### Continuous integration
+
+`ci.yml` runs on every pull request, on pushes to `dev` and `main`, and as the
+production gate. The `verify` job runs lint, TypeScript, unit and HTTP tests and
+a production build; the `integration` job starts a disposable local Supabase
+stack and runs the database and browser suites. No CI job reaches a hosted
+Supabase project or the SoC LLM, so continuous integration consumes no provider
+quota and no real key.
+
+### Workflow folder
+
+Process material lives under `workflow/`:
+
+- `README.md`: the active development workflow — the everyday loop, coordination
+  and resource limits, and the installed skills.
+- `specs/`: one approved specification per feature, plus the historical workflow
+  design decisions. Approval of a spec is what starts implementation.
+- `plans/`: implementation plans, written only for changes complex enough to need
+  one.
+- `agents/`: the two reviewer role briefs, `code-reviewer.md` and
+  `security-reviewer.md`, loaded when those agents are dispatched.
+- `architecture.md`, `ui.md`: short shared engineering policies on module
+  boundaries and on UI/theme reuse.
+- `templates/session-summary.md`: the template each session log follows.
+- `THIRD_PARTY.md`, `MATT-POCOCK-LICENSE`: provenance and licensing for reused
+  workflow material and local adaptations.
+
+Project-local agent skills are versioned in `.agents/skills/` so that cloning the
+repository reproduces them, and `AGENTS.md` at the root is the entry point agents
+read first. Sanitised session summaries are in `logs/`.
 
 ## Checks
 
@@ -467,7 +666,9 @@ npm run test:e2e
 
 `verify` runs lint, TypeScript, HTTP tests and a production build. Database tests
 are explicitly skipped in the ordinary test command; run `test:integration` for
-them. Both integration/browser wrappers obtain only the named local stack's
+them. Test plan checks are `npx vitest run src/tests/test-plans.test.ts` for the
+deterministic provider tests and `node src/tooling/test-local.mjs test-plans` for
+the database ones. Both integration/browser wrappers obtain only the named local stack's
 configuration and reject any API URL except `http://127.0.0.1:55321`. Fixture admin
 access is local-only. Browser tests start their own app server on port 3000. If your manual server is
 running, use `SPECFORGE_BROWSER_ORIGIN=http://localhost:3001 npm run test:e2e`
@@ -476,10 +677,21 @@ Run type generation/build checks sequentially with browser tests: Next.js rewrit
 shared generated type references even with a separate output directory. For
 focused request checks, use `node src/tooling/test-local.mjs requests` or
 `SPECFORGE_BROWSER_ORIGIN=http://localhost:3001 node src/tooling/test-local.mjs requests-browser`.
+The one suite that spends real provider quota is opt-in and never runs in CI:
+
+```sh
+SPECFORGE_LIVE_AI=1 npx vitest run src/tests/soc-live.manual.test.ts
+```
+
+It makes exactly two calls, one per role feature, and is skipped unless
+`SPECFORGE_LIVE_AI=1` and both `SOCLAAS_API_KEY` and `SOCLAAS_CHAT_MODEL` are
+set. Run it after changing a prompt, a validator or a stored limit.
+
 Screenshots are ignored under `test-results/`; they are not submission evidence
 unless reviewed and summarized. The one-off legacy migration check is
 `node src/tooling/test-local.mjs migration` and runs only before the two-field
-migration is applied; ordinary tests explicitly skip it. Tests do not call SoCLaaS or hosted Supabase.
+migration is applied; ordinary tests explicitly skip it. Tests do not call SoCLaaS or hosted Supabase, apart from the opt-in live suite
+below.
 
 One lint dependency override upgrades `minimatch` under TypeScript ESLint to a
 patched compatible release. Re-evaluate the override when upstream updates.

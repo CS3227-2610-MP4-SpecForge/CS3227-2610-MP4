@@ -1,0 +1,44 @@
+# Required by the repository ruleset on main: without a CodeQL analysis the
+# code-scanning rule has nothing to report and no pull request can merge.
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+  schedule:
+    # Weekly, so advisories published after a merge are still caught.
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyse:
+    name: Analyse JavaScript and TypeScript
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out the revision under analysis
+        uses: actions/checkout@v5
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # security-and-quality adds maintainability rules the ruleset's
+          # code-quality gate expects, on top of the security queries.
+          queries: security-and-quality
+
+      # No build step: JavaScript and TypeScript are analysed from source, and
+      # a Next.js production build would only slow the gate down.
+      - name: Analyse
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript-typescript

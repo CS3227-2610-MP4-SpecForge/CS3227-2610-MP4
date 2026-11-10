@@ -4,10 +4,11 @@ A shared workspace for Product Managers and Developers. The initial slice
 implements verified email accounts, member-scoped organisations, invitations
 and admin/member management, plus private PM drafts and explicitly published
 feature requests with a two-field editor, AI drafting and inline suggestions,
-and collapsible private SoC discussion.
-The partner-owned Developer AI remains unimplemented.
+and collapsible private SoC discussion. Developers get the second role AI
+feature: generated test plans on published tickets, reviewed and then saved to
+the ticket for the whole organisation.
 
-Use Node.js 24 and Docker Desktop:
+Use Node.js 22 and Docker Desktop:
 
 ```sh
 npm ci
@@ -25,4 +26,9 @@ your `.env` unchanged. Never put real project credentials in guides or test data
 - [Product specification](workflow/specs/2026-11-07-product-mvp.md).
 - [Workflow](workflow/README.md).
 
-No hosted deployment or GitHub Pages product website is configured yet.
+Deployment automation and the GitHub Pages product website live in
+`.github/workflows/` and `website/`. The pipeline is team-managed: GitHub Actions
+applies migrations and drives the Vercel CLI, with separate development and
+production environments. Hosting accounts and environment secrets still need
+human setup before the first live deployment; see
+[Deployment](docs/DeveloperGuide.md#deployment-and-environments).

@@ -7,9 +7,17 @@ logout, creating/listing/selecting your organisations, invitations and membershi
 management, ticket drafting/publication, delivery tracking and team comments. Both Product Managers and
 Developers use the same workspace. Organisation creators become admins.
 
-Demo kits and the partner-owned Developer AI remain future work. PM task chat
-uses SoC LLM; hosted deployment is not configured.
-No public application URL is available yet.
+Each role has its own AI feature, both on SoC LLM. Product Managers get private
+ticket drafting, inline suggestions and discussion. Developers get generated test
+plans on published tickets ([below](#test-plans-developer-ai)).
+
+Demo kits remain future work.
+
+There is no public application URL yet, so testing is local for now. The
+deployment pipeline exists (see
+[Deployment](DeveloperGuide.md#deployment-and-environments)) but awaits hosting
+setup, and this guide and the product website will carry the URL once a
+deployment has actually run.
 
 ## Try the local app
 
@@ -249,6 +257,45 @@ Markdown display supports headings, lists, paragraphs, `**bold text**`,
 are displayed as text.
 Ticket lists use 50-item pages with **Load more tickets**. No hosted application URL is available yet.
 
+## Test plans (Developer AI)
+
+Sign in with an account whose role is **Developer** and open any **published**
+ticket in an organisation you belong to. Below the ticket, select **Show test
+plan**.
+
+**Generating.** Optionally type a focus note (up to 500 characters), for example
+"concentrate on the invitation expiry rules", then select **Generate test
+cases**. The assistant reads only the ticket title and description and returns up
+to 12 cases. Each case has a title, a kind pill (**Happy path** green, **Edge
+case** yellow, **Failure** red), optional preconditions, numbered steps and one
+expected result.
+
+**Reviewing and saving.** Generated cases are a suggestion: nothing reaches the
+ticket until you select **Save to ticket**. **Discard** removes them from your
+view. Once saved, every member of the organisation sees the plan, together with
+the username of the developer who saved it and when. Saving again shows
+**Replace saved plan** and increases the version number.
+
+**What you cannot do.** Product Managers see a saved plan read-only and have no
+Generate button; the ticket author cannot generate one either. Draft tickets have
+no test plan section at all. Individual cases cannot be edited before saving: it
+is save-all or discard, and you can generate again.
+
+**Staleness.** If the ticket is edited after cases are generated, the panel says
+so and saving is refused, so a plan built on older wording cannot be written over
+newer behaviour. A saved plan whose ticket has since changed is shown with a
+warning to generate a fresh one.
+
+**Discarded suggestions.** Occasionally the model writes a case that is longer
+than a ticket can store, usually a rambling expected result. That single case is
+dropped and the rest are kept, and the panel's message says how many were
+discarded, so a count lower than the message implies is expected rather than a
+fault. Generate again if you want the dropped case back.
+
+**Limits.** 20 generations per developer per hour, one generation at a time per
+developer, and one saved plan per ticket. Cases are suggestions, not verified
+requirements: check them against the ticket before relying on them.
+
 ## Failures
 
 - Invalid credentials or an unverified email: check your details or verify email.
@@ -261,6 +308,10 @@ Ticket lists use 50-item pages with **Load more tickets**. No hosted application
   may block the action. Do not repeatedly submit a timed-out change; refresh first.
 - Workspace loading failure: use **Retry loading workspace**. Signed-out users
   are redirected to sign-in.
+- Test plan AI failure: the panel names what happened (timeout, upstream error,
+  invalid output, usage limit). Nothing is saved to the ticket. **Retry
+  generation** repeats the same request explicitly; it is disabled once the
+  ticket has changed, in which case generate a new plan instead.
 
 Online ordinary signup will require configured SMTP delivery. Planned generated
 demo accounts will bypass email delivery, but are not provisioned in this slice.

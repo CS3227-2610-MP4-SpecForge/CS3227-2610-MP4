@@ -1,0 +1,115 @@
+name: Deploy
+
+# Reusable deployment for one environment. The repository owns the trigger, the
+# order and the gates; Vercel's own Git integration is deliberately unused so the
+# automation stays team-managed. Callers choose the environment and the Vercel
+# target, and nothing else differs between development and production.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub Environment holding this target's secrets.
+        required: true
+        type: string
+      vercel-environment:
+        description: Vercel environment scope to pull configuration from.
+        required: true
+        type: string
+      production:
+        description: Deploy to the production target rather than a preview.
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      VERCEL_TOKEN:
+        required: true
+      VERCEL_ORG_ID:
+        required: true
+      VERCEL_PROJECT_ID:
+        required: true
+      SUPABASE_ACCESS_TOKEN:
+        required: true
+      SUPABASE_PROJECT_REF:
+        required: true
+      SUPABASE_DB_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.121.0
+
+      # Migrations run before the deployment so the schema can never trail the
+      # code that expects it. CLI output may carry credentials, so it is not
+      # echoed; only the outcome is reported.
+      - name: Apply migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          # CLI output can carry credentials, so it is never echoed verbatim.
+          # A failure with no reason at all cannot be diagnosed from a CI log,
+          # so the tail is relayed with credential-shaped values redacted.
+          redact() {
+            sed -E \
+              -e 's/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/[redacted-token]/g' \
+              -e 's/(sbp|sb_publishable|sb_secret|sb)_[A-Za-z0-9_-]{8,}/[redacted-key]/g' \
+              -e 's#(://[^:[:space:]]+:)[^@[:space:]]+@#\1[redacted]@#g' \
+              -e 's/[A-Za-z0-9_-]{40,}/[redacted-value]/g'
+          }
+          if ! supabase link --project-ref "$PROJECT_REF" --workdir src >link.log 2>&1; then
+            echo "::error::Could not link the ${{ inputs.environment }} Supabase project. Check SUPABASE_PROJECT_REF and SUPABASE_ACCESS_TOKEN."
+            tail -n 30 link.log | redact
+            exit 1
+          fi
+          if ! supabase db push --workdir src >push.log 2>&1; then
+            echo "::error::Migration push failed for ${{ inputs.environment }}."
+            tail -n 40 push.log | redact
+            exit 1
+          fi
+          rm -f link.log push.log
+          echo "Migrations applied to the ${{ inputs.environment }} project."
+
+      # Installed globally, not into the project. Inside node_modules the CLI's
+      # own builder packages get deduped against the application's dependencies
+      # and @vercel/next loses files it needs at build time.
+      - name: Install Vercel CLI
+        run: npm install --global vercel@48.2.0
+
+      - name: Pull ${{ inputs.vercel-environment }} configuration
+        run: vercel pull --yes --environment=${{ inputs.vercel-environment }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        id: deploy
+        run: |
+          url="$(vercel deploy --prebuilt ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})"
+          echo "url=$url" >>"$GITHUB_OUTPUT"
+          echo "Deployed ${{ inputs.environment }} to $url" >>"$GITHUB_STEP_SUMMARY"

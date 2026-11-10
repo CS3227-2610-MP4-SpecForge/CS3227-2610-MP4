@@ -1,3 +1,4 @@
+import type { TestPlanProvider } from "../server/test-plan-ai";
 import { assistanceMessages } from "../assistance";
 import { aiResponseTimeoutMs } from "../ai-diagnostics";
 import { AiFailure, type AiProvider } from "../server/soc";
@@ -11,4 +12,23 @@ export const localFakeAi: AiProvider = async input => {
   if (input.message.toLowerCase().includes("simulate failure")) throw new AiFailure("unavailable");
   if (input.message.toLowerCase().includes("slow proposal")) await new Promise(resolve => setTimeout(resolve, 1500));
   return ([assistanceMessages.draft, assistanceMessages.undecided] as string[]).includes(input.message) || input.message.toLowerCase().includes("proposal") ? { reply: "Here is a proposed task. Review it before applying.", proposal: { title: "AI task proposal", description: "## Problem description\n\nPMs need to find saved requests.\n\n## Desired behaviour\n\n- Search request titles.\n\n## Assumptions / unresolved questions\n\nSearch applies to the active organisation." } } : { reply: "Who is this feature for?", proposal: null };
+};
+
+// Deterministic Developer-role provider for local browser checks. The focus note
+// selects a behaviour so failure paths can be exercised without SoC quota.
+export const localFakeTestPlanAi: TestPlanProvider = async input => {
+  const focus = input.focus ?? "";
+  if (focus.includes("simulate invalid plan")) throw new AiFailure("invalid_output", { source: "invalid_output", reason: "invalid_schema" });
+  if (focus.includes("simulate local timeout")) throw new AiFailure("local_timeout", { source: "local_deadline", elapsed_ms: aiResponseTimeoutMs });
+  if (focus.includes("simulate upstream 502")) throw new AiFailure("upstream_http", { source: "upstream_http", elapsed_ms: 1234, http_status: 502 });
+  if (focus.toLowerCase().includes("simulate failure")) throw new AiFailure("unavailable");
+  if (focus.toLowerCase().includes("slow plan")) await new Promise(resolve => setTimeout(resolve, 1500));
+  return {
+    reply: "Three cases from the ticket's stated behaviour. Review them before saving.",
+    plan: { cases: [
+      { title: `Stated behaviour holds for ${input.fields.title.slice(0, 40) || "the ticket"}`, kind: "happy", preconditions: "A verified account that is a member of the organisation.", steps: ["Open the published ticket", "Follow the ticket's described behaviour once"], expected: "The behaviour the ticket describes is observable and nothing else changes." },
+      { title: "Boundary value is accepted", kind: "edge", steps: ["Enter the largest value the ticket allows", "Save"], expected: "The value is accepted and stored unchanged." },
+      { title: "Rejected input leaves the record untouched", kind: "failure", steps: ["Enter a value the ticket forbids", "Save"], expected: "An error names the field and the stored record is unchanged." },
+    ] },
+  };
 };

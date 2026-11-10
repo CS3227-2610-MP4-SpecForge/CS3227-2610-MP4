@@ -1,0 +1,62 @@
+name: Product website
+
+# Publishes the GitHub Pages product website. The guides stay single-source in
+# docs/ and are copied into the Jekyll source at build time, so the site can
+# never drift from the repository's own documentation.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - website/**
+      - docs/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      # Jekyll renders a Markdown file only when it carries front matter, and the
+      # guides must stay plain Markdown in docs/ for GitHub's own file view. The
+      # copies get empty front matter here; _config.yml supplies the layout.
+      - name: Copy the guides into the site source
+        run: |
+          for guide in docs/*.md; do
+            name="$(basename "$guide")"
+            printf -- '---\n---\n\n' >"website/$name"
+            cat "$guide" >>"website/$name"
+          done
+
+      - uses: actions/configure-pages@v5
+        id: pages
+
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: website
+          destination: ./_site
+
+      - uses: actions/upload-pages-artifact@v4
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

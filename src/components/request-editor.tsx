@@ -10,6 +10,7 @@ import { deliveryOf, deliveryChanges, sameDelivery, type Delivery } from "@/deli
 import { TicketDelivery, TicketDeliveryFields, CopyTicketLink } from "./ticket-delivery";
 import { TicketVisibility } from "./ticket-visibility";
 import { TicketActivity } from "./ticket-activity";
+import { TestPlanPanel } from "./test-plan-panel";
 import { BackLink, Button, Field, Notice } from "./ui";
 
 type Problem = { kind: "conflict" | "ambiguous" | "retry" | "denied"; message: string };
@@ -44,6 +45,7 @@ export function RequestScreen({ organisationId, requestId }: { organisationId: s
       <Button className="secondary" onClick={() => setReload(n => n + 1)}>Refresh saved request</Button>
       <RequestMetadata item={item} author={item.author_username} />
     </div>
+    {item.submitted_at && <TestPlanPanel path={path + "/test-plan"} fields={item.fields} ticketRevision={item.revision} canGenerate={account.role === "Developer"} />}
     <TicketActivity path={path + "/activity"} />
   </section>;
 }
@@ -291,6 +293,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
           </p>
         </RequestMetadata>
       </div>
+      {published && <TestPlanPanel path={path + "/test-plan"} fields={stored.fields} ticketRevision={stored.revision} canGenerate={false} />}
       {published && <TicketActivity path={path + "/activity"} />}
     </ChatPanel>
   </section>;
