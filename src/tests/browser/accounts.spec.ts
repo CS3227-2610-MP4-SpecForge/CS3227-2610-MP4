@@ -85,8 +85,50 @@ for (const role of ["PM", "Developer"] as const) {
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         await page.screenshot({ path: "test-results/workspace-mobile.png", fullPage: true, caret: "initial" });
       }
-      await page.getByRole("button", { name: "Sign out", exact: true }).click();
+      if (role === "PM") await page.setViewportSize({ width: 1280, height: 900 });
+      const navigation = page.getByRole("navigation", { name: "Main navigation" });
+      const accountControl = navigation.getByRole("button", { name: "Account options" });
+      await expect(accountControl).toContainText(username.toLowerCase());
+      await expect(accountControl).toContainText(email);
+      await expect(navigation.getByRole("link", { name: "Workspace", exact: true })).toHaveCount(0);
+      const headingRow = page.getByRole("heading", { name: "Organisations", exact: true }).locator("../..");
+      await expect(headingRow).not.toContainText(email);
+      await expect(headingRow.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(0);
+      await page.getByRole("link", { name: "View requests", exact: true }).click();
+      await expect(page).toHaveURL(/\/requests$/);
+      await expect(accountControl).toContainText(username.toLowerCase());
+      await page.getByRole("link", { name: "SpecForge home" }).click();
+      await expect(page).toHaveURL(/\/workspace$/);
+      const signout = navigation.getByRole("button", { name: "Sign out", exact: true });
+      await expect(signout).toBeHidden();
+      await accountControl.hover();
+      await expect(signout).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: `test-results/account-menu-${role}.png`, fullPage: true });
+      await signout.hover();
+      await expect(signout).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(signout).toBeHidden();
+      await accountControl.focus();
+      await accountControl.press("Enter");
+      await page.keyboard.press("Tab");
+      await expect(navigation.getByRole("link", { name: "Profile", exact: true })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(signout).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(accountControl).toBeFocused();
+      await accountControl.click();
+      await page.getByText("Choose a team space, or create a new one.", { exact: true }).click();
+      await expect(signout).toBeHidden();
+      await accountControl.click();
+      await page.route("**/api/auth/signout", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Please try signing out again." }) }));
+      await signout.click();
+      await expect(navigation.getByRole("alert")).toHaveText("Please try signing out again.");
+      await expect(signout).toBeEnabled();
+      await page.unroute("**/api/auth/signout");
+      await signout.click();
       await expect(page).toHaveURL(/\/sign-in$/);
+      await expect(accountControl).toHaveCount(0);
       expect((await page.request.get("/api/account")).status()).toBe(401);
       const replay = await page.request.post("/api/auth/verify", { headers: { origin }, data: { email, token } });
       expect(replay.status()).toBe(400);
@@ -96,6 +138,7 @@ for (const role of ["PM", "Developer"] as const) {
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(page).toHaveURL(/\/workspace$/);
       await expect(page.getByRole("button", { name: new RegExp(`${role} test team Admin`) })).toBeVisible();
+      await expect(accountControl).toContainText(username.toLowerCase());
       expect(errors).toEqual([]);
     } finally {
       const { data } = await fixture.admin.auth.admin.listUsers();
@@ -121,4 +164,38 @@ test("account forms support keyboard focus and do not overflow on mobile", async
   await backToSignIn.press("Enter");
   await expect(page).toHaveURL(/\/sign-in$/);
   expect(hydrationWarnings).toBe(0);
+});
+
+
+test("signing out respects unsaved ticket edits before ending the session", async ({ page }) => {
+  const fixture = localFixture();
+  const actor = await fixture.actor("PM");
+  const org = (await actor.client.rpc("create_organisation", { organisation_name: "Sign-out guard" })).data;
+  const draft = (await actor.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+  try {
+    await page.goto("/sign-in");
+    await page.getByLabel("Email address").fill(actor.email);
+    await page.getByLabel("Password", { exact: true }).fill(actor.password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/workspace$/);
+    await page.goto(`/organisations/${org}/requests/${draft.id}`);
+    await page.getByLabel("Title", { exact: true }).fill("Published ticket");
+    await page.getByLabel("Description", { exact: true }).fill("Original description");
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Update", exact: true })).toBeVisible();
+    await page.getByLabel("Title", { exact: true }).fill("Unsaved title");
+    const accountControl = page.getByRole("button", { name: "Account options", exact: true });
+    await accountControl.click();
+    let warned = false;
+    page.once("dialog", async dialog => { warned = true; await dialog.dismiss(); });
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    expect(warned).toBe(true);
+    await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Unsaved title");
+    expect((await page.request.get("/api/account")).status()).toBe(200);
+    await accountControl.click();
+    page.once("dialog", dialog => dialog.accept());
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect(page).toHaveURL(/\/sign-in$/);
+    expect((await page.request.get("/api/account")).status()).toBe(401);
+  } finally { await fixture.cleanup(); }
 });

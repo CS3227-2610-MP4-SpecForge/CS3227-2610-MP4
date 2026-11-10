@@ -46,15 +46,9 @@ export function Workspace() {
     catch (failure) { setSelected(undefined); setError(failureMessage(failure)); }
     finally { setPending(false); }
   }
-  async function signout() {
-    if (pending) return;
-    setPending(true); setError("");
-    try { await api("/api/auth/signout", {}); setAccount(undefined); setOrganisations([]); setSelected(undefined); router.replace("/sign-in"); router.refresh(); }
-    catch (failure) { setError(failureMessage(failure)); setPending(false); }
-  }
   if (loading) return <Notice>Loading your workspace…</Notice>;
   return <section>
-    <div className="page-heading"><div><p className="eyebrow">Your workspace</p><h1>Organisations</h1><p className="muted">Choose a team space, or create a new one.</p></div>{account && <div className="account-summary"><span className="badge">{account.role === "PM" ? "Product Manager" : "Developer"}</span><span className="account-email">{account.email}</span><Button className="secondary" onClick={signout} disabled={pending}>Sign out</Button></div>}</div>
+    <div className="page-heading"><div><p className="eyebrow">Your workspace</p><h1>Organisations</h1><p className="muted">Choose a team space, or create a new one.</p></div></div>
     {error && <Notice danger>{error}</Notice>}{message && <Notice>{message}</Notice>}
     {!account ? <Button className="secondary" onClick={() => { setError(""); setLoading(true); setReload(n => n + 1); }}>Retry loading workspace</Button> : <div className="workspace-grid">
       <div className="stack"><div className="section-title"><h2>Your organisations</h2><span className="count">{organisations.length}</span></div>

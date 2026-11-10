@@ -30,13 +30,14 @@ Follow the [developer setup](DeveloperGuide.md#local-setup), then open
    use 3–24 letters, digits, or underscores and are stored in lowercase. Each
    username is unique across SpecForge. If no verification code arrives, try a
    different username or sign in if you already have an account. Your username
-   and application role are fixed after signup. Accounts created before this
+   can be changed from your profile; your application role is fixed after signup. Accounts created before this
    change have a generated username beginning with `legacy_`.
 2. Choose **Enter your verification code** after signup. For local testing, open
    <http://127.0.0.1:55324> and find the email addressed to your disposable account.
    Enter its eight-digit code and email on the verification screen. This local
    inbox captures messages; it does not send email to real inboxes.
-3. Successful verification opens **Organisations**. You cannot create an
+3. Successful verification opens **Organisations**. Select **SpecForge** in the
+   navbar to return to this page from elsewhere. You cannot create an
    organisation before verification. Use **Send a new code** if needed; resend
    and sign-in attempts are rate-limited. Local codes expire after one hour and
    cannot be reused after verification.
@@ -44,12 +45,31 @@ Follow the [developer setup](DeveloperGuide.md#local-setup), then open
    its first admin. Either application role can create multiple organisations.
 5. Select an organisation card to make it active. Only organisations you belong
    to appear. This version's selection lasts until the page reloads.
-6. Choose **Sign out**, then use the ordinary email/password sign-in form to
-   return. Other members' organisations are not discoverable through your account.
+6. Hover over your username and email in the navbar (or select them by click or
+   keyboard), then choose **Sign out**. If a ticket has unsaved work, cancel the
+   departure warning to keep editing or confirm to leave. Use the ordinary
+   email/password sign-in form to return. Other members' organisations are not discoverable through your account.
 
 Password recovery and account deletion are not available. Save your test
 credentials; a new account will not inherit the previous account's memberships.
 Admin status does not change your PM/Developer application role.
+
+## Your profile
+
+Open the navbar account dropdown and choose **Profile**, above **Sign out**.
+Your profile shows your username, application role, verified email address and
+actual account creation date, plus your organisations and Admin/Member status.
+The initial avatar is generated from your username.
+
+To change your username, edit **Username** and choose **Save changes**. Names
+follow the same rules as signup and must be unique. **Cancel** restores the saved
+name. A successful change updates the navbar immediately and your current name
+appears on existing tickets and team labels; ticket ownership stays with your
+account. Previous names are not reserved. Email and role are read-only.
+
+If saving fails, your typed name stays available for retry. Leaving with unsaved
+changes, including signing out, asks for confirmation. A profile loading failure
+has a **Retry loading profile** action.
 
 ## Invitations and membership
 
