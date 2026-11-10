@@ -1,57 +1,55 @@
 # SpecForge project instructions
 
-Use the lightweight workflow in [workflow/README.md](workflow/README.md).
-It replaces the earlier Superpowers-led workflow for this repository; do not
-invoke Superpowers automatically or maintain its per-task planning paperwork.
+SpecForge is a Next.js/React and Supabase application for organisation ticket
+workflows and SoC-assisted drafting and test plans.
 
-- Clarify uncertain requirements before coding; save one concise approved feature
-  spec under `workflow/specs/`. Agree testing interfaces in that spec.
-- Implement in the main agent using the local `tdd` and `codebase-design` skills.
-  Use one independent code/architecture reviewer at feature boundaries, plus the
-  security specialist before/after sensitive work. See role briefs in `workflow/agents/`.
-- Reuse shared UI and theme tokens; read `workflow/ui.md` for UI changes and
-  `workflow/architecture.md` when choosing module boundaries. Do not load all docs for every edit.
-- Keep source under `src/`, process material under `workflow/`, and one sanitized
-  summary per session under `logs/`, following the concise outcome-focused
-  `workflow/templates/session-summary.md`. Update guides when user-visible behavior changes.
-  Native skills, a root `GLOSSARY.md` and decision records under `docs/adr/` are
-  natural exceptions; create glossary/ADRs only when useful, not for every task.
-- Do not log secrets, full sensitive prompts, hidden reasoning or invented metrics.
-- The app must use SoC LLM; exact provider limits are unverified. Deployment must
-  use team-managed automation with separate development/production environments.
+## Constraints
 
-Current state: approved initial product specification under `workflow/specs/`;
-Next.js/React and Supabase scaffold with verified accounts and initial
-organisation workflow, including invitations and membership/admin management, plus the manual request
-lifecycle (private drafts, publication and author-only editing), a two-field
-Markdown task editor, ticket-first AI drafting/inline suggestions and collapsible private SoC discussion.
-Tickets also support due dates, up to five assignees, delivery status/priority,
-internally stored organisation-scoped references, filtered/paged lists, shared
-comments and activity. Ticket fields sit beneath the editable title; AI tools,
-discussion and suggestion review occupy a collapsible right panel. Ticket
-references are hidden from the user interface.
-Read `docs/DeveloperGuide.md` for setup/check commands.
-Deployment automation and the GitHub Pages product website now exist under
-`.github/workflows/` and `website/`: CI gates, a reusable deploy workflow and
-separate development (`dev`) and production (`main`) environments. Both are
-deployed and serving: `specforge-dev.vercel.app` and
-`specforge-prod.vercel.app`, each against its own Supabase project, with
-migrations applied by the workflow. GitHub Pages is not enabled yet, so the
-product website is not published.
-The Developer role now has its own AI feature: generated test plans on published
-tickets, reviewed then saved to the ticket for the organisation. It reuses the
-shared bounded SoC transport in `src/server/soc.ts`; see the developer guide.
-PM AI reliability/provider-wide quotas and hosted deployment remain unverified.
-`npm run verify` (lint, typecheck, unit tests, `next build`) passes on Node 22,
-and CI run 42550277324 on pull request #2 applied every migration to a
-disposable local Supabase and passed all 56 database tests (including the 4 for
-test plans) and the browser suite. The test plan panel still has no browser
-check of its own. Both role AI features have now been executed against SoC LLM
-(`SPECFORGE_LIVE_AI=1 npx vitest run src/tests/soc-live.manual.test.ts`); the
-observed provider behaviour, including an unavailable model and a gateway
-deadline, is recorded in the developer guide. Hosted deployment remains
-unverified.
-Do not invent passing checks or treat future product scope as implemented.
+- Use SoC LLM for application AI features.
+- Preserve organisation isolation and enforce permissions on the server/database.
+- Never log secrets, full sensitive prompts or hidden reasoning.
+- Deploy through team-managed automation with separate development and production
+  environments.
+
+## Working rules
+
+- Follow [workflow/README.md](workflow/README.md). Do not invoke Superpowers
+  automatically or introduce its per-task planning paperwork.
+- For new features or material behavior changes, clarify uncertain requirements
+  and save one concise approved spec under `workflow/specs/`, including acceptance
+  criteria and testing interfaces. Routine fixes and documentation edits use
+  proportionate checks without artificial feature paperwork.
+- Implement in the main agent. Use the local `tdd` skill for behavior changes and
+  `codebase-design` for meaningful interface decisions. Use one independent
+  code/architecture reviewer at feature boundaries; sensitive work also needs
+  security preflight and review. Role briefs are under `workflow/agents/`.
+- Keep application source under `src/`, the product website under `website/`,
+  and process material under `workflow/`. Create a root `GLOSSARY.md` or records
+  under `docs/adr/` only when useful.
+
+## Read when relevant
+
+- Setup, commands and module details: [docs/DeveloperGuide.md](docs/DeveloperGuide.md).
+- Product behavior: [docs/UserGuide.md](docs/UserGuide.md).
+- Module boundaries: [workflow/architecture.md](workflow/architecture.md).
+- UI changes: [workflow/ui.md](workflow/ui.md); reuse shared components and theme tokens.
+- Unfinished work: follow the handoff procedure in `workflow/README.md`. Read the
+  supplied note or only the matching note under `local/notes/active/`; verify its
+  claims against the checkout. A handoff does not grant permission.
+
+## Validation and documentation
+
+- Run focused checks during implementation and `npm run verify` at feature
+  completion. Run `npm run test:integration` for database/permission changes and
+  `npm run test:e2e` for UI behavior changes; see the Developer Guide for setup.
+  Documentation-only edits need link and consistency checks, not application tests.
+- Report checks actually run and their scope; never invent passing results or
+  treat future scope as implemented.
+- Update affected guides when user-visible behavior or setup changes. Write one
+  sanitized session summary under `logs/` using
+  [workflow/templates/session-summary.md](workflow/templates/session-summary.md).
+- Keep this file focused on durable instructions. Store feature details in guides
+  and specs, dated validation in session logs, and temporary task state in handoffs.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
