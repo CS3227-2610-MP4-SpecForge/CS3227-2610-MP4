@@ -25,8 +25,9 @@ and implements; specialized subagents provide independent scrutiny.
    Dispatch one independent code/architecture reviewer using its role brief.
    Sensitive features also get a separate security review. Fix behavioral defects
    through regression tests; run affected checks again after fixes.
-6. Summarize actual prompts/decisions, tests, review findings, rework and available
-   resource use once in the session log. Human reviews/merges the feature.
+6. The main agent writes one concise, outcome-focused session log using
+   [the summary template](templates/session-summary.md): changes, final validation,
+   material review fixes and open issues. Human reviews/merges the feature.
 
 No automatic implementer subagent per edit, repeated full-suite runs without a
 reason, or separate handoff documents between these steps. Create a short handoff
@@ -40,8 +41,9 @@ The main chat owns task ordering and one writer per checkout. Give each reviewer
 the spec path, base/head or exact working diff, relevant files, existing test
 evidence and its role brief. Do not copy the full conversation. Reviewer output:
 verdict, concrete findings with file/line evidence, and checks/limitations.
-Return compact reports to the main chat; store their conclusions in the session
-summary. Reviewers are read-only and never dispatch children.
+Return compact reports to the main chat; record material findings, their resolution
+and any outstanding blockers once in the session summary. Reviewers are read-only
+and never dispatch children.
 
 Use the environment's available models deliberately; avoid inheriting an
 expensive model/effort blindly. At most two rework rounds for the same unresolved
@@ -49,10 +51,9 @@ finding, then diagnose/escalate. A cap never waives blocking findings. Resolve
 disagreements against the specification and evidence; ask the user when scope
 would change. Add parallel workers only for substantial independent work.
 
-Track time, dispatch/retry/tool/provider-call counts when captured. Tokens, cache
-hits and reasoning-token counts are optional provider measurements, not guesses.
-Record unavailable data explicitly. App usage and coding-agent usage are separate.
-This setup has no measured token-saving percentage yet.
+Record resource measurements only when requested or relevant to a performance/cost
+investigation, using captured data. Omit unavailable-metric boilerplate. App usage
+and coding-agent usage are separate; never guess measurements.
 
 ## Installed skills and onboarding
 
@@ -85,8 +86,8 @@ verified for this installed universal-directory plugin. Do not uninstall it glob
 - `agents/`: the two explicit reviewer briefs, loaded when dispatched.
 - `architecture.md`, `ui.md`: short shared engineering policies.
 - `specs/`: feature specifications and historical workflow decisions.
-- `templates/session-summary.md`: one summary that also captures reviews and usage.
-- Repository-root `logs/`: summaries of development interactions, including this setup.
+- `templates/session-summary.md`: concise session-log format and omission rules.
+- Repository-root `logs/`: session outcomes, validation and unresolved work.
 
 Keep workflow files here except native-discovery `.agents/skills/` and root
 `AGENTS.md`; domain terms may live in root `GLOSSARY.md` and significant decision

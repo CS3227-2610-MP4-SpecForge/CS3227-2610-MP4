@@ -12,7 +12,8 @@ invoke Superpowers automatically or maintain its per-task planning paperwork.
 - Reuse shared UI and theme tokens; read `workflow/ui.md` for UI changes and
   `workflow/architecture.md` when choosing module boundaries. Do not load all docs for every edit.
 - Keep source under `src/`, process material under `workflow/`, and one sanitized
-  summary per session under `logs/`. Update guides when user-visible behavior changes.
+  summary per session under `logs/`, following the concise outcome-focused
+  `workflow/templates/session-summary.md`. Update guides when user-visible behavior changes.
   Native skills, a root `GLOSSARY.md` and decision records under `docs/adr/` are
   natural exceptions; create glossary/ADRs only when useful, not for every task.
 - Do not log secrets, full sensitive prompts, hidden reasoning or invented metrics.
