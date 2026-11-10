@@ -38,10 +38,11 @@ The Developer role now has its own AI feature: generated test plans on published
 tickets, reviewed then saved to the ticket for the organisation. It reuses the
 shared bounded SoC transport in `src/server/soc.ts`; see the developer guide.
 PM AI reliability/provider-wide quotas and hosted deployment remain unverified.
-`npm run verify` (lint, typecheck, unit tests, `next build`) passes on Node 24.
-The test plan panel has no browser check, the database tests and the new
-migration have not run against any database, and nothing in this slice has been
-executed against SoC LLM.
+`npm run verify` (lint, typecheck, unit tests, `next build`) passes on Node 24,
+and CI run 42550277324 on pull request #2 applied every migration to a
+disposable local Supabase and passed all 56 database tests (including the 4 for
+test plans) and the browser suite. The test plan panel still has no browser
+check of its own, and nothing in this slice has been executed against SoC LLM.
 Do not invent passing checks or treat future product scope as implemented.
 
 <!-- BEGIN:nextjs-agent-rules -->

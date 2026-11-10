@@ -77,6 +77,15 @@ odejs`
     `src/supabase/migrations/20261109002000_developer_test_plans.sql` has not
     been applied to any database. Nothing about the SQL, the RLS policies, the
     role gating or the HTTP authorization order may be reported as verified.
+  - Resolved after the branch was pushed: CI run 42550277324 on pull request #2
+    ran the database job on an Ubuntu runner, which has Docker. Observed: the
+    local Supabase stack started, every migration applied including
+    `20261109002000_developer_test_plans.sql`, and
+    `src/tests/test-plans.database.test.ts` passed its 4 cases alongside the
+    other 52 database tests and the browser suite. So the SQL, the RLS
+    policies, the role gating, the storage caps and the authorization order are
+    now covered by an observed run; the earlier entry above records the state
+    at the time of writing.
   - No call has been made to SoC LLM for this feature; the panel has no browser
     check.
 - Agent dispatches: role, scope/context supplied, result and handoff: none. The
