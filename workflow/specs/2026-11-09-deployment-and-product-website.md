@@ -24,7 +24,7 @@ website. No build-and-host environment provided by a coding agent may be used.
   repository-wide secrets. Production requires a reviewer, so a deploy to
   production is an explicit human decision.
 - Runtime configuration (`APP_ORIGIN`, Supabase URL/keys, SoC LLM settings) is
-  held in Vercel's Preview and Production environment scopes. GitHub holds only
+  held in each Vercel project's Production scope. GitHub holds only
   the credentials the pipeline itself needs.
 - Website: Jekyll on GitHub Pages, built by `actions/jekyll-build-pages` from
   `website/` with the existing guides copied in at build time. The guides stay
@@ -39,7 +39,8 @@ website. No build-and-host environment provided by a coding agent may be used.
 2. `deploy.yml` is a reusable workflow: apply migrations, `vercel pull`,
    `vercel build`, `vercel deploy --prebuilt`, then record the deployment URL in
    the run summary.
-3. `deploy-development.yml` calls it on every push to `dev` with the preview
+3. `deploy-development.yml` calls it on every push to `dev` with the development
+   project's production
    target and the `development` environment.
 4. `deploy-production.yml` calls it on every push to `main` with the production
    target and the `production` environment, and only after `ci.yml` has passed

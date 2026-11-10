@@ -534,7 +534,8 @@ treat the figures as one sample, not a service level:
 | Branch | `dev` | `main` |
 | Workflow | `deploy-development.yml` | `deploy-production.yml` |
 | GitHub Environment | `development` | `production` (reviewer required) |
-| Vercel scope | Preview | Production |
+| Vercel project | `specforge-dev` | `specforge` |
+| Vercel target | production target of that project | production target |
 | Supabase project | development project | production project |
 
 Both callers delegate to the reusable `deploy.yml`, so the steps and their order
@@ -562,8 +563,8 @@ GitHub Environment secrets rather than repository-wide secrets:
 
 Application runtime configuration — `APP_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SOCLAAS_BASE_URL`,
-`SOCLAAS_API_KEY`, `SOCLAAS_CHAT_MODEL` — is set in the Vercel project's Preview
-and Production scopes, pointing each environment at its own Supabase project.
+`SOCLAAS_API_KEY`, `SOCLAAS_CHAT_MODEL` — is set in each Vercel project's
+Production scope, pointing each environment at its own Supabase project.
 `APP_ORIGIN` must be the exact HTTPS origin of that environment: the server fails
 closed on a missing or non-HTTPS origin in production rather than inferring one
 from request headers.
@@ -574,9 +575,16 @@ from request headers.
    `dev`, no direct pushes to `main`.
 2. Create two Supabase projects, development and production, and keep their
    service keys out of the repository and out of local `.env`.
-3. Create one Vercel project from this repository without enabling Vercel's Git
-   deployments, and set the runtime variables above in its Preview and Production
-   scopes.
+3. Create two empty Vercel projects, `specforge-dev` and `specforge`, without
+   connecting a Git repository: Vercel's own Git deployments would take the
+   automation out of the team's hands and race with `deploy.yml`. Set the
+   runtime variables above in each project's Production scope.
+
+   Each environment deploys to its own project's production target rather than
+   to a preview. A Vercel preview URL is unique per deployment, while
+   `APP_ORIGIN` has to be one fixed origin, so a preview target would give the
+   development app an origin that changes on every push. `VERCEL_PROJECT_ID` is
+   an environment secret, so the two environments name different projects.
 4. Create the `development` and `production` GitHub Environments, add the six
    secrets to each, and add a required reviewer to `production`.
 5. In repository settings, set Pages to build from GitHub Actions.
