@@ -112,8 +112,6 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .organisation-symbol { display: grid; place-items: center; flex-shrink: 0; width: 42px; height: 42px; border-radius: 10px; background: var(--brand-soft); color: var(--brand); font-size: 1.1rem; font-weight: 700; }
 .organisation-label { display: flex; flex-direction: column; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .organisation-label .muted { font-size: .8rem; }
-.active-organisation { border-left: 3px solid var(--brand); overflow-wrap: anywhere; }
-.active-organisation p:last-child { margin: 0; }
 .create-card > p { font-size: .9rem; margin-bottom: 24px; }
 .skip-link { position: absolute; left: 16px; top: -100px; background: var(--surface); padding: 12px 20px; z-index: 10; }
 .skip-link:focus { top: 12px; }
@@ -345,3 +343,37 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .date-picker-entry .button { flex: none; }
 .date-picker-error { color: var(--danger); font-size: .75rem; margin: 8px 0 0; }
 .date-picker-popover input.calendar-year { width: 62px; min-height: 30px; padding: 3px 5px; border-color: var(--border); text-align: center; font-size: .85rem; font-weight: 650; }
+
+.organisation-card { text-decoration: none; }
+
+.organisation-entry { display: flex; align-items: center; gap: 12px; }
+.organisation-entry .organisation-card { flex: 1; min-width: 0; }
+.organisation-entry > button { flex-shrink: 0; }
+
+.management-dialog { width: 70vw; height: 70dvh; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); overflow: hidden; }
+.management-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.management-dialog[open] { display: flex; flex-direction: column; }
+.management-dialog-toolbar { display: flex; flex-shrink: 0; justify-content: flex-end; padding: 2px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.management-dialog-close.button.secondary { width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; }
+.management-dialog-close.button.secondary:hover { background: var(--brand-soft); }
+.management-dialog-content { min-height: 0; overflow: auto; padding: 24px; }
+@media (max-width: 640px) { .management-dialog { width: calc(100vw - 32px); } .management-dialog-content { padding: 16px; } }
+
+.invite-member-panel { background: var(--brand-soft); border-radius: var(--radius); padding: 20px; }
+.invite-member-panel h2 { margin-bottom: 0; }
+.invitation-form { display: flex; align-items: flex-start; gap: 12px; }
+.invitation-form .field { flex: 1; min-width: 0; }
+.invitation-form > .button { flex-shrink: 0; margin-top: 30px; }
+.member-roster-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.member-identity { min-width: 0; }
+.member-name { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.member-roster-row .member-role { font-size: .8rem; margin: 4px 0 0; }
+.member-roster-row .actions { justify-content: flex-end; flex-shrink: 0; }
+@media (max-width: 640px) { .invitation-form { flex-direction: column; } .invitation-form .field { width: 100%; } .invitation-form > .button { margin-top: 0; } .member-roster-row .actions { flex-direction: column; align-items: stretch; } .member-roster-row .button { padding: 8px 10px; font-size: .8rem; } }
+
+.notification-banner { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 1000; width: max-content; max-width: calc(100vw - 32px); padding: 12px 20px; border: 1px solid var(--brand-border); border-radius: var(--radius); background: var(--brand-soft); color: var(--ink); box-shadow: 0 4px 20px #20233620; pointer-events: none; overflow-wrap: anywhere; }
+.outgoing-invitation-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.invitation-identity { min-width: 0; }
+.outgoing-invitation-row p { margin: 4px 0 0; font-size: .8rem; }
+.outgoing-invitation-row .actions { flex-shrink: 0; justify-content: flex-end; }
+@media (max-width: 640px) { .outgoing-invitation-row .actions { flex-direction: column; align-items: stretch; } .outgoing-invitation-row .button { padding: 8px 10px; font-size: .8rem; } }

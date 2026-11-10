@@ -31,8 +31,7 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
   const reader = await context.newPage();
   try {
     await login(page, pm);
-    await page.getByRole("button", { name: /Requirements team Admin/ }).click();
-    await page.getByRole("link", { name: "View requests", exact: true }).click();
+    await page.getByRole("link", { name: /Requirements team Admin/ }).click();
     await page.getByRole("button", { name: "New task", exact: true }).click();
     await page.getByRole("button", { name: "Start manually", exact: true }).click();
     await page.getByLabel("Title", { exact: true }).focus();

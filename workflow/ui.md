@@ -60,3 +60,14 @@ Calendar colors use existing purple brand tokens. Read-only date presentation
 stays in the ticket display. Do not use UTC serialization or year-remapping
 Date constructors for calendar-only values. The exact-entry range is years
 0001–9999; calendar navigation is bounded to the same range.
+
+
+## Temporary notifications
+
+Use `NotificationBanner` from shared UI for temporary success feedback. Pass
+`message` and a stable `onDismiss`; mount a new keyed instance for each event,
+including repeated identical messages, to restart its three-second timer. The
+module owns timer cleanup and polite status announcements without moving focus.
+It floats at the viewport's top centre and occupies no layout space. Render
+inside the active dialog when present so it shares the browser's modal top layer.
+Keep actionable failures persistent with `Notice` rather than a temporary banner.

@@ -1,5 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, failureMessage } from "./http";
 import { Button, Field, Notice } from "./ui";
@@ -8,6 +10,7 @@ type Organisation = { id: string; name: string; isAdmin: boolean };
 type Account = { id: string; email: string; role: "PM" | "Developer" };
 export function Workspace() {
   const router = useRouter();
+  const manageTrigger = useRef<HTMLButtonElement | null>(null);
   const [account, setAccount] = useState<Account>();
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [selected, setSelected] = useState<Organisation>();
@@ -52,11 +55,26 @@ export function Workspace() {
     {error && <Notice danger>{error}</Notice>}{message && <Notice>{message}</Notice>}
     {!account ? <Button className="secondary" onClick={() => { setError(""); setLoading(true); setReload(n => n + 1); }}>Retry loading workspace</Button> : <div className="workspace-grid">
       <div className="stack"><div className="section-title"><h2>Your organisations</h2><span className="count">{organisations.length}</span></div>
-        {organisations.length === 0 ? <div className="card empty-state"><span className="empty-symbol" aria-hidden="true">◇</span><h3>Your team starts here</h3><p className="muted">Create an organisation to get started. You can belong to more than one.</p></div> : <ul className="organisation-list">{organisations.map(org => <li key={org.id}><button className={`organisation-card ${selected?.id === org.id ? "selected" : ""}`} aria-pressed={selected?.id === org.id} onClick={() => select(org.id)} disabled={pending}><span className="organisation-symbol" aria-hidden="true">{org.name.charAt(0).toUpperCase()}</span><span className="organisation-label"><strong>{org.name}</strong><span className="muted">{org.isAdmin ? "Admin" : "Member"}</span></span><span aria-hidden="true">↗</span></button></li>)}</ul>}
-        {selected && <div className="card active-organisation"><p className="eyebrow">Active organisation</p><h2>{selected.name}</h2><p className="muted">You have {selected.isAdmin ? "admin" : "member"} access to this organisation.</p><a className="button secondary" href={`/organisations/${selected.id}/requests`}>View requests</a></div>}
+        {organisations.length === 0 ? <div className="card empty-state"><span className="empty-symbol" aria-hidden="true">◇</span><h3>Your team starts here</h3><p className="muted">Create an organisation to get started. You can belong to more than one.</p></div> : <ul className="organisation-list">{organisations.map(org => <li className="organisation-entry" key={org.id}><Link className="organisation-card" href={`/organisations/${org.id}/requests`}><span className="organisation-symbol" aria-hidden="true">{org.name.charAt(0).toUpperCase()}</span><span className="organisation-label"><strong>{org.name}</strong><span className="muted">{org.isAdmin ? "Admin" : "Member"}</span></span><span aria-hidden="true">↗</span></Link><Button className="secondary" aria-label={`Manage ${org.name}`} aria-haspopup="dialog" onClick={event => { manageTrigger.current = event.currentTarget; void select(org.id); }} disabled={pending}>Manage</Button></li>)}</ul>}
       </div>
       <aside className="card create-card"><h2>Create an organisation</h2><p className="muted">Give your team a shared home. You will become its first admin.</p><form className="stack" onSubmit={create} aria-busy={pending}><Field id="organisation-name" label="Organisation name" maxLength={80} required value={name} onChange={e => setName(e.target.value)} disabled={pending} placeholder="e.g. Team Atlas" /><Button disabled={pending}>{pending ? "Please wait…" : "Create organisation"}</Button></form></aside>
     </div>}
-    {account && <Membership key={selected?.id ?? "inbox"} selected={selected} accountId={account.id} revision={membershipRevision} onChanged={() => { setError(""); setReload(n => n + 1); }} />}
+    {account && <div hidden={Boolean(selected)}><Membership accountId={account.id} revision={membershipRevision} onChanged={() => { setError(""); setReload(n => n + 1); }} /></div>}
+    {account && selected && <ManagementDialog name={selected.name} onClose={() => { setSelected(undefined); requestAnimationFrame(() => manageTrigger.current?.focus()); }}><Membership showInbox={false} key={selected.id} selected={selected} accountId={account.id} revision={membershipRevision} onChanged={() => { setError(""); setReload(n => n + 1); }} /></ManagementDialog>}
   </section>;
+}
+
+function ManagementDialog({ name, onClose, children }: { name: string; onClose(): void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current!;
+    const previousOverflow = document.body.style.overflow;
+    dialog.showModal();
+    document.body.style.overflow = "hidden";
+    return () => { dialog.close(); document.body.style.overflow = previousOverflow; };
+  }, []);
+  return <dialog ref={ref} className="management-dialog" aria-label={`Manage ${name}`} onClose={() => { if (!ref.current?.open) onClose(); }}>
+    <header className="management-dialog-toolbar"><Button className="secondary management-dialog-close" autoFocus onClick={onClose} aria-label="Close management"><X className="ui-icon" aria-hidden="true" focusable="false" /></Button></header>
+    <div className="management-dialog-content" role="region" aria-label="Management content">{children}</div>
+  </dialog>;
 }

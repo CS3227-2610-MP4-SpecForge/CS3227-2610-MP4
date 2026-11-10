@@ -23,8 +23,7 @@ export function localFixture() {
       const token = `${body}.${createHmac("sha256", process.env.LOCAL_SUPABASE_JWT_SECRET!).update(body).digest("base64url")}`;
       return createClient(url, process.env.LOCAL_SUPABASE_ANON_KEY!, { ...options, accessToken: async () => token });
     },
-    async actor(role: "PM" | "Developer", confirmed = true) {
-      const email = `test-${randomUUID()}@example.com`;
+    async actor(role: "PM" | "Developer", confirmed = true, email = `test-${randomUUID()}@example.com`) {
       const username = `member_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
       const password = "Disposable-test-password-2026";
       const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: confirmed, user_metadata: { role, username } });
