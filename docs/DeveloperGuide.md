@@ -18,7 +18,9 @@ Studio 55323 and captured email inbox 55324. Source/configuration/migrations liv
 under `src/supabase/`. `db:start` applies migrations to a fresh local stack;
 `npm run db:reset` reapplies them by clearing **only disposable local data**.
 `npm run db:stop` stops the local stack. Wrappers refuse additional arguments and
-suppress CLI output that can contain generated local credentials.
+suppress CLI output that can contain generated local credentials. When a
+command fails, the tail of that output is relayed with credential-shaped values
+redacted, because a failure with no reason at all cannot be diagnosed in CI.
 
 `db:env` updates ignored `.env.local` with local Supabase public values, the
 server-only local AI worker key and `APP_ORIGIN`, preserving unrelated settings

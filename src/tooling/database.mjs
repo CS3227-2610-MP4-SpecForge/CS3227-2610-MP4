@@ -27,7 +27,21 @@ if (action === "env") {
 } else {
   const args = action === "reset" ? ["db", "reset", "--local", "--workdir", "src"] : [action, "--workdir", "src"];
   const result = spawnSync(cli, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 300_000, maxBuffer: 16 * 1024 * 1024 });
-  // CLI success and error output can contain generated credentials. Never relay it.
-  if (result.status !== 0) { console.error(`Local Supabase ${action} failed. Check Docker and src/supabase/config.toml; provider output suppressed.`); process.exit(1); }
+  // CLI output can contain generated credentials, so nothing is relayed verbatim.
+  // On failure the reason still has to reach the operator: a fully suppressed
+  // error leaves CI unable to tell a transient image pull from a real fault, so
+  // the tail of the output is relayed with credential-shaped values redacted.
+  if (result.status !== 0) {
+    console.error(`Local Supabase ${action} failed. Check Docker and src/supabase/config.toml.`);
+    if (result.error) console.error(`Reason: ${result.error.code === "ETIMEDOUT" ? "the command exceeded its 300s limit" : result.error.code}.`);
+    const redact = line => line
+      .replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, "[redacted-token]")
+      .replace(/\b(?:sbp|sb_publishable|sb_secret|sb)_[A-Za-z0-9_-]{8,}/g, "[redacted-key]")
+      .replace(/(:\/\/[^:\s]+:)[^@\s]+@/g, "$1[redacted]@")
+      .replace(/\b[A-Za-z0-9_-]{40,}\b/g, "[redacted-value]");
+    const tail = [result.stdout ?? "", result.stderr ?? ""].join("\n").split(/\r?\n/).map(line => line.trimEnd()).filter(Boolean).slice(-20);
+    if (tail.length > 0) console.error(["Provider output (credential-shaped values redacted):", ...tail.map(redact)].join("\n"));
+    process.exit(1);
+  }
   console.log(`Local Supabase ${action} succeeded. Credentials suppressed.`);
 }
