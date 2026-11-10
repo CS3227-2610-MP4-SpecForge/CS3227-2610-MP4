@@ -82,10 +82,13 @@ deployment, product-website and Developer test plan work
   tokens. Zero hosted Supabase operations. Token and cache figures for the
   assistant itself were not captured.
 - Remaining work / next action (use as a handoff only if unfinished):
-  1. Decide whether `gemma4:26b` is worth a fallback path. There is an unused
-     `SOCLAAS_FALLBACK_CHAT_MODEL` in the example file and no code reads it; a
-     single fallback on 503 would have hidden this outage, which is a design
-     decision, not an oversight to fix silently.
+  1. Decided, same session: no fallback model. A silent switch on 503 would
+     have hidden today's `gemma4:26b` outage, and an AI feature that quietly
+     answers from a different model than the one configured is harder to
+     reason about than one that fails visibly with `upstream_http` and the
+     provider's status in the diagnostic. `SOCLAAS_FALLBACK_CHAT_MODEL` stays
+     unread by any code and is now labelled as deliberately unimplemented in
+     `.env.example`, so nobody mistakes it for working configuration.
   2. The browser spec for the test plan panel is still unwritten, and it should
      now also cover the discarded-case message.
   3. Security specialist and independent code reviewer on the Developer AI
