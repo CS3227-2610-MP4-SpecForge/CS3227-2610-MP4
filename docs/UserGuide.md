@@ -274,6 +274,12 @@ so and saving is refused, so a plan built on older wording cannot be written ove
 newer behaviour. A saved plan whose ticket has since changed is shown with a
 warning to generate a fresh one.
 
+**Discarded suggestions.** Occasionally the model writes a case that is longer
+than a ticket can store, usually a rambling expected result. That single case is
+dropped and the rest are kept, and the panel's message says how many were
+discarded, so a count lower than the message implies is expected rather than a
+fault. Generate again if you want the dropped case back.
+
 **Limits.** 20 generations per developer per hour, one generation at a time per
 developer, and one saved plan per ticket. Cases are suggestions, not verified
 requirements: check them against the ticket before relying on them.

@@ -76,6 +76,42 @@ describe("Developer test plan provider", () => {
     expect(result.plan.cases).toEqual([oneCase]);
   });
 
+  it("keeps the usable cases and discards only the ones that overrun a stored limit", () => {
+    // Observed against the real provider: one case overran the expected-result
+    // limit and failing the whole generation lost five usable cases with it.
+    const result = validateTestPlanReply({ reply: "Six cases.", plan: { cases: [
+      oneCase,
+      { ...oneCase, title: "Overruns", expected: "x".repeat(testPlanLimits.expected + 1) },
+      { ...oneCase, title: "Unknown kind", kind: "regression" },
+      { ...oneCase, title: "Kept" },
+    ] } });
+    expect(result.plan.cases.map(item => item.title)).toEqual([oneCase.title, "Kept"]);
+    expect(result.reply).toBe("Six cases. 2 further suggested cases were discarded for exceeding the stored limits.");
+  });
+
+  it("reports a single discarded case in the singular", () => {
+    const result = validateTestPlanReply({ reply: "Two.", plan: { cases: [oneCase, { ...oneCase, steps: [] }] } });
+    expect(result.plan.cases).toHaveLength(1);
+    expect(result.reply).toBe("Two. 1 further suggested case was discarded for exceeding the stored limits.");
+  });
+
+  it("caps an over-long plan at the stored limit instead of refusing it", () => {
+    const offered = Array.from({ length: testPlanLimits.cases + 2 }, () => oneCase);
+    const result = validateTestPlanReply({ reply: "Many.", plan: { cases: offered } });
+    expect(result.plan.cases).toHaveLength(testPlanLimits.cases);
+    expect(result.reply).toContain("2 further suggested cases were discarded");
+  });
+
+  it("fails only when no case survives validation", () => {
+    expect(() => validateTestPlanReply({ reply: "One.", plan: { cases: [{ ...oneCase, title: "   " }] } })).toThrowError();
+  });
+
+  it("treats a blank preconditions string as absent", () => {
+    // The real provider sends "" rather than omitting the field.
+    const result = validateTestPlanReply({ reply: "One.", plan: { cases: [{ ...oneCase, preconditions: "   " }] } });
+    expect(Object.keys(result.plan.cases[0])).not.toContain("preconditions");
+  });
+
   it("supplies a human reply when the provider omits one", () => {
     expect(validateTestPlanReply({ plan: { cases: [oneCase] } }).reply).toBe("Review these suggested test cases.");
     expect(validateTestPlanReply({ reply: "   ", plan: { cases: [oneCase] } }).reply).toBe("Review these suggested test cases.");
@@ -85,7 +121,6 @@ describe("Developer test plan provider", () => {
     ["no plan at all", { reply: "Here you go." }],
     ["a null plan", { reply: "Here you go.", plan: null }],
     ["an empty case list", { reply: "None.", plan: { cases: [] } }],
-    ["more cases than the stored limit allows", { reply: "Many.", plan: { cases: Array.from({ length: testPlanLimits.cases + 1 }, () => oneCase) } }],
     ["an unknown kind", { reply: "One.", plan: { cases: [{ ...oneCase, kind: "regression" }] } }],
     ["a case with no steps", { reply: "One.", plan: { cases: [{ ...oneCase, steps: [] }] } }],
     ["more steps than allowed", { reply: "One.", plan: { cases: [{ ...oneCase, steps: Array.from({ length: testPlanLimits.steps + 1 }, () => "Click") }] } }],

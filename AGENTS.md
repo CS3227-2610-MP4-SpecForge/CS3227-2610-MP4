@@ -42,7 +42,11 @@ PM AI reliability/provider-wide quotas and hosted deployment remain unverified.
 and CI run 42550277324 on pull request #2 applied every migration to a
 disposable local Supabase and passed all 56 database tests (including the 4 for
 test plans) and the browser suite. The test plan panel still has no browser
-check of its own, and nothing in this slice has been executed against SoC LLM.
+check of its own. Both role AI features have now been executed against SoC LLM
+(`SPECFORGE_LIVE_AI=1 npx vitest run src/tests/soc-live.manual.test.ts`); the
+observed provider behaviour, including an unavailable model and a gateway
+deadline, is recorded in the developer guide. Hosted deployment remains
+unverified.
 Do not invent passing checks or treat future product scope as implemented.
 
 <!-- BEGIN:nextjs-agent-rules -->

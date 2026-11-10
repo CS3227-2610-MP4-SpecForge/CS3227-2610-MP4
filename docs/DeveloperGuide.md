@@ -470,6 +470,29 @@ ticket view.
 locked row and refuses a mismatch, and compares the expected plan revision with
 the stored one so two developers saving at once cannot silently clobber.
 
+### Observed provider behaviour
+
+Measured on 2026-11-10 against `https://soclaas-api.comp.nus.edu.sg/v1`, so
+treat the figures as one sample, not a service level:
+
+- `GET /models` listed 20 models. `qwen3.5:9b` and `gemma4:26b` are both
+  listed, but a chat completion on `gemma4:26b` returned HTTP 503 with
+  `no healthy provider backends` in about 30ms. A model appearing in `/models`
+  therefore does not mean it will serve a request, and the configured
+  `SOCLAAS_CHAT_MODEL` is `qwen3.5:9b`.
+- A successful call took 6.6s to 9.1s for a chat turn or a 12-case plan budget.
+  One attempt returned HTTP 502 after 60.1s, which looks like a gateway
+  deadline shorter than our own 90s `aiResponseTimeoutMs`. Both were mapped to
+  `upstream_http` with the status and elapsed time in the diagnostic, and
+  neither was retried automatically, which is the intended behaviour: a retry
+  here would spend a second admission against the hourly cap on a backend that
+  is already failing.
+- A 12-case plan request cost 472 prompt tokens and 490 completion tokens, so
+  the 3,000-token completion budget is not the binding constraint.
+- The model regularly writes one case that overruns a stored limit, usually the
+  expected result. Validation discards that case and keeps the rest; see the
+  plan shape above.
+
 ## Security and deployment gates
 
 - All mutations require exact configured `APP_ORIGIN`; never infer it from Host
@@ -623,10 +646,21 @@ Run type generation/build checks sequentially with browser tests: Next.js rewrit
 shared generated type references even with a separate output directory. For
 focused request checks, use `node src/tooling/test-local.mjs requests` or
 `SPECFORGE_BROWSER_ORIGIN=http://localhost:3001 node src/tooling/test-local.mjs requests-browser`.
+The one suite that spends real provider quota is opt-in and never runs in CI:
+
+```sh
+SPECFORGE_LIVE_AI=1 npx vitest run src/tests/soc-live.manual.test.ts
+```
+
+It makes exactly two calls, one per role feature, and is skipped unless
+`SPECFORGE_LIVE_AI=1` and both `SOCLAAS_API_KEY` and `SOCLAAS_CHAT_MODEL` are
+set. Run it after changing a prompt, a validator or a stored limit.
+
 Screenshots are ignored under `test-results/`; they are not submission evidence
 unless reviewed and summarized. The one-off legacy migration check is
 `node src/tooling/test-local.mjs migration` and runs only before the two-field
-migration is applied; ordinary tests explicitly skip it. Tests do not call SoCLaaS or hosted Supabase.
+migration is applied; ordinary tests explicitly skip it. Tests do not call SoCLaaS or hosted Supabase, apart from the opt-in live suite
+below.
 
 One lint dependency override upgrades `minimatch` under TypeScript ESLint to a
 patched compatible release. Re-evaluate the override when upstream updates.
