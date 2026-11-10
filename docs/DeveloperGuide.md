@@ -579,6 +579,16 @@ from request headers.
    `dev`, no direct pushes to `main`.
 2. Create two Supabase projects, development and production, and keep their
    service keys out of the repository and out of local `.env`.
+
+   Set each project's **Site URL** (Authentication, URL Configuration) to that
+   environment's deployed origin. A hosted project defaults to
+   `http://localhost:3000`, and the application does not pass an explicit
+   `emailRedirectTo`, so the default is what verification emails link to: a
+   deployed sign-up otherwise sends the user to their own machine. Note that
+   `src/supabase/config.toml` is the local stack's configuration and correctly
+   says `localhost`; `supabase db push` never touches hosted auth settings, but
+   `supabase config push` would overwrite them, so do not run it against a
+   deployed project.
 3. Create two empty Vercel projects, `specforge-dev` and `specforge`, without
    connecting a Git repository: Vercel's own Git deployments would take the
    automation out of the team's hands and race with `deploy.yml`. Set the
