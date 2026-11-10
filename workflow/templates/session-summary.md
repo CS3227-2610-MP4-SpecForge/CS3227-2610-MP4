@@ -3,7 +3,7 @@
 - Changes: <outcome and consequential decisions; link the spec/guide for detail>.
 - Validation: <final commands/results and material coverage gaps>.
 - Review: <material findings and fixes; verdict or outstanding review>.
-- Open: <unresolved issue, blocker or necessary next action>.
+- Open: <unresolved issue or blocker; one concrete next action for unfinished work>.
 
 The main agent writes this log. Aim for 100–200 words for a routine session;
 use more only for material evidence or unresolved risk. Omit inapplicable bullets.
@@ -27,3 +27,8 @@ relevant performance/cost investigation, and must be measured.
 Do not include secrets, private prompt content or hidden reasoning. Distinguish
 observed results from simulations or reconstruction. Preserve material security
 findings and validation limits even when shortening the log.
+
+For an unfinished task crossing a pause or chat boundary, follow the handoff
+format in `workflow/README.md`. Keep that temporary note in ignored
+`local/notes/active/`; this summary remains the durable outcome record. Do not
+copy the handoff here or link to a note that will be removed on completion.

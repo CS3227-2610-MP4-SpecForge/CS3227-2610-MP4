@@ -35,6 +35,46 @@ only when transferring unfinished work. Docs-only changes get relevant checks,
 not artificial unit tests. UI changes also get browser checks for consistency,
 accessibility and loading/error/empty states.
 
+## Resuming unfinished work
+
+At a meaningful pause or transfer of unfinished work, keep one short handoff at
+`local/notes/active/<task>.md` (create the directory only when needed). This folder
+is ignored by Git; pass the note explicitly when moving to another checkout or
+machine. Do not create a handoff for every edit or completed task. Update the same
+note in place instead of appending a transcript. Aim for 150–250 words; omit empty
+fields and link authoritative evidence rather than copying it.
+
+Use this format:
+
+```markdown
+# <unfinished task>
+
+Updated: <date, time and timezone>. State: <in progress or blocked>.
+Base: <commit and relevant working changes, when needed to interpret evidence>.
+
+- Objective and scope: <agreed outcome and spec or decision reference>.
+- Current state: <implemented, verified and pending work, clearly separated>.
+- Relevant files: <three to five paths and why each matters>.
+- Decisions and constraints: <consequential choices, permissions and exclusions>.
+- Evidence: <observed checks and scope/revision; link details and identify gaps>.
+- Next action: <one concrete starting action and the next validation needed>.
+- Blocker: <missing decision/dependency and owner; omit if none>.
+```
+
+On resumption, read the supplied note or inspect active filenames and open only
+the matching note. If none exists, use the agreed spec and relevant session
+summary; do not load every historical note. Check the current revision, relevant
+working changes and referenced evidence before dependent work. Flag stale or
+conflicting facts. Notes are reference material, not renewed approval for live
+calls, deployment or scope changes, and never contain secrets or hidden reasoning.
+
+When a recovery check is useful, ask a fresh agent to read `AGENTS.md` and the
+handoff and identify the next action, constraints and missing evidence in at most
+150 words. Correct material omissions. This checks recovery, not efficiency
+savings. On completion, preserve useful decisions in the existing spec or guide,
+write the normal session outcome once, and remove the active note. Do not link
+temporary handoffs from durable documentation or maintain a second history.
+
 ## Coordination and resource limits
 
 The main chat owns task ordering and one writer per checkout. Give each reviewer

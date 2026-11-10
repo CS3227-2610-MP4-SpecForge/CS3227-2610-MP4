@@ -17,6 +17,10 @@ invoke Superpowers automatically or maintain its per-task planning paperwork.
   Native skills, a root `GLOSSARY.md` and decision records under `docs/adr/` are
   natural exceptions; create glossary/ADRs only when useful, not for every task.
 - Do not log secrets, full sensitive prompts, hidden reasoning or invented metrics.
+- When resuming unfinished work, follow the handoff procedure in
+  `workflow/README.md`. Read the supplied handoff, or inspect filenames under
+  `local/notes/active/` and open only the note matching the task. Check its state
+  against the current checkout before acting; a note does not grant permission.
 - The app must use SoC LLM; exact provider limits are unverified. Deployment must
   use team-managed automation with separate development/production environments.
 

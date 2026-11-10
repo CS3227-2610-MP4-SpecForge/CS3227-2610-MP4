@@ -677,6 +677,14 @@ Project-local agent skills are versioned in `.agents/skills/` so that cloning th
 repository reproduces them, and `AGENTS.md` at the root is the entry point agents
 read first. Sanitised session summaries are in `logs/`.
 
+For unfinished work, the workflow also defines a concise handoff in ignored
+`local/notes/active/<task>.md`: agreed scope, current state, relevant files,
+decisions, evidence and a concrete next action. Agents check a matching note
+against the current checkout when resuming. These notes are local to a checkout;
+share the specific note explicitly for a handoff to another machine. Update them
+in place and remove them when complete, preserving lasting decisions in the
+existing spec or guide and outcomes in the normal session summary.
+
 ## Checks
 
 ```sh
