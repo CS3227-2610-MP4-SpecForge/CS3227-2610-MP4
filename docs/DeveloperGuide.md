@@ -76,6 +76,23 @@ the profile trigger. This difference remains visible to callers of that endpoint
 `GET/POST /api/organisations` list/create; `GET /api/organisations/[id]`
 selects a member-visible organisation. The membership slice adds the routes below.
 
+## Shared action notifications
+
+RootLayout mounts the client NotificationProvider from `src/components/notifications.tsx`.
+Call `useNotifications().notify(message, danger?)` for transient action feedback.
+`useNotificationState` adapts string state that must still gate recovery controls;
+expiry removes the global banner only, not the local recovery state. Do not use
+this adapter for text input or ongoing field validation. NotificationBanner owns
+presentation; the provider owns event identity, replacement and three-second timer
+cleanup. Error events use red alert styling and informational events use polite
+status styling. Repeated identical events restart the timer without overlap.
+
+ManagementDialog registers its native top-layer element explicitly so notifications
+from anywhere remain visible above the modal. Host changes preserve the deadline.
+Keep persistent save/conflict state, field guidance and saved AI history contextual.
+Browser coverage checks last-admin error expiry, signup verification navigation,
+invitation repeat timing, and developer test-plan content/retry preservation.
+
 ## Membership interfaces
 
 The approved [membership slice](../workflow/specs/2026-11-07-organisation-membership.md)

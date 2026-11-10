@@ -151,3 +151,72 @@ Human verification: plan awaiting approval; no implementation performed.
   Hosted behavior and fresh-stack migration replay not checked in this session.
 - Final generated next-env browser path restored. Human verification pending.
   Provider token/cache metrics and total elapsed time unavailable.
+
+## Commit and neutral initial modal focus
+
+- User requested committing completed work, then fixing the highlighted X when
+  Manage opens. Committed all prior reviewed changes as673c106 on ui-updates.
+- Approved correction recorded in the existing navigation spec. Removed X
+  autofocus and focused the named static content region after showModal; only
+  that region suppresses its outline. Control keyboard focus indicators remain.
+- Regression setup initially duplicated a declaration; corrected it, then observed
+  expected RED because X was focused. GREEN: three focused browser tests passed
+  in6.7s (PM/Developer creation plus initial content focus, Shift+Tab X access,
+  dismissal/restoration and navigation). npm run verify passed108 unit tests,
+  lint/typecheck/build;71 database/manual tests skipped. No authorization changes.
+- Independent read-only code/UI reviewer approved with no blocking findings.
+  Updated keyboard user guide; no full browser/database rerun for this small fix.
+- Focus follow-up remains uncommitted, separate from the requested prior commit.
+  No push or deployment. Human verification pending.
+
+## App notification standardization proposal
+
+- User requested notifications app-wide use the shared overlay banner, including
+  last-admin errors, retaining red error/failure styling. Inventoried Notice and
+  alert/status usage across modules; distinguished action feedback from loading,
+  validation, blocking state and saved AI history.
+- Proposed spec: workflow/specs/2026-11-10-app-notification-banners.md. Recommends
+  shared hosting/timing/replacement and three-second success/error notifications,
+  preserving contextual recovery controls. Awaiting explicit spec/test approval
+  under workflow/README.md; no implementation performed for this new scope yet.
+
+## App-wide notification banners implemented
+
+- User approved workflow/specs/2026-11-10-app-notification-banners.md. Main agent
+  implemented using local tdd/codebase-design guidance and the bundled Next.js
+  server/client provider guide. Preserved the uncommitted initial-focus fix.
+- Added root NotificationProvider: one current event, replacement, three-second
+  lifetime, unique identity for repeated messages and timer cleanup. Explicit
+  native-dialog registration portals the overlay into the modal top layer without
+  restarting its timer. NotificationBanner supports red alert and purple status.
+- Migrated action outcomes across membership, workspace, authentication/sign-out,
+  profile, request/list/editor, delivery, copy link, comments, member lookup, AI
+  discussion and test-plan modules. useNotificationState preserves local recovery
+  state independently of expiry. Kept loading/validation/save/conflict states and
+  saved AI failure history contextual. Signup verification link remains available.
+- RED: last-admin message was still notice danger instead of overlay. GREEN:
+  red overlay/expiry and retained controls passed. Corrected layout assertion to
+  account for modal scrolling when Leave is clicked; banner caused no layout shift.
+- Added Developer test-plan browser coverage: saved content survives success-banner
+  expiry and replacement-save failure leaves content/retry controls intact. Existing
+  repeated invitation tests cover timer restart; desktop/mobile screenshots inspected.
+- npm run verify passed: lint, typecheck,108 unit tests and production build;
+  71 database/manual tests skipped. No backend/database changes in this scope;
+  database integration suite not rerun for presentation-only migration.
+- Initial full browser run45/50: three unscoped alert selectors also matched Next's
+  route announcer; one matched both a persistent conflict hint and its new banner.
+  Corrected selectors to target the expected alert text. The remaining editor test
+  failed with description content in Title; setup now waits for intended initial
+  Title focus after Start manually before editing, synchronizing its queued focus.
+- Final complete browser suite: all50 passed in2.4m. Independent code/UI reviewer
+  approved implementation and rechecked final test fixes without weakened checks.
+  No security review needed: no permissions, storage or AI transport/context change.
+- Updated shared UI policy and user/developer guides. Generated next-env path
+  restored after browser checks. No new commit, push or deployment. Human review
+  pending. Token/cache metrics and total elapsed time not captured.
+
+## Commit and push requested
+
+- User explicitly requested committing and pushing the completed changes to the
+  remote UI branch. Confirmed ui-updates and the reviewed file inventory; diff
+  whitespace checks pass. Existing verification evidence above remains applicable.

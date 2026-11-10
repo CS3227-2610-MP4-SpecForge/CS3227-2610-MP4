@@ -1,7 +1,7 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, failureMessage } from "./http";
-import { Button, Field, Notice, Pill, NotificationBanner } from "./ui";
+import { Button, Field, Notice, Pill, useNotifications } from "./ui";
 
 type Invitation = { id: string; organisation_name: string; recipient_email: string; status: "pending" | "expired" | "declined"; expires_at: string };
 type Member = { user_id: string; username: string; email: string; app_role: string; is_admin: boolean };
@@ -15,11 +15,7 @@ export function Membership({ selected, accountId, revision, onChanged, showInbox
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [notification, setNotification] = useState<{ id: number; message: string }>();
-  const notificationId = useRef(0);
-  const dismissNotification = useCallback(() => setNotification(undefined), []);
+  const { notify } = useNotifications();
   const orgId = selected?.id;
   const isAdmin = selected?.isAdmin;
   useEffect(() => {
@@ -35,27 +31,23 @@ export function Membership({ selected, accountId, revision, onChanged, showInbox
     }).then(result => {
       if (!result) return;
       const [inbox, roster, sent] = result;
-      if (active) { setError(""); setInvitations(inbox.invitations); setMembers(roster.members); setOutgoing(sent.invitations); }
-    }).catch(failure => { if (active) setError(failureMessage(failure)); })
+      if (active) { setInvitations(inbox.invitations); setMembers(roster.members); setOutgoing(sent.invitations); }
+    }).catch(failure => { if (active) notify(failureMessage(failure), true); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [orgId, isAdmin, revision]);
+  }, [orgId, isAdmin, revision, notify]);
   async function act(path: string, input: object, confirmation?: string) {
     if (pending || (confirmation && !window.confirm(confirmation))) return;
-    setPending(true); setError(""); setMessage("");
+    setPending(true);
     try {
       const result = await api(path, input);
-      if (["Invitation created.", "Invitation already pending.", "The invitation has been withdrawn"].includes(result.message)) {
-        setNotification({ id: ++notificationId.current, message: result.message });
-      } else setMessage(result.message);
+      notify(result.message);
       setEmail(""); onChanged();
-    } catch (failure) { setError(failureMessage(failure)); }
+    } catch (failure) { notify(failureMessage(failure), true); }
     finally { setPending(false); }
   }
   return <section className="stack membership-section" aria-label="Organisation membership" aria-busy={loading || pending}>
-    {showInbox && <div className="section-title"><h2>Membership</h2><Button className="secondary" disabled={pending || loading} onClick={() => { setError(""); onChanged(); }}>Refresh membership</Button></div>}
-    {notification && <NotificationBanner key={notification.id} message={notification.message} onDismiss={dismissNotification} />}
-    {error && <Notice danger>{error}</Notice>}{message && <Notice>{message}</Notice>}
+    {showInbox && <div className="section-title"><h2>Membership</h2><Button className="secondary" disabled={pending || loading} onClick={() => { onChanged(); }}>Refresh membership</Button></div>}
     {loading ? <Notice>Loading membership…</Notice> : <>
       {showInbox && <div className="card"><h2>Your invitations</h2>{invitations.length === 0 ? <p className="muted">No pending invitations.</p> : <ul className="organisation-list">{invitations.map(invitation => <li className="membership-row" key={invitation.id}>
         <strong>{invitation.organisation_name}</strong><p className="muted">{invitation.status === "expired" ? "Expired — ask an admin to resend." : `Expires ${new Date(invitation.expires_at).toLocaleString()}`}</p>

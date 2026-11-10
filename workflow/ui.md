@@ -64,10 +64,25 @@ Date constructors for calendar-only values. The exact-entry range is years
 
 ## Temporary notifications
 
-Use `NotificationBanner` from shared UI for temporary success feedback. Pass
-`message` and a stable `onDismiss`; mount a new keyed instance for each event,
-including repeated identical messages, to restart its three-second timer. The
-module owns timer cleanup and polite status announcements without moving focus.
-It floats at the viewport's top centre and occupies no layout space. Render
-inside the active dialog when present so it shares the browser's modal top layer.
-Keep actionable failures persistent with `Notice` rather than a temporary banner.
+Use the shared notification mechanism for transient action success/error feedback
+throughout the app. RootLayout mounts NotificationProvider, which owns one event,
+replacement and the three-second timer. `useNotifications().notify(message,
+danger?)` emits an event, including repeated identical messages. `danger` selects
+red alert styling; other outcomes use the purple polite status presentation.
+
+`useNotificationState(danger?)` adapts existing string state when it also controls
+recovery/retry UI: its setter emits nonempty messages, and the local value remains
+independent of banner expiry. Clearing that value does not clear unrelated global
+notifications. It can override the default danger tone per event. Use ordinary
+state for user input and field validation, rather than this notification adapter.
+
+ManagementDialog registers its native dialog with the provider after showModal
+and unregisters on cleanup. The provider portals the same notification into the
+active modal's top layer, or renders at the page level when there is no modal.
+Host changes do not restart the event timer. Banners float at viewport top centre,
+occupy no layout space, and do not move focus or block pointer interaction.
+
+Keep loading/progress, empty states, field validation, save/conflict state and
+saved AI failure history contextual. Their state and retry/reconciliation controls
+must remain available after a related transient banner expires. `Notice` remains
+available for those contextual states; action feedback uses the provider.

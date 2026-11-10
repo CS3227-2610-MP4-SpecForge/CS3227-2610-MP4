@@ -377,3 +377,7 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .outgoing-invitation-row p { margin: 4px 0 0; font-size: .8rem; }
 .outgoing-invitation-row .actions { flex-shrink: 0; justify-content: flex-end; }
 @media (max-width: 640px) { .outgoing-invitation-row .actions { flex-direction: column; align-items: stretch; } .outgoing-invitation-row .button { padding: 8px 10px; font-size: .8rem; } }
+
+.management-dialog-content:focus { outline: none; }
+
+.notification-banner.danger { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }

@@ -89,3 +89,12 @@ Non-admin management keeps existing leave-only permissions. Reopen modal to
 refresh remote changes; keep inbox refresh outside modal. Existing browser seam
 covers layout/actions/order and SQL RPC tests cover username data, ordering and
 admin-only organisation isolation. These extend the approved testing interfaces.
+
+## Approved follow-up: neutral initial modal focus
+
+User requested the X not be selected/highlighted when Manage opens the modal.
+Move initial programmatic focus to the named static management content region,
+without a focus outline on that region. Retain visible keyboard focus on controls,
+native focus containment, Escape dismissal and focus restoration. Extend the
+existing Playwright modal test to verify neutral initial focus and keyboard access
+to the X. This is an approved correction to the existing modal behavior.

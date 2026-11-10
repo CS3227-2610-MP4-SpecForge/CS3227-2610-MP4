@@ -5,7 +5,7 @@ import { assistanceMessages } from "@/assistance";
 import type { ChatTurn } from "@/chat";
 import { sameFields, type RequestFields } from "@/requests";
 import { api, ApiWaitTimeout, failureMessage } from "./http";
-import { Button, Notice, TextareaField } from "./ui";
+import { Button, Notice, TextareaField, useNotificationState } from "./ui";
 import { Markdown } from "./markdown";
 type SendInput = { key: string; revision: number; fields: RequestFields; message: string; retry: boolean };
 export function ChatPanel({ path, fields, revision, canSend, starting, onManual, onRoughIdea, onSuggestion, children, header, review }: {
@@ -17,7 +17,7 @@ export function ChatPanel({ path, fields, revision, canSend, starting, onManual,
   const [open, setOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useNotificationState(true);
   const [replayInput, setReplayInput] = useState<SendInput | null>(null);
   const [unresolved, setUnresolved] = useState(false);
   const operation = useRef(false);
@@ -43,7 +43,7 @@ export function ChatPanel({ path, fields, revision, canSend, starting, onManual,
       setReplayInput(null);
       setError(failureMessage(failure) + " Reopen the AI assistant to check again.");
     }
-  }, [path]);
+  }, [path, setError]);
   const syncConversation = useCallback(async () => {
     if (operation.current) return;
     operation.current = true;
@@ -103,7 +103,7 @@ export function ChatPanel({ path, fields, revision, canSend, starting, onManual,
         {(busy || running) && <span role="status">AI is responding… You can keep editing.</span>}
         {!canSend && <span className="hint">Wait for autosave or resolve save errors before asking AI.</span>}
         {review}
-        {error && <Notice danger>{error}</Notice>}
+
         {replayInput && <Button disabled={busy || running || loading || !canSend} onClick={() => send({ ...replayInput, revision, fields: { ...fields } }, true)}>{replayInput.revision === revision && sameFields(replayInput.fields, fields) ? "Retry reconciled send" : "Send reconciled message with current task"}</Button>}
         {loading && turns.length === 0 ? <Notice>Loading chat…</Notice> : turns.length === 0 && <p className="muted">Ask a question or tell AI how to improve your ticket.</p>}
         <div className="chat-transcript" aria-label="Conversation">

@@ -2,7 +2,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { TicketMember } from "@/delivery";
 import { api, failureMessage } from "./http";
-import { Button, Notice } from "./ui";
+import { Button, useNotificationState } from "./ui";
 
 type MemberPage = { members: TicketMember[]; selected_members: TicketMember[]; next_cursor: string | null };
 const assigneeLimit = 5;
@@ -14,8 +14,8 @@ export function TicketMembers({ organisationId, selected, onChange, disabled = f
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [identityError, setIdentityError] = useState("");
+  const [error, setError] = useNotificationState(true);
+  const [identityError, setIdentityError] = useNotificationState(true);
   const [reload, setReload] = useState(0);
   const generation = useRef(0);
   const paging = useRef(false);
@@ -36,7 +36,7 @@ export function TicketMembers({ organisationId, selected, onChange, disabled = f
         .finally(() => { if (current) setLoading(false); });
     }, 250);
     return () => { current = false; window.clearTimeout(timer); };
-  }, [path, search, reload, editing, directory]);
+  }, [path, search, reload, editing, directory, setError]);
   useEffect(() => { onMembers?.(page.members); }, [page.members, onMembers]);
   useEffect(() => {
     if (!selectedKey) return;
@@ -45,7 +45,7 @@ export function TicketMembers({ organisationId, selected, onChange, disabled = f
       if (current) { setIdentities(result.selected_members); setIdentityError(""); }
     }).catch(failure => { if (current) setIdentityError(failureMessage(failure)); });
     return () => { current = false; };
-  }, [path, selectedKey, reload]);
+  }, [path, selectedKey, reload, setIdentityError]);
   const options = page.members.filter(member => !selected?.includes(member.user_id));
   const selectedCount = selected?.length ?? 0;
   const full = selectedCount >= assigneeLimit;
@@ -79,10 +79,10 @@ export function TicketMembers({ organisationId, selected, onChange, disabled = f
   function label(userId: string) { return identities.find(member => member.user_id === userId)?.email ?? "Assignee unavailable"; }
   if (directory) return <div className="stack member-picker">
     {loading && <p role="status">Loading members…</p>}
-    {error && <><Notice danger>{error}</Notice><Button type="button" className="secondary" onClick={retry}>Retry member list</Button></>}
+    {error && <><Button type="button" className="secondary" onClick={retry}>Retry member list</Button></>}
     {page.next_cursor && <Button type="button" className="secondary" disabled={loading || disabled} onClick={more}>Load more members</Button>}
   </div>;
-  if (!onChange) return <div className="field"><span className="field-label">Assignees</span><span className="field-value">{selected?.length ? selected.map(label).join(", ") : "Unassigned"}</span>{selectedKey && identityError && <><Notice danger>{identityError}</Notice><Button type="button" className="secondary" onClick={retry}>Retry assignee emails</Button></>}</div>;
+  if (!onChange) return <div className="field"><span className="field-label">Assignees</span><span className="field-value">{selected?.length ? selected.map(label).join(", ") : "Unassigned"}</span>{selectedKey && identityError && <><Button type="button" className="secondary" onClick={retry}>Retry assignee emails</Button></>}</div>;
   return <div className="field assignee-picker" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) { setOpen(false); setActiveIndex(-1); } }}>
     <div className="assignee-label">
       <label htmlFor={id}>Assignees</label>
@@ -96,14 +96,14 @@ export function TicketMembers({ organisationId, selected, onChange, disabled = f
         else if (event.key === "Enter") { event.preventDefault(); if (expanded && !loading && options[activeIndex]) choose(options[activeIndex]); }
       }} />
     </div>
-    {selectedKey && identityError && <><Notice danger>{identityError}</Notice><Button type="button" className="secondary" onClick={retry}>Retry assignee emails</Button></>}
+    {selectedKey && identityError && <><Button type="button" className="secondary" onClick={retry}>Retry assignee emails</Button></>}
     {expanded && <div className="assignee-popover">
       <div ref={list} id={`${id}-list`} role="listbox" aria-label="Matching members" className="assignee-options" aria-busy={loading}>
         {options.map((member, index) => <button type="button" role="option" aria-selected={index === activeIndex} tabIndex={-1} id={`${id}-option-${index}`} key={member.user_id} onMouseDown={event => event.preventDefault()} onClick={() => choose(member)}>{member.email}</button>)}
       </div>
       {loading && <p className="hint" role="status">Loading members…</p>}
       {!loading && !error && !options.length && <p className="hint" role="status">No matching members.</p>}
-      {error && <><Notice danger>{error}</Notice><Button type="button" className="secondary" onClick={retry}>Retry member list</Button></>}
+      {error && <><Button type="button" className="secondary" onClick={retry}>Retry member list</Button></>}
       {page.next_cursor && <Button type="button" className="secondary" disabled={loading} onClick={more}>Load more members</Button>}
     </div>}
   </div>;

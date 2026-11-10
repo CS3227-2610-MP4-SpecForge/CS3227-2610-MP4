@@ -59,6 +59,10 @@ for (const role of ["PM", "Developer"] as const) {
       expect(denied.status()).toBe(401);
       let token = "";
       await expect.poll(async () => { token = await codeFor(email); return Boolean(token); }).toBe(true);
+      if (role === "PM") {
+        await expect(page.getByRole("status").filter({ hasText: "Check your email" })).toHaveCount(0, { timeout: 4500 });
+        await expect(page.getByRole("link", { name: "Enter your verification code" })).toBeVisible();
+      }
       await page.getByRole("link", { name: "Enter your verification code" }).click();
       await expect(page).toHaveURL(/\/verify-email$/);
       await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
@@ -123,7 +127,7 @@ for (const role of ["PM", "Developer"] as const) {
       await accountControl.click();
       await page.route("**/api/auth/signout", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Please try signing out again." }) }));
       await signout.click();
-      await expect(navigation.getByRole("alert")).toHaveText("Please try signing out again.");
+      await expect(page.getByRole("alert").filter({ hasText: "Please try signing out again." })).toHaveText("Please try signing out again.");
       await expect(signout).toBeEnabled();
       await page.unroute("**/api/auth/signout");
       await signout.click();
@@ -212,6 +216,11 @@ test("organisation links navigate directly and Manage switches team context", as
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("button", { name: "Manage First team", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Manage First team", exact: true })).toBeVisible();
+    const initialClose = page.getByRole("button", { name: "Close management", exact: true });
+    await expect(initialClose).not.toBeFocused();
+    await expect(page.getByRole("region", { name: "Management content", exact: true })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(initialClose).toBeFocused();
     await expect(page.getByRole("dialog", { name: "Manage First team", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Close management", exact: true }).press("Escape");
     await expect(page.getByRole("button", { name: "Manage First team", exact: true })).toBeFocused();

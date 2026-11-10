@@ -613,7 +613,7 @@ test("a failed Update preserves editable metadata and a lost response confirms t
     await setDueDate(page, "");
     await page.getByRole("button", { name: "Update", exact: true }).click();
     await page.getByRole("button", { name: "Check saved version", exact: true }).click();
-    await expect(page.getByText(/The saved version is unchanged/)).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: /The saved version is unchanged/ })).toBeVisible();
     await expect(page.getByLabel("Due date", { exact: true })).toBeEnabled();
     await setDueDate(page, "2026-12-25");
     await page.route(`**/api/organisations/${org}/requests/${draft.id}`, async route => {

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Building2 } from "lucide-react";
 import { legacyUsernamePrefix, reservedUsernameMessage, usernameHint, usernamePattern } from "@/usernames";
 import { api, ApiError, failureMessage } from "./http";
-import { BackLink, Button, Field, Notice } from "./ui";
+import { BackLink, Button, Field, Notice, useNotificationState } from "./ui";
 import { publishAccount } from "./account-events";
 import { useUnsavedChanges } from "./use-unsaved-changes";
 
@@ -18,9 +18,9 @@ export function Profile() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError] = useNotificationState(true);
   const [validation, setValidation] = useState("");
-  const [message, setMessage] = useState("");
+  const [, setMessage] = useNotificationState(false);
   const [revision, setRevision] = useState(0);
   const saving = useRef(false);
   const dirty = Boolean(account && username !== account.username);
@@ -36,7 +36,7 @@ export function Profile() {
       else setError(failureMessage(failure));
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [router, revision]);
+  }, [router, revision, setError]);
 
   async function save(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,7 +55,7 @@ export function Profile() {
     } finally { saving.current = false; setPending(false); }
   }
   if (loading) return <Notice>Loading your profile…</Notice>;
-  if (!account) return <section><h1>Your profile</h1><Notice danger>{error || "Profile unavailable."}</Notice><Button className="secondary" onClick={() => { setError(""); setLoading(true); setRevision(n => n + 1); }}>Retry loading profile</Button></section>;
+  if (!account) return <section><h1>Your profile</h1><p className="muted">Profile unavailable.</p><Button className="secondary" onClick={() => { setError(""); setLoading(true); setRevision(n => n + 1); }}>Retry loading profile</Button></section>;
   const role = account.role === "PM" ? "Product Manager" : "Developer";
   return <section className="profile-page">
     <BackLink href="/workspace">Back to workspace</BackLink>
@@ -70,7 +70,7 @@ export function Profile() {
         <form onSubmit={save} className="stack" aria-busy={pending}>
           <Field id="profile-username" label="Username" value={username} onChange={event => { setUsername(event.target.value); setValidation(""); setMessage(""); }} required minLength={3} maxLength={24} pattern={usernamePattern} autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={pending} hint={validation || usernameHint} aria-invalid={Boolean(validation)} />
           <dl className="profile-facts"><div><dt>Email address</dt><dd><span>{account.email}</span><span className="profile-verified"><CheckCircle2 className="ui-icon" aria-hidden="true" />Verified</span></dd></div><div><dt>Application role</dt><dd>{role}<span className="hint">Chosen at signup. Your application role stays the same across organisations.</span></dd></div></dl>
-          {error && <Notice danger>{error}</Notice>}{message && <Notice>{message}</Notice>}
+
           <div className="actions profile-form-actions"><Button disabled={!dirty || pending}>{pending ? "Saving…" : "Save changes"}</Button><Button type="button" className="secondary" disabled={!dirty || pending} onClick={() => { setUsername(account.username); setValidation(""); setError(""); setMessage(""); }}>Cancel</Button></div>
         </form>
       </section>

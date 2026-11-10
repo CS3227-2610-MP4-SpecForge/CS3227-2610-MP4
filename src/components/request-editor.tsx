@@ -11,7 +11,7 @@ import { TicketDelivery, TicketDeliveryFields, CopyTicketLink } from "./ticket-d
 import { TicketVisibility } from "./ticket-visibility";
 import { TicketActivity } from "./ticket-activity";
 import { TestPlanPanel } from "./test-plan-panel";
-import { BackLink, Button, Field, Notice } from "./ui";
+import { BackLink, Button, Field, Notice, useNotificationState, useNotifications } from "./ui";
 import { useUnsavedChanges } from "./use-unsaved-changes";
 
 type Problem = { kind: "conflict" | "ambiguous" | "retry" | "denied"; message: string };
@@ -21,7 +21,7 @@ export function RequestScreen({ organisationId, requestId }: { organisationId: s
   const [item, setItem] = useState<TicketRead>();
   const [organisationName, setOrganisationName] = useState<string>();
   const [account, setAccount] = useState<{ id: string; role: string }>();
-  const [error, setError] = useState("");
+  const [error, setError] = useNotificationState(true);
   const [reload, setReload] = useState(0);
   const path = `/api/organisations/${organisationId}/requests/${requestId}`;
   const listPath = `/organisations/${organisationId}/requests`;
@@ -31,13 +31,13 @@ export function RequestScreen({ organisationId, requestId }: { organisationId: s
       if (active) { setItem(result.request); setAccount(identity.account); setOrganisationName(organisation.organisation.name); setError(""); }
     }).catch(failure => { if (active) setError(failureMessage(failure)); });
     return () => { active = false; };
-  }, [path, organisationId, reload]);
-  if (error && (!item || !account || !organisationName)) return <section className="stack"><BackLink href={listPath} fullPage>Back to requests</BackLink><Notice danger>{error}</Notice><Button onClick={() => { setError(""); setReload(n => n + 1); }}>Retry loading request</Button></section>;
+  }, [path, organisationId, reload, setError]);
+  if (error && (!item || !account || !organisationName)) return <section className="stack"><BackLink href={listPath} fullPage>Back to requests</BackLink><p className="muted">Request unavailable.</p><Button onClick={() => { setError(""); setReload(n => n + 1); }}>Retry loading request</Button></section>;
   if (!item || !account || !organisationName) return <Notice>Loading request…</Notice>;
   if (item.author_id === account.id && account.role === "PM") return <RequestEditor key={item.id} initial={item} path={path} listPath={listPath} accountId={account.id} organisationName={organisationName} />;
   return <section className="stack request-page ticket-reader">
     <div className="ticket-topbar"><BackLink href={listPath} fullPage>Back to requests</BackLink><CopyTicketLink /></div>
-    {error && <Notice danger>{error} Your local input is preserved; retry Refresh saved request.</Notice>}
+    {error && <p className="hint">Your local input is preserved; retry Refresh saved request.</p>}
     <div className="card stack ticket-content">
       <TicketVisibility published={Boolean(item.submitted_at)} organisationName={organisationName} />
       <h1 className="ticket-title">{item.fields.title}</h1>
@@ -80,8 +80,9 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
   }
   const [busy, setBusy] = useState<"autosave" | "explicit" | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
-  const [message, setMessage] = useState("");
-  function reportProblem(value: Problem | null) { problemLive.current = value; setProblem(value); }
+  const { notify } = useNotifications();
+  const [, setMessage] = useNotificationState(false);
+  function reportProblem(value: Problem | null) { problemLive.current = value; setProblem(value); if (value) notify(value.message, true); }
   const operation = useRef(false);
   const leaving = useRef(false);
   const latest = useRef(fields);
@@ -185,7 +186,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
       review(turn); startManually();
       window.requestAnimationFrame(() => document.getElementById("ticket-suggestion")?.focus());
     } catch (failure) {
-      setMessage(failureMessage(failure)); review(turn); startManually();
+      setMessage(failureMessage(failure), true); review(turn); startManually();
       window.requestAnimationFrame(() => document.getElementById("ticket-suggestion")?.focus());
     }
   }
@@ -196,7 +197,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
       if (await replaceIfFresh(candidate.input_fields, candidate.base_revision, candidate.proposal, () => suggestionLive.current === candidate)) {
         review(null); setUndo(null); startManually(); setMessage("AI changes accepted. Review the ticket before publishing.");
       }
-    } catch (failure) { setMessage(failureMessage(failure)); }
+    } catch (failure) { setMessage(failureMessage(failure), true); }
   }
   async function undoDraft() {
     if (!undo) return;
@@ -204,7 +205,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
       if (await replaceIfFresh(undo.after, persisted.current.revision, undo.before)) {
         setUndo(null); setMessage("AI draft undone. Your original idea is restored.");
       }
-    } catch (failure) { setMessage(failureMessage(failure)); }
+    } catch (failure) { setMessage(failureMessage(failure), true); }
   }
   const blocked = Boolean(problem && problem.kind !== "retry");
   const pendingStatus = busy ? "Saving…" : problem ? "Save failed — local edits preserved" : dirty ? "Unsaved changes" : null;
@@ -214,7 +215,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
     <ChatPanel path={path + "/chat"} fields={fields} revision={stored.revision} canSend={!busy && !applying && !blocked && withinLimits && (published || !dirty)} starting={starting} onManual={startManually} onRoughIdea={value => edit("description", value)} onSuggestion={receiveSuggestion}
       header={<><BackLink href={listPath} fullPage>Back to requests</BackLink><CopyTicketLink /></>}
       review={<>
-        {message && <Notice>{message}</Notice>}
+
         {undo && <div className="actions"><Button className="secondary" disabled={Boolean(busy) || applying || blocked || !sameFields(fields, undo.after)} onClick={undoDraft}>Undo AI draft</Button></div>}
         {suggestion && <SuggestionReview turn={suggestion} fields={fields} revision={stored.revision} disabled={Boolean(busy) || applying || blocked} onAccept={() => { void acceptSuggestion(); }} onDiscard={() => { review(null); focusDescription(); }} />}
       </>}>
@@ -222,7 +223,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
         <TicketVisibility published={published} organisationName={organisationName} />
         <Field id="request-title" label="Title" form="request-content" required maxLength={320} value={fields.title} disabled={busy === "explicit"} onChange={event => edit("title", event.target.value)} />
         <TicketDeliveryFields item={stored} accountId={accountId} value={delivery} formId="request-content" disabled={busy === "explicit" || applying || blocked} onChange={editDelivery} />
-        {problem && <div className="stack"><Notice danger>{problem.message}</Notice><div className="actions">
+        {problem && <div className="stack"><p className="hint">{problem.message}</p><div className="actions">
           {problem.kind === "ambiguous" && <Button className="secondary" disabled={Boolean(busy)} onClick={reconcile}>Check saved version</Button>}
           {problem.kind === "retry" && !published && <Button disabled={Boolean(busy)} onClick={() => save("save_draft")}>Retry draft save</Button>}
           <Button className="secondary" disabled={Boolean(busy)} onClick={reloadSaved}>Reload saved version and discard edits</Button>

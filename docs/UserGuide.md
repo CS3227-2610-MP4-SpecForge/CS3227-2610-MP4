@@ -71,13 +71,26 @@ If saving fails, your typed name stays available for retry. Leaving with unsaved
 changes, including signing out, asks for confirmation. A profile loading failure
 has a **Retry loading profile** action.
 
+## Notifications
+
+Action feedback appears at the top centre of the screen for three seconds.
+Success/information uses purple styling; errors use red. New notifications replace
+older ones and restart the timer. Banners float above an open modal without
+moving its content or changing keyboard focus.
+
+Loading indicators, field guidance, save/conflict state and saved AI failure
+history stay beside their related controls. Retry/reconciliation controls and
+unsaved input remain available after an error banner disappears. Signup's
+verification link also remains available after its notification expires.
+
 ## Invitations and membership
 
 The management overlay groups invitation controls in a light-purple **Invite Member** panel. **Existing members** lists usernames with an Admin pill where applicable and their application role underneath. Admins appear first; each group is sorted alphabetically by username. Promote/demote controls appear beside each member.
 
 Choose **Manage** beside an organisation to open its management overlay. Close it
 with the **X** in the fixed header or Escape. The header stays visible while the
-management content scrolls. Admins use **Invite by email** for any email address,
+management content scrolls. On opening, Shift+Tab reaches the X; Tab moves
+through the management controls. Admins use **Invite by email** for any email address,
 including one that has not registered. The invitation immediately appears in
 **Outgoing invitations**. No invitation email is sent.
 
@@ -96,7 +109,9 @@ an invitation. Declined recipients need a fresh invitation to try again.
 Creation shows **Invitation created.** and cancellation shows **The invitation has
 been withdrawn** in a top-centre overlay for three seconds. These banners float
 above the modal without moving content. Duplicate sends show **Invitation already
-pending.** Failures stay visible so they can be addressed.
+pending.** Error/failure notifications also use three-second overlays, with a red
+background. Retry controls and blocked-save state remain available after the
+notification disappears.
 
 Admins see members and their fixed application roles. Use **Promote admin**,
 **Demote admin** or **Remove member** after confirming. Members can **Leave
