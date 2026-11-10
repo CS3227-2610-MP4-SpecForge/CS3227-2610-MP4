@@ -1,10 +1,12 @@
 # SpecForge development workflow
 
-Active decision: user selected this lighter setup on 2026-11-07. It supersedes
-the initial Superpowers design and setup plan. The main agent clarifies, designs
-and implements; specialized subagents provide independent scrutiny.
+The main agent clarifies, designs and implements; specialized subagents provide
+independent scrutiny. Do not invoke Superpowers automatically or introduce its
+per-task planning paperwork.
 
 ## Everyday use
+
+For new features or material behavior changes:
 
 1. Start from a brief request. Use `$grill-me` for a new/unclear feature; inspect
    existing code for facts rather than asking the user. Stop when behavior,
@@ -28,6 +30,9 @@ and implements; specialized subagents provide independent scrutiny.
 6. The main agent writes one concise, outcome-focused session log using
    [the summary template](templates/session-summary.md): changes, final validation,
    material review fixes and open issues. Human reviews/merges the feature.
+
+Routine fixes do not require a new feature spec unless they change agreed behavior
+or testing interfaces; clarify material ambiguity before coding.
 
 No automatic implementer subagent per edit, repeated full-suite runs without a
 reason, or separate handoff documents between these steps. Create a short handoff
@@ -111,15 +116,7 @@ follow it; nested skill references mean load that installed skill by name.
 - `domain-modeling`: dependency of that audit; glossary/ADRs created only when useful.
 - `specforge-security`: shared guidance for implementer and security specialist.
 
-We intentionally did not install Matt's `implement-spec`, `code-review`, or his
-whole plugin. Our reviewer brief avoids automatic dual review. See
-[THIRD_PARTY.md](THIRD_PARTY.md) for pinned provenance and local adaptations.
-
-Superpowers remains installed in the desktop environment. This repository's
-instructions opt out of its workflow, but cannot remove plugin metadata already
-in a running chat. For a completely clean context, disable Superpowers in the
-client's plugin settings and start a fresh chat; a repo-only toggle was not
-verified for this installed universal-directory plugin. Do not uninstall it globally.
+See [THIRD_PARTY.md](THIRD_PARTY.md) for pinned skill provenance and local adaptations.
 
 ## Artifact map
 
@@ -132,5 +129,6 @@ verified for this installed universal-directory plugin. Do not uninstall it glob
 Keep workflow files here except native-discovery `.agents/skills/` and root
 `AGENTS.md`; domain terms may live in root `GLOSSARY.md` and significant decision
 records in `docs/adr/`, matching the installed skills. Create both lazily.
-Explain them in the developer guide when application implementation
-begins. No app security, deployment or submission completeness is claimed yet.
+Document their purpose in the developer guide when introduced. Keep product
+behavior and setup in the guides, dated validation in session logs, and temporary
+state in handoffs; do not maintain a current-state inventory in `AGENTS.md`.
