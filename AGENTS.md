@@ -32,8 +32,11 @@ references are hidden from the user interface.
 Read `docs/DeveloperGuide.md` for setup/check commands.
 Deployment automation and the GitHub Pages product website now exist under
 `.github/workflows/` and `website/`: CI gates, a reusable deploy workflow and
-separate development (`dev`) and production (`main`) environments. No workflow
-has run against a hosting account yet, so no live deployment is claimed.
+separate development (`dev`) and production (`main`) environments. Both are
+deployed and serving: `specforge-dev.vercel.app` and
+`specforge-prod.vercel.app`, each against its own Supabase project, with
+migrations applied by the workflow. GitHub Pages is not enabled yet, so the
+product website is not published.
 The Developer role now has its own AI feature: generated test plans on published
 tickets, reviewed then saved to the ticket for the organisation. It reuses the
 shared bounded SoC transport in `src/server/soc.ts`; see the developer guide.
