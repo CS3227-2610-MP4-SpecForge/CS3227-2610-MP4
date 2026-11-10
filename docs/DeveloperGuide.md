@@ -584,6 +584,12 @@ from request headers.
    automation out of the team's hands and race with `deploy.yml`. Set the
    runtime variables above in each project's Production scope.
 
+   `vercel.json` at the repository root declares `framework: nextjs`. An empty
+   Vercel project defaults to no framework and then looks for a static `public`
+   directory, so the build fails after Next.js has already built successfully.
+   Declaring it in the repository keeps the setting in version control rather
+   than in a dashboard checkbox.
+
    Each environment deploys to its own project's production target rather than
    to a preview. A Vercel preview URL is unique per deployment, while
    `APP_ORIGIN` has to be one fixed origin, so a preview target would give the
