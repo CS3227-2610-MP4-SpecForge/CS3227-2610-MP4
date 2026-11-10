@@ -107,9 +107,36 @@ jobs:
       - name: Build
         run: vercel build ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
 
+      # Deployed from a copy of .vercel outside the checkout, so no .git is
+      # reachable from the working directory. The Vercel CLI otherwise reads the
+      # commit author out of the repository and the platform refuses to deploy a
+      # commit whose author is not the account owner, which is every commit from
+      # a teammate. Vercel is deliberately not connected to this repository, so
+      # it is not the authority on who may change it; the repository's own
+      # required checks and environment reviewers are. The commit and run are
+      # still recorded as deployment metadata so a deployment stays traceable.
+      #
+      # A blocked deployment never leaves the "Building" state, and the CLI waits
+      # on it indefinitely, so the deploy carries its own deadline. Without one
+      # the job runs until the 20 minute limit and reports only a cancellation.
       - name: Deploy
         id: deploy
         run: |
-          url="$(vercel deploy --prebuilt ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})"
+          workdir="$(mktemp -d)"
+          cp -R .vercel "$workdir/.vercel"
+          status=0
+          url="$(timeout 600 vercel deploy --prebuilt ${{ inputs.production && '--prod' || '' }} \
+            --cwd "$workdir" \
+            --meta commit="$GITHUB_SHA" \
+            --meta run="$GITHUB_RUN_ID" \
+            --token=${{ secrets.VERCEL_TOKEN }})" || status=$?
+          if [ "$status" -ne 0 ]; then
+            if [ "$status" -eq 124 ]; then
+              echo "::error::The ${{ inputs.environment }} deployment did not become ready within 10 minutes. A deployment that stays in Building is usually blocked by Vercel; check the deployment in the Vercel dashboard."
+            else
+              echo "::error::The ${{ inputs.environment }} deployment failed (exit $status)."
+            fi
+            exit 1
+          fi
           echo "url=$url" >>"$GITHUB_OUTPUT"
           echo "Deployed ${{ inputs.environment }} to $url" >>"$GITHUB_STEP_SUMMARY"
