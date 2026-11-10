@@ -2,7 +2,9 @@
 
 ## Local setup
 
-Requirements: Node.js 24, npm, Docker Desktop running. Dependencies are locked
+Requirements: Node.js 22, npm, Docker Desktop running. Node 22 is the version
+the deployment target supports, so local, CI and both environments run the same
+major; Vercel rejects a project whose `engines` ask for Node 24. Dependencies are locked
 in `package-lock.json`. Supabase CLI is pinned to the compatible 2.121.0 line;
 CLI 3 rejected the legacy inbox configuration during setup.
 

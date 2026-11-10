@@ -8,7 +8,7 @@ and collapsible private SoC discussion. Developers get the second role AI
 feature: generated test plans on published tickets, reviewed and then saved to
 the ticket for the whole organisation.
 
-Use Node.js 24 and Docker Desktop:
+Use Node.js 22 and Docker Desktop:
 
 ```sh
 npm ci
