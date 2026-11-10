@@ -43,6 +43,16 @@ jobs:
       - uses: actions/configure-pages@v5
         id: pages
 
+      # The site is served from /<repository>, not the domain root. Without a
+      # matching baseurl every theme asset resolves to the root and 404s, so the
+      # published site renders unstyled. Taken from configure-pages rather than
+      # hard-coded, so renaming the repository cannot silently break it again.
+      - name: Point the site at its published base path
+        run: |
+          base_path='${{ steps.pages.outputs.base_path }}'
+          echo "baseurl: ${base_path%/}" >>website/_config.yml
+          echo "url: ${{ steps.pages.outputs.origin }}" >>website/_config.yml
+
       - uses: actions/jekyll-build-pages@v1
         with:
           source: website
