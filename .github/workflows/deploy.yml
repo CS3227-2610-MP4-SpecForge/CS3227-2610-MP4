@@ -95,18 +95,21 @@ jobs:
           rm -f link.log push.log
           echo "Migrations applied to the ${{ inputs.environment }} project."
 
+      # Installed globally, not into the project. Inside node_modules the CLI's
+      # own builder packages get deduped against the application's dependencies
+      # and @vercel/next loses files it needs at build time.
       - name: Install Vercel CLI
-        run: npm install --no-save vercel@48.2.0
+        run: npm install --global vercel@48.2.0
 
       - name: Pull ${{ inputs.vercel-environment }} configuration
-        run: npx vercel pull --yes --environment=${{ inputs.vercel-environment }} --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=${{ inputs.vercel-environment }} --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build
-        run: npx vercel build ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy
         id: deploy
         run: |
-          url="$(npx vercel deploy --prebuilt ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})"
+          url="$(vercel deploy --prebuilt ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})"
           echo "url=$url" >>"$GITHUB_OUTPUT"
           echo "Deployed ${{ inputs.environment }} to $url" >>"$GITHUB_STEP_SUMMARY"
