@@ -72,14 +72,27 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
-          if ! supabase link --project-ref "$PROJECT_REF" --workdir src >/dev/null 2>&1; then
+          # CLI output can carry credentials, so it is never echoed verbatim.
+          # A failure with no reason at all cannot be diagnosed from a CI log,
+          # so the tail is relayed with credential-shaped values redacted.
+          redact() {
+            sed -E \
+              -e 's/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/[redacted-token]/g' \
+              -e 's/(sbp|sb_publishable|sb_secret|sb)_[A-Za-z0-9_-]{8,}/[redacted-key]/g' \
+              -e 's#(://[^:[:space:]]+:)[^@[:space:]]+@#\1[redacted]@#g' \
+              -e 's/[A-Za-z0-9_-]{40,}/[redacted-value]/g'
+          }
+          if ! supabase link --project-ref "$PROJECT_REF" --workdir src >link.log 2>&1; then
             echo "::error::Could not link the ${{ inputs.environment }} Supabase project. Check SUPABASE_PROJECT_REF and SUPABASE_ACCESS_TOKEN."
+            tail -n 30 link.log | redact
             exit 1
           fi
-          if ! supabase db push --workdir src >/dev/null 2>&1; then
-            echo "::error::Migration push failed for ${{ inputs.environment }}. Provider output suppressed; run it locally against the same project to see details."
+          if ! supabase db push --workdir src >push.log 2>&1; then
+            echo "::error::Migration push failed for ${{ inputs.environment }}."
+            tail -n 40 push.log | redact
             exit 1
           fi
+          rm -f link.log push.log
           echo "Migrations applied to the ${{ inputs.environment }} project."
 
       - name: Install Vercel CLI
