@@ -1,50 +1,125 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { api, failureMessage } from "./http";
-import { BackLink, Button, Notice, Pill } from "./ui";
-import { deadlineLabel, localDay, ticketPriorities, ticketStatuses, type TicketMember } from "@/delivery";
-import { PriorityPill, StatusPill } from "./ticket-pills";
+import { Search } from "lucide-react";
+import { api, ApiError, failureMessage } from "./http";
+import { BackLink, Button, Dropdown, Notice, Pill } from "./ui";
+import { ticketPriorities, ticketStatuses, type TicketMember, type TicketPriority, type TicketStatus } from "@/delivery";
+import { PriorityPill, StatusPill, priorityOptions, statusOptions } from "./ticket-pills";
 import { TicketMembers } from "./ticket-members";
 import type { TicketRead } from "@/requests";
 import { assigneeUsernameLabel } from "@/usernames";
 
+const statusFilterOptions = [
+  { value: "", label: "All statuses" },
+  { value: "draft", label: "Private drafts" },
+  ...Object.entries(ticketStatuses).map(([value, label]) => ({ value, label })),
+];
+const priorityFilterOptions = [
+  { value: "", label: "All priorities" },
+  ...Object.entries(ticketPriorities).map(([value, label]) => ({ value, label })),
+];
+const sortOptions = [
+  { value: "updated", label: "Recently updated" },
+  { value: "due", label: "Due date" },
+  { value: "status", label: "Status" },
+];
+type RequestPage = { requests: TicketRead[]; nextOffset: number | null };
+const emptyPage: RequestPage = { requests: [], nextOffset: null };
+
+function accessDenied(failure: unknown) {
+  return failure instanceof ApiError && (failure.status === 401 || failure.status === 403);
+}
+
 export function RequestList({ organisationId }: { organisationId: string }) {
-  const [items, setItems] = useState<TicketRead[]>([]);
+  const [{ requests: items, nextOffset }, setPage] = useState(emptyPage);
   const [organisation, setOrganisation] = useState("");
-  const [role, setRole] = useState("");
+  const [account, setAccount] = useState<{ id: string; role: string } | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [pending, setPending] = useState(false);
+  const [savingDelivery, setSavingDelivery] = useState(false);
+  const [deliveryError, setDeliveryError] = useState("");
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [members, setMembers] = useState<TicketMember[]>([]);
-  const [filters, setFilters] = useState({ search: "", status: "", priority: "", assignee: "", sort: "updated", overdue: false });
-  const [query, setQuery] = useState(""); const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [filters, setFilters] = useState({ search: "", status: "", priority: "", assignee: "", sort: "updated" });
+  const [query, setQuery] = useState("");
   const creationKey = useRef<string | null>(null);
+  const deliveryOperation = useRef(false);
+  const busy = pending || savingDelivery;
   const path = `/api/organisations/${organisationId}/requests`;
+  const assigneeOptions = [
+    { value: "", label: "Anyone" },
+    { value: "me", label: "Assigned to me" },
+    { value: "unassigned", label: "Unassigned" },
+    ...members.map(member => ({ value: member.user_id, label: `${member.username} (${member.app_role})` })),
+  ];
   useEffect(() => {
     let active = true;
-    Promise.all([api(path + query), api("/api/account"), api(`/api/organisations/${organisationId}`)]).then(([list, account, org]) => {
-      if (active) { setItems(list.requests); setNextOffset(list.nextOffset); setRole(account.account.role); setOrganisation(org.organisation.name); setError(""); }
-    }).catch(failure => { if (active) setError(failureMessage(failure)); }).finally(() => { if (active) setLoaded(true); });
+    Promise.all([api(path + query), api("/api/account"), api(`/api/organisations/${organisationId}`)]).then(([list, identity, org]) => {
+      if (active) { setPage(list); setAccount(identity.account); setOrganisation(org.organisation.name); setError(""); }
+    }).catch(failure => {
+      if (!active) return;
+      setPage(emptyPage);
+      if (accessDenied(failure)) setAccount(null);
+      setError(failureMessage(failure));
+    }).finally(() => { if (active) setLoaded(true); });
     return () => { active = false; };
   }, [path, organisationId, reload, query]);
   function applyFilters() {
-    if (pending) return;
+    if (busy || deliveryOperation.current) return;
     const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(filters)) if (value) params.set(key, String(value));
-    if (filters.overdue) params.set("today", localDay());
+    for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
+    setDeliveryError("");
     setLoaded(false); setQuery("?" + params.toString()); setReload(n => n + 1);
   }
   async function more() {
-    if (pending || nextOffset === null) return; setPending(true);
+    if (busy || deliveryOperation.current || nextOffset === null) return; setPending(true);
     try {
       const params = new URLSearchParams(query); params.set("offset", String(nextOffset));
-      const result = await api(path + "?" + params.toString());
-      setItems(current => [...current, ...result.requests.filter((item: TicketRead) => !current.some(old => old.id === item.id))]); setNextOffset(result.nextOffset); setError("");
-    } catch (failure) { setError(failureMessage(failure)); } finally { setPending(false); }
+      const result: RequestPage = await api(path + "?" + params.toString());
+      setPage(current => ({
+        requests: [...current.requests, ...result.requests.filter(item => !current.requests.some(old => old.id === item.id))],
+        nextOffset: result.nextOffset,
+      }));
+      setError("");
+    } catch (failure) {
+      if (accessDenied(failure)) { setPage(emptyPage); setAccount(null); }
+      setError(failureMessage(failure));
+    } finally { setPending(false); }
+  }
+  async function saveDelivery(item: TicketRead, changes: { status: TicketStatus } | { priority: TicketPriority }) {
+    if (busy || deliveryOperation.current) return;
+    deliveryOperation.current = true;
+    setSavingDelivery(true);
+    setDeliveryError("");
+    let saveError = "";
+    try {
+      await api(`${path}/${item.id}/delivery`, { revision: item.delivery_revision, changes });
+    } catch (failure) {
+      const conflict = failure instanceof ApiError && failure.status === 409;
+      saveError = conflict ? "This task changed before your edit could be saved."
+        : accessDenied(failure) ? "You no longer have permission to make this update."
+        : "Could not confirm the update. Check the current value before trying again.";
+    }
+    // The update can move the row or exclude it from the active filters. Re-read
+    // even on failure so a stale revision or a lost response is never replayed.
+    try {
+      const [list, identity] = await Promise.all([api(path + query), api("/api/account")]);
+      setPage(list);
+      setAccount(identity.account);
+      setError("");
+    } catch (failure) {
+      setPage(emptyPage);
+      if (accessDenied(failure)) setAccount(null);
+      setError("Could not reload requests. Select Apply filters to try again.");
+    } finally {
+      setDeliveryError(saveError);
+      deliveryOperation.current = false;
+      setSavingDelivery(false);
+    }
   }
   async function create() {
-    if (pending) return;
+    if (busy || deliveryOperation.current) return;
     setPending(true); setError("");
     creationKey.current ??= crypto.randomUUID();
     try {
@@ -53,29 +128,59 @@ export function RequestList({ organisationId }: { organisationId: string }) {
       // protects Back/Forward. Keep this consistent with the plain request links.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign(`/organisations/${organisationId}/requests/${result.request.id}`);
-    } catch (failure) { setError(failureMessage(failure)); setPending(false); }
+    } catch (failure) { setError(`${failureMessage(failure)} If draft creation failed, retrying uses the same creation key.`); setPending(false); }
   }
   return <section className="stack">
     <BackLink href="/workspace" fullPage>Back to workspace</BackLink>
-    <div className="page-heading"><div><p className="eyebrow">{organisation || "Organisation"}</p><h1>Requests</h1><p className="muted">Submitted requests are shared with your team. Drafts are private to their author.</p></div>{role === "PM" && <Button disabled={pending} onClick={create}>{pending ? "Creating…" : "New draft"}</Button>}</div>
-    {error && <Notice danger>{error} If draft creation failed, retrying uses the same creation key.</Notice>}
-    <form className="card stack" aria-label="Ticket filters" onSubmit={event => { event.preventDefault(); applyFilters(); }}>
-      <div className="ticket-filters">
-        <div className="field"><label htmlFor="ticket-search">Search tickets</label><input id="ticket-search" maxLength={160} value={filters.search} onChange={event => setFilters({ ...filters, search: event.target.value })} placeholder="Search by title" /></div>
-        <div className="field"><label htmlFor="filter-status">Status filter</label><select id="filter-status" value={filters.status} onChange={event => setFilters({ ...filters, status: event.target.value })}><option value="">All statuses</option><option value="draft">Private drafts</option>{Object.entries(ticketStatuses).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-        <div className="field"><label htmlFor="filter-priority">Priority filter</label><select id="filter-priority" value={filters.priority} onChange={event => setFilters({ ...filters, priority: event.target.value })}><option value="">All priorities</option>{Object.entries(ticketPriorities).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-        <div className="field"><label htmlFor="filter-assignee">Assignee filter</label><select id="filter-assignee" value={filters.assignee} onChange={event => setFilters({ ...filters, assignee: event.target.value })}><option value="">Anyone</option><option value="me">Assigned to me</option><option value="unassigned">Unassigned</option>{members.map(member => <option key={member.user_id} value={member.user_id}>{member.username} ({member.app_role})</option>)}</select></div>
-        <div className="field"><label htmlFor="filter-sort">Sort tickets</label><select id="filter-sort" value={filters.sort} onChange={event => setFilters({ ...filters, sort: event.target.value })}><option value="updated">Recently updated</option><option value="due">Due date</option></select></div>
+    <div>
+      <p className="eyebrow">{organisation || "Organisation"}</p>
+      <div className="page-heading requests-heading">
+        <h1>Requests</h1>
+        {account?.role === "PM" && <Button disabled={busy} onClick={create}>{pending ? "Creating…" : "New task"}</Button>}
       </div>
-      <label className="checkbox-field"><input type="checkbox" checked={filters.overdue} onChange={event => setFilters({ ...filters, overdue: event.target.checked })} />Overdue only</label>
-      <div className="actions"><Button disabled={pending}>Apply filters</Button></div>
+    </div>
+    {error && <Notice danger>{error}</Notice>}
+    {deliveryError && <Notice danger>{deliveryError}</Notice>}
+    <form className="card stack request-filters" aria-label="Ticket filters" onSubmit={event => { event.preventDefault(); applyFilters(); }}>
+      <div className="field request-search">
+        <input type="search" aria-label="Search by title" maxLength={160} value={filters.search} onChange={event => setFilters({ ...filters, search: event.target.value })} placeholder="Search by title" />
+        <Button type="submit" className="secondary" aria-label="Apply search" disabled={busy}><Search className="ui-icon" aria-hidden="true" /></Button>
+      </div>
+      <div className="ticket-filters">
+        <Dropdown id="filter-status" label="Status filter" value={filters.status} options={statusFilterOptions} onChange={status => setFilters({ ...filters, status })} fitOptions />
+        <Dropdown id="filter-priority" label="Priority filter" value={filters.priority} options={priorityFilterOptions} onChange={priority => setFilters({ ...filters, priority })} fitOptions />
+        <Dropdown id="filter-assignee" label="Assignee filter" value={filters.assignee} options={assigneeOptions} onChange={assignee => setFilters({ ...filters, assignee })} fitOptions />
+        <Dropdown id="filter-sort" label="Sort tickets" value={filters.sort} options={sortOptions} onChange={sort => setFilters({ ...filters, sort })} fitOptions />
+        <Button type="submit" disabled={busy}>Apply filters</Button>
+      </div>
       <TicketMembers organisationId={organisationId} onMembers={setMembers} />
     </form>
     {!loaded ? <Notice>Loading requests…</Notice> : <>
-      <Button className="secondary" disabled={pending} onClick={() => { setError(""); setReload(n => n + 1); }}>Refresh requests</Button>
       {!error && items.length === 0 && <div className="card"><p className="muted">{query ? "No tickets match these filters." : "No requests yet."}</p></div>}
-      <ul className="organisation-list">{items.map(item => <li className="card request-summary" key={item.id}><div className="ticket-badges">{item.submitted_at ? <StatusPill value={item.status} /> : <Pill>Private draft</Pill>}<PriorityPill value={item.priority} /><span>{deadlineLabel(item)}</span></div><h2><a href={`/organisations/${organisationId}/requests/${item.id}`}>{item.fields.title || "Untitled draft"}</a></h2><p className="muted">Assignees: {assigneeUsernameLabel(item.assignee_usernames)}</p><p className="muted">Author: {item.author_username}</p><p className="muted">Last modified: {new Date(item.updated_at).toLocaleString()}</p></li>)}</ul>
-      {nextOffset !== null && <Button className="secondary" disabled={pending} onClick={more}>Load more tickets</Button>}
+      {items.length > 0 && <div className="card requests-table-scroll" role="region" aria-label="Request list" tabIndex={0}>
+        <table className="requests-table" aria-label="Requests" aria-busy={savingDelivery}>
+          <thead><tr>
+            <th scope="col">Title</th><th scope="col">Owner</th><th scope="col">Assignees</th><th scope="col">Status</th><th scope="col">Priority</th>
+          </tr></thead>
+          <tbody>{items.map(item => {
+            const title = item.fields.title || "Untitled draft";
+            const owner = item.author_id === account?.id;
+            const canChangeStatus = item.submitted_at && account && (owner || item.assignee_ids.includes(account.id));
+            return <tr key={item.id}>
+              <td><a href={`/organisations/${organisationId}/requests/${item.id}`}>{title}</a></td>
+              <td>{item.author_username}</td>
+              <td>{assigneeUsernameLabel(item.assignee_usernames)}</td>
+              <td>{canChangeStatus
+                ? <Dropdown id={`status-${item.id}`} label={`Status for ${title}`} value={item.status} options={statusOptions} disabled={busy} onChange={status => saveDelivery(item, { status })} compact />
+                : item.submitted_at ? <StatusPill value={item.status} /> : <Pill>Private draft</Pill>}</td>
+              <td>{owner
+                ? <Dropdown id={`priority-${item.id}`} label={`Priority for ${title}`} value={item.priority} options={priorityOptions} disabled={busy} onChange={priority => saveDelivery(item, { priority })} compact />
+                : <PriorityPill value={item.priority} />}</td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>}
+      {nextOffset !== null && <Button className="secondary" disabled={busy} onClick={more}>Load more tickets</Button>}
     </>}
   </section>;
 }

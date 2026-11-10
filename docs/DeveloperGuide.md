@@ -121,7 +121,10 @@ creation order without changing existing content revisions or timestamps.
 - `GET /api/organisations/[org]/requests` now uses `list_ticket_page`: 50 entries,
   `nextOffset`, filters `search/status/priority/assignee/overdue/today/sort` and
   `offset`. Filtering occurs before pagination; `today` is the viewer's ISO
-  calendar day for overdue filtering. Offset pages reflect live updates, so a
+  calendar day for overdue filtering. Sort accepts `updated`, `due`, or `status`.
+  Migration `20261110000000_ticket_status_sort.sql` groups statuses before
+  pagination and places Done last. Apply it before deploying the updated UI.
+  Offset pages reflect live updates, so a
   refresh is needed if concurrent edits reorder results. Legacy `list_requests`
   remains a capped compatibility RPC; the UI does not use it.
 - `POST .../requests/[id]/delivery`: `{revision, changes}`; strict optional change
@@ -764,3 +767,20 @@ once in the root layout before the purple theme overrides.
 Browser coverage uses `setDueDate` through the visible Exact date/Apply controls,
 plus calendar day/month/year/keyboard selection, optional dates, save/reload,
 negative-timezone/boundary validation and desktop/mobile visual checks.
+
+
+### Profile username editing
+
+`/profile` composes the shared account menu, controls and unsaved-change guard.
+`GET /api/account` includes authenticated Auth `createdAt`; same-origin
+`POST /api/account` accepts only `{username}` and returns the current account.
+The session-bound `rename_username(new_username)` RPC independently checks
+verified identity and updates only its own profile username. Table update grants
+remain closed; format/reserved-prefix checks and atomic uniqueness are enforced
+in PostgreSQL. Email, application role and creation date cannot be edited here.
+The navbar refreshes after profile changes; ticket ownership remains UUID-based.
+
+Apply `20261110001000_profile_username_edit.sql` using the existing migration
+workflow. For focused disposable integration coverage, run
+`node src/tooling/test-local.mjs profile`; browser coverage lives in
+`src/tests/browser/profile.spec.ts`. No live SoC calls are needed.

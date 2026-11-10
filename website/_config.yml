@@ -24,5 +24,6 @@ defaults:
     values:
       layout: default
 
-# Set by the Pages workflow; a local build without it still renders.
-baseurl: ""
+# The Pages workflow appends the published baseurl and url from
+# actions/configure-pages. A local build without them still renders, with
+# assets resolved from the root.

@@ -12,6 +12,7 @@ import { TicketVisibility } from "./ticket-visibility";
 import { TicketActivity } from "./ticket-activity";
 import { TestPlanPanel } from "./test-plan-panel";
 import { BackLink, Button, Field, Notice } from "./ui";
+import { useUnsavedChanges } from "./use-unsaved-changes";
 
 type Problem = { kind: "conflict" | "ambiguous" | "retry" | "denied"; message: string };
 type Action = "save_draft" | "submit" | "save_published" | "delete_draft";
@@ -132,25 +133,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
     // save reads the current refs; rescheduling follows observable editor state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields, delivery, published, dirty, busy, applying, problem, withinLimits]);
-  useEffect(() => {
-    if (!dirty && !busy) return;
-    const beforeUnload = (event: BeforeUnloadEvent) => { if (!leaving.current) { event.preventDefault(); event.returnValue = ""; } };
-    const click = (event: MouseEvent) => {
-      const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
-      if (!link || event.ctrlKey || event.metaKey || event.shiftKey || link.getAttribute("target") === "_blank" || leaving.current) return;
-      const target = new URL(link.getAttribute("href")!, window.location.href);
-      if (target.hash && target.origin === window.location.origin && target.pathname === window.location.pathname && target.search === window.location.search) return;
-      if (!window.confirm("Leave with unsaved work? Your latest changes may be lost.")) { event.preventDefault(); event.stopPropagation(); }
-      else {
-        leaving.current = true;
-        // Suppress only this departure's native prompt; restore protection if
-        // client navigation is cancelled or does not unmount the editor.
-        window.setTimeout(() => { leaving.current = false; }, 0);
-      }
-    };
-    window.addEventListener("beforeunload", beforeUnload); document.addEventListener("click", click, true);
-    return () => { window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("click", click, true); };
-  }, [dirty, busy]);
+  useUnsavedChanges(dirty || Boolean(busy), leaving);
   async function reconcile() {
     if (operation.current) return;
     operation.current = true; setBusy("explicit");

@@ -11,5 +11,5 @@ export const date = z.iso.date();
 export const ticketListQuery = z.strictObject({
   search: z.string().max(160).optional(), status: z.enum(["draft", ...status.options]).optional(), priority: priority.optional(),
   assignee: z.union([z.uuid(), z.enum(["me", "unassigned"])]).optional(), overdue: z.enum(["true", "false"]).optional(), today: date.optional(),
-  sort: z.enum(["due", "updated"]).optional(), offset: z.coerce.number().int().min(0).max(2147483597).default(0),
+  sort: z.enum(["due", "updated", "status"]).optional(), offset: z.coerce.number().int().min(0).max(2147483597).default(0),
 });

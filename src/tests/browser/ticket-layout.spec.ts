@@ -88,7 +88,7 @@ test("a new ticket is editable with AI collapsed and a Developer reads the same 
   try {
     await page.goto("/sign-in"); await page.getByLabel("Email address").fill(pm.email); await page.getByLabel("Password", { exact: true }).fill(pm.password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click(); await expect(page).toHaveURL(/\/workspace$/);
-    await page.goto(`/organisations/${org}/requests`); await page.getByRole("button", { name: "New draft", exact: true }).click();
+    await page.goto(`/organisations/${org}/requests`); await page.getByRole("button", { name: "New task", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Description", { exact: true })).toBeVisible();
     const about = page.getByRole("region", { name: "About this ticket", exact: true });

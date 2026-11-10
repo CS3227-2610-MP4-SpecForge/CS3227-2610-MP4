@@ -207,6 +207,55 @@ describe.skipIf(!localEnabled)("ticket delivery storage interface", () => {
     expect((await post("/activity", { creationKey: randomUUID(), body: "Draft comment" })).status).toBe(403);
   });
 
+  it("sorts visible tickets by status across pages with Done last", async () => {
+    fixture = localFixture(); const pm = await fixture.actor("PM"); const dev = await fixture.actor("Developer");
+    const org = (await pm.client.rpc("create_organisation", { organisation_name: "Status sort" })).data;
+    async function ticket(status?: string) {
+      const draft = await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() });
+      expect(draft.error).toBeNull();
+      if (status) {
+        const args = { target_org: org, request_id: draft.data.id };
+        const published = await pm.client.rpc("publish_request", { ...args, expected_revision: 1, content: { title: status, description: "Status sorting fixture" }, acknowledged: true, first_submission: true });
+        expect(published.error).toBeNull();
+        if (status !== "to_do") expect((await pm.client.rpc("update_delivery", { ...args, expected_revision: published.data.delivery_revision, changes: { status } })).error).toBeNull();
+      }
+      return draft.data.id as string;
+    }
+    const olderDone = await ticket("done");
+    const drafts = [];
+    for (let index = 0; index < 46; index++) drafts.push(await ticket());
+    const inReview = await ticket("in_review");
+    const cancelled = await ticket("cancelled");
+    const inProgress = await ticket("in_progress");
+    const toDo = await ticket("to_do");
+    const newerDone = await ticket("done");
+    const orderedActive = [toDo, inProgress, inReview, cancelled];
+    const sort = { sort: "status" };
+    const first = await pm.client.rpc("list_ticket_page", { target_org: org, filters: sort });
+    expect(first.error).toBeNull();
+    expect(first.data.next_offset).toBe(50);
+    expect(first.data.items.map((row: { id: string }) => row.id)).toEqual([...drafts.reverse(), ...orderedActive]);
+
+    const path = `http://localhost:3000/api/organisations/${org}/requests`;
+    const ownerApp = createApplication({ origin: "http://localhost:3000", client: () => pm.client });
+    const next = await ownerApp(new Request(`${path}?sort=status&offset=50`));
+    expect(next.status).toBe(200);
+    expect(next.headers.get("cache-control")).toBe("private, no-store");
+    expect((await next.json()).requests.map((row: { id: string }) => row.id)).toEqual([newerDone, olderDone]);
+    expect((await ownerApp(new Request(`${path}?sort=unknown`))).status).toBe(400);
+    expect((await pm.client.rpc("list_ticket_page", { target_org: org, filters: { sort: "unknown" } })).error?.code).toBe("22023");
+
+    const memberApp = createApplication({ origin: "http://localhost:3000", client: () => dev.client });
+    expect((await memberApp(new Request(`${path}?sort=status`))).status).toBe(403);
+    expect((await pm.client.rpc("invite_member", { target_org: org, target_email: dev.email })).error).toBeNull();
+    const invitation = (await dev.client.rpc("list_invitations")).data[0];
+    expect((await dev.client.rpc("respond_invitation", { invitation_id: invitation.id, decision: "accept" })).error).toBeNull();
+    const visible = await memberApp(new Request(`${path}?sort=status`));
+    expect(visible.status).toBe(200);
+    expect((await visible.json()).requests.map((row: { id: string }) => row.id)).toEqual([...orderedActive, newerDone, olderDone]);
+    expect((await (await memberApp(new Request(`${path}?sort=status&status=draft`))).json()).requests).toEqual([]);
+  });
+
   it("pages beyond 100 tickets, isolates other organisations, and pages immutable shared activity", async () => {
     fixture = localFixture(); const pm = await fixture.actor("PM");
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "Pagination" })).data;

@@ -30,13 +30,14 @@ Follow the [developer setup](DeveloperGuide.md#local-setup), then open
    use 3–24 letters, digits, or underscores and are stored in lowercase. Each
    username is unique across SpecForge. If no verification code arrives, try a
    different username or sign in if you already have an account. Your username
-   and application role are fixed after signup. Accounts created before this
+   can be changed from your profile; your application role is fixed after signup. Accounts created before this
    change have a generated username beginning with `legacy_`.
 2. Choose **Enter your verification code** after signup. For local testing, open
    <http://127.0.0.1:55324> and find the email addressed to your disposable account.
    Enter its eight-digit code and email on the verification screen. This local
    inbox captures messages; it does not send email to real inboxes.
-3. Successful verification opens **Organisations**. You cannot create an
+3. Successful verification opens **Organisations**. Select **SpecForge** in the
+   navbar to return to this page from elsewhere. You cannot create an
    organisation before verification. Use **Send a new code** if needed; resend
    and sign-in attempts are rate-limited. Local codes expire after one hour and
    cannot be reused after verification.
@@ -44,12 +45,31 @@ Follow the [developer setup](DeveloperGuide.md#local-setup), then open
    its first admin. Either application role can create multiple organisations.
 5. Select an organisation card to make it active. Only organisations you belong
    to appear. This version's selection lasts until the page reloads.
-6. Choose **Sign out**, then use the ordinary email/password sign-in form to
-   return. Other members' organisations are not discoverable through your account.
+6. Hover over your username and email in the navbar (or select them by click or
+   keyboard), then choose **Sign out**. If a ticket has unsaved work, cancel the
+   departure warning to keep editing or confirm to leave. Use the ordinary
+   email/password sign-in form to return. Other members' organisations are not discoverable through your account.
 
 Password recovery and account deletion are not available. Save your test
 credentials; a new account will not inherit the previous account's memberships.
 Admin status does not change your PM/Developer application role.
+
+## Your profile
+
+Open the navbar account dropdown and choose **Profile**, above **Sign out**.
+Your profile shows your username, application role, verified email address and
+actual account creation date, plus your organisations and Admin/Member status.
+The initial avatar is generated from your username.
+
+To change your username, edit **Username** and choose **Save changes**. Names
+follow the same rules as signup and must be unique. **Cancel** restores the saved
+name. A successful change updates the navbar immediately and your current name
+appears on existing tickets and team labels; ticket ownership stays with your
+account. Previous names are not reserved. Email and role are read-only.
+
+If saving fails, your typed name stays available for retry. Leaving with unsaved
+changes, including signing out, asks for confirmation. A profile loading failure
+has a **Retry loading profile** action.
 
 ## Invitations and membership
 
@@ -116,11 +136,22 @@ Other members can read and comment. Draft/publication state remains separate fro
 delivery status. Overdue and due-today indicators use your browser's local date;
 Done and Cancelled tickets are excluded from overdue work.
 
-The request list supports title search, status, priority and assignee
-filters, including **Assigned to me**, **Unassigned** and **Overdue only**. Choose
-recently updated or due-date sorting, then **Apply filters**. Filters run across
-all visible tickets; **Load more tickets** fetches another page. Refresh after
-teammates make changes; pages are a live list, not a frozen snapshot.
+The Requests table shows **Title**, **Owner**, **Assignees**, **Status** and
+**Priority**. Select a title to open the ticket. On narrow screens, scroll the
+table sideways to see all columns.
+
+Select a status or priority dropdown in the table to save that change immediately.
+The owner can change priority, including on private drafts. The owner and
+current assignees can change status on published tasks. The table refreshes the
+applied filters after an edit, so the task may move or leave the results.
+
+Search by title or use the status, priority and assignee dropdowns, including
+**Assigned to me** and **Unassigned**. Sort by **Recently updated**, **Due date**
+or **Status**, then select the search icon or **Apply filters**. Status sorts
+private drafts first, then To do, In progress, In review, Cancelled and Done.
+Filters and sorting run across all visible tickets. **Load more tickets**
+fetches another page. Reload the page for a fresh default view, or select
+**Apply filters** again to refresh your filtered results.
 
 **Team discussion & activity** is shared with current organisation members on
 published tickets. Post plain-text comments up to 4,000 Unicode characters;
@@ -138,9 +169,10 @@ delivery details**. These recovery controls appear only when needed.
 
 ## Tasks and AI chat
 
-Select an organisation and choose **View requests**. PM authors can create/edit
-private drafts; current members read submitted tasks. There are two task fields:
-**Title** (up to160 Unicode characters) and **Description** (up to24,000).
+Select an organisation and choose **View requests**. PMs select **New task**
+to create a private draft. Current members can read published tasks. The two
+task fields are **Title** (up to 160 Unicode characters) and **Description**
+(up to 24,000).
 Description is free-form Markdown; headings are optional. Existing requests keep
 their title and all old section contents under description headings.
 Use **Write** to edit the Markdown and **Preview** to see how the current text,
@@ -195,7 +227,7 @@ Only the original PM author can edit ticket requirements; assigned Developers ca
 **Delete draft** asks confirmation; submitted tasks cannot be deleted. Leaving
 or removal ends access; submitted work remains visible to members and rejoining
 restores author access. Ticket lists and details show the author's username.
-Ticket summaries, assignee filters and activity history also use usernames.
+The Requests table, assignee filters and activity history also use usernames.
 The ticket's assignee picker still searches by email.
 
 On ticket save failure, local text and delivery edits are preserved and automatic saving stops. Use

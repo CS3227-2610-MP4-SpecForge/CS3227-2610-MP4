@@ -137,11 +137,20 @@ export function createApplication(options: Options) {
           }
           return json({ message: inviting ? "If this account can be invited, its invitation is available in their workspace." : "Membership updated." }, inviting ? 202 : 200);
         }
-        if (path === "/api/account" && request.method === "GET") {
+        if (path === "/api/account" && ["GET", "POST"].includes(request.method)) {
+          if (request.method === "POST") {
+            const input = z.strictObject({ username: signupUsername }).safeParse(await readBody(request));
+            if (!input.success) return error(input.error.issues.find(issue => issue.path[0] === "username")?.message ?? "Only the username can be changed.", 400);
+            const { error: renameError } = await client.rpc("rename_username", { new_username: input.data.username });
+            if (renameError?.code === "23505") return error("That username is already taken. Choose another.", 409);
+            if (renameError?.code === "22023") return error(usernameHint, 400);
+            if (renameError?.code === "42501") return error("Profile unavailable. Sign in again.", 403);
+            if (renameError) return error("Unable to save your profile. Check the saved username before retrying.", 503);
+          }
           const { data: profile, error: profileError } = await client.from("profiles").select("app_role,username").eq("id", data.user.id).single();
           const identity = z.object({ app_role: z.enum(["PM", "Developer"]), username: z.string() }).safeParse(profile);
           if (profileError || !identity.success) return error("Account unavailable. Try again later.", 503);
-          return json({ account: { id: data.user.id, email: data.user.email, role: identity.data.app_role, username: identity.data.username } });
+          return json({ account: { id: data.user.id, email: data.user.email, role: identity.data.app_role, username: identity.data.username, createdAt: data.user.created_at } });
         }
         if (path === "/api/organisations" && request.method === "POST") {
           const input = organisationInput.safeParse(await readBody(request));

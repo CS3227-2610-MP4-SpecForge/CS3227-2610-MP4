@@ -27,10 +27,15 @@ editor's unsaved-change warning still applies.
 Use `Dropdown` from `src/components/ui.tsx` for new fixed-choice dropdowns. Its
 interface is `id`, `label`, `value`, `options: {value, label, tone?}[]`, `onChange`,
 and optional `disabled`. Values are controlled; the module owns popup state,
-keyboard/focus handling, outside-click dismissal and scrolling. Optional `tone`
+keyboard/focus handling, typeahead by option label, outside-click dismissal and
+scrolling. Set `fitOptions`
+to size the control to its widest option when space allows. Optional `tone`
 renders an option with the shared `Pill` presentation. Empty options disable the
 trigger. Options must have unique values and the supplied value should be one
 of them. Keep the selected label meaningful without color.
+
+Use `compact` for dropdowns inside the scrolling Requests table. The trigger
+keeps its accessible label, and the menu opens outside the table's scroll area.
 
 `Pill` uses centralized `--pill-*-bg/ink` tokens and supports gray, yellow,
 orange, red, blue, purple and green. Ticket presentation mappings live in
@@ -38,9 +43,9 @@ orange, red, blue, purple and green. Ticket presentation mappings live in
 Low/yellow, Medium/orange, High/red. Status is To do/gray, In progress/blue,
 In review/purple, Done/green, Cancelled/gray.
 
-Existing account/filter native selects remain supported by the shared field
-styles; migrate them when their behavior needs changing. Searchable multiple
-assignee selection remains a specialized combobox rather than a fixed dropdown.
+Existing account native selects remain supported by the shared field styles.
+The Requests page uses shared dropdowns for all four filter and sort controls.
+Searchable multiple assignee selection remains a specialized combobox.
 
 ## Date picker
 
