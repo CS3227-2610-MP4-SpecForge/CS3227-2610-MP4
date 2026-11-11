@@ -14,4 +14,5 @@ full suite just to reproduce a report or approve a revision different from the o
 
 Return a compact approved / needs-fixes verdict, blocking findings with file/line
 evidence and impact, optional improvements, and checks run or limitations.
+End with a final line `Verdict: approved` or `Verdict: needs-fixes`.
 Security specialization belongs to the separate security review, not self-certification here.

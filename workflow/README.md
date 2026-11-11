@@ -24,7 +24,9 @@ For new features or material behavior changes:
    small behavior-preserving refactoring with tests green. Work against public
    behavior; substitute the external SoC provider for deterministic local tests.
 5. Run focused tests while working and the project suite at feature completion.
-   Dispatch one independent code/architecture reviewer using its role brief.
+   Dispatch the `code-reviewer` subagent (`.claude/agents/code-reviewer.md`, which
+   loads its role brief) on the exact diff before committing; this also applies to
+   routine fixes under `src/`. A review gate hook enforces this in Claude Code.
    Sensitive features also get a separate security review. Fix behavioral defects
    through regression tests; run affected checks again after fixes.
 6. The main agent writes one concise, outcome-focused session log using

@@ -703,6 +703,19 @@ Process material lives under `workflow/`:
 - `THIRD_PARTY.md`, `MATT-POCOCK-LICENSE`: provenance and licensing for reused
   workflow material and local adaptations.
 
+Claude Code configuration in `.claude/` makes independent review enforceable:
+
+- `agents/code-reviewer.md` registers the read-only `code-reviewer` subagent,
+  which follows `workflow/agents/code-reviewer.md` and ends with a
+  `Verdict: approved` or `Verdict: needs-fixes` line.
+- `settings.json` runs `hooks/review-gate.mjs`. It records a hash of the
+  uncommitted `src/` diff each time `code-reviewer` finishes. It denies
+  `git commit` until that exact diff is approved. When a turn ends with unreviewed
+  `src/` changes, it asks once for a review (pauses for user input are allowed).
+  Once a session log under `logs/` has also changed, it insists. State is kept in
+  ignored `local/review/state.json`. Set `SPECFORGE_REVIEW_GATE=off` to disable it
+  for a human-driven session. Other agent clients do not run these hooks.
+
 Project-local agent skills are versioned in `.agents/skills/` so that cloning the
 repository reproduces them, and `AGENTS.md` at the root is the entry point agents
 read first. Sanitised session summaries are in `logs/`.
