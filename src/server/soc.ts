@@ -35,7 +35,7 @@ export function stripRepeatedTitle(description: string, title: string) {
   const first = lines[start]?.trim() ?? "";
   const labelled = first.match(titleLabel);
   const same = (value: string) => value.replace(/^#{1,6}\s*/, "").replace(/[*_]/g, "").trim().toLowerCase() === title.trim().toLowerCase();
-  let end = start;
+  let end: number;
   if (labelled && labelled[1].trim() === "") {
     end = start + 1;
     while (end < lines.length && !/^#{1,6}\s/.test(lines[end].trim())) end++;
