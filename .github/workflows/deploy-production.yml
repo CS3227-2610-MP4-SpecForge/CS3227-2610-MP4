@@ -1,8 +1,9 @@
 name: Deploy production
 
 # main is production. The same gates CI applies to a pull request run again on
-# the merge commit, and the production GitHub Environment requires a reviewer, so
-# reaching production is always an explicit human decision.
+# the merge commit, so production is only reached through a reviewed merge that
+# still passes them. A required reviewer on the production GitHub Environment
+# would add a separate deployment approval; it is not configured yet.
 
 on:
   push:

@@ -29,6 +29,6 @@ your `.env` unchanged. Never put real project credentials in guides or test data
 Deployment automation and the GitHub Pages product website live in
 `.github/workflows/` and `website/`. The pipeline is team-managed: GitHub Actions
 applies migrations and drives the Vercel CLI, with separate development and
-production environments, each against its own Supabase project. Both are live:
+production environments, each against its own Supabase project. They deploy to:
 <https://specforge-prod.vercel.app> and <https://specforge-dev.vercel.app>. See
 [Deployment](docs/DeveloperGuide.md#deployment-and-environments).

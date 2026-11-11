@@ -13,16 +13,22 @@ plans on published tickets ([below](#test-plans-developer-ai)).
 
 Demo kits remain future work.
 
-There is no public application URL yet, so testing is local for now. The
-deployment pipeline exists (see
-[Deployment](DeveloperGuide.md#deployment-and-environments)) but awaits hosting
-setup, and this guide and the product website will carry the URL once a
-deployment has actually run.
+## Where to run it
+
+- **Production:** <https://specforge-prod.vercel.app>
+- **Development:** <https://specforge-dev.vercel.app>
+
+Both are deployed by the team's GitHub Actions workflows (see
+[Deployment](DeveloperGuide.md#deployment-and-environments)). Signing up on a
+hosted environment needs the verification email to reach you; if no code
+arrives, use the local app below, where every email is captured locally.
 
 ## Try the local app
 
 Follow the [developer setup](DeveloperGuide.md#local-setup), then open
 <http://localhost:3000>. Use disposable test information, not production data.
+On a hosted environment the steps are the same, except that the code arrives in
+your own inbox instead of the local one.
 
 1. Choose **Create an account**. Enter a username, an email address, and a
    password of 12–128 characters. Select **Product Manager** or **Developer**
@@ -44,7 +50,7 @@ Follow the [developer setup](DeveloperGuide.md#local-setup), then open
 4. Enter a name of 1–80 characters and choose **Create organisation**. You become
    its first admin. Either application role can create multiple organisations.
 5. Select an organisation card to open its requests page. Only organisations you belong
-   to appear. This version's selection lasts until the page reloads.
+   to appear. The page has its own address, so you can reload or bookmark it.
 6. Hover over your username and email in the navbar (or select them by click or
    keyboard), then choose **Sign out**. If a ticket has unsaved work, cancel the
    departure warning to keep editing or confirm to leave. Use the ordinary
@@ -164,6 +170,19 @@ completed work. Only the author changes scheduling, priority and assignments.
 Other members can read and comment. Draft/publication state remains separate from
 delivery status. Overdue and due-today indicators use your browser's local date;
 Done and Cancelled tickets are excluded from overdue work.
+
+Priority appears as a colored pill: **Low** is yellow, **Medium** orange, and
+**High** red. Existing Urgent tickets become High. Click the priority or delivery
+status pill to choose a value; use arrow keys and Enter, or Escape to dismiss.
+Status colors are gray (To do/Cancelled), blue (In progress), purple (In review),
+and green (Done). Read-only tickets and request-list badges use the same pills.
+
+Click **Due date** to open the purple calendar. Choose a day, navigate with the
+month/year controls, or enter **Exact date** as YYYY-MM-DD and select **Apply
+date**. **Today** selects your local calendar day; **Clear date** leaves the
+ticket Unscheduled. Escape or clicking outside dismisses the calendar without
+applying pending text. Use arrow keys to move between days and Enter to select.
+Draft changes autosave; published changes still require **Update**.
 
 The Requests table shows **Title**, **Owner**, **Assignees**, **Status** and
 **Priority**. Select a title to open the ticket. On narrow screens, scroll the
@@ -335,7 +354,7 @@ truncated AI responses fail safely; ask for a concise change or edit manually.
 Markdown display supports headings, lists, paragraphs, `**bold text**`,
 `*italic text*` or `_italic text_`, and fenced code. Raw HTML, images and links
 are displayed as text.
-Ticket lists use 50-item pages with **Load more tickets**. No hosted application URL is available yet.
+Ticket lists use 50-item pages with **Load more tickets**.
 
 ## Test plans (Developer AI)
 
@@ -393,18 +412,6 @@ requirements: check them against the ticket before relying on them.
   generation** repeats the same request explicitly; it is disabled once the
   ticket has changed, in which case generate a new plan instead.
 
-Online ordinary signup will require configured SMTP delivery. Planned generated
-demo accounts will bypass email delivery, but are not provisioned in this slice.
-
-Priority appears as a colored pill: **Low** is yellow, **Medium** orange, and
-**High** red. Existing Urgent tickets become High. Click the priority or delivery
-status pill to choose a value; use arrow keys and Enter, or Escape to dismiss.
-Status colors are gray (To do/Cancelled), blue (In progress), purple (In review),
-and green (Done). Read-only tickets and request-list badges use the same pills.
-
-Click **Due date** to open the purple calendar. Choose a day, navigate with the
-month/year controls, or enter **Exact date** as YYYY-MM-DD and select **Apply
-date**. **Today** selects your local calendar day; **Clear date** leaves the
-ticket Unscheduled. Escape or clicking outside dismisses the calendar without
-applying pending text. Use arrow keys to move between days and Enter to select.
-Draft changes autosave; published changes still require **Update**.
+- No verification email on a hosted environment: hosted signup depends on the
+  environment's email delivery. Use the local app instead. Generated demo
+  accounts that skip email are planned but not provided yet.

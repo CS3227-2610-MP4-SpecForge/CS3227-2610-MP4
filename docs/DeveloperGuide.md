@@ -29,8 +29,8 @@ server-only local AI worker key and `APP_ORIGIN`, preserving unrelated settings
 and writing atomically with mode0600. It does not change `.env` or copy a hosted project's key.
 Next.js gives `.env.local` precedence over `.env`; remove/replace it deliberately
 when switching to a hosted development project. Ordinary account/task paths use the public session client. Trusted AI turn
-admission/completion alone require server-only `SUPABASE_SECRET_KEY`. `.env.example` documents future server-only SoCLaaS and
-privileged-operation slots; routine tests make no live model requests.
+admission/completion alone require server-only `SUPABASE_SECRET_KEY`. `.env.example` documents the server-only SoCLaaS settings both AI features use;
+routine tests make no live model requests.
 
 ## Modules and interfaces
 
@@ -272,7 +272,8 @@ The author editor owns delivery state and navigation protection alongside text.
 Its lost-response check compares content, publication state, delivery values and
 both expected revisions before reporting success. Recovery controls appear only
 after failures. Apply `20261108015000_whole_ticket_saves.sql` using the local
-additive migration command before testing. No hosted migration has been applied.
+additive migration command before testing. Hosted environments receive it from
+the deployment workflow.
 
 ## Two-field tasks and private AI chat
 
@@ -578,11 +579,11 @@ treat the figures as one sample, not a service level:
   Organisation lists currently return at most the local PostgREST cap (100);
   pagination remains necessary before expanding beyond peer-testing scale.
 - Deployment is team-controlled automation under `.github/workflows/`; see
-  [Deployment and environments](#deployment-and-environments). Hosting accounts
-  and environment secrets are not yet created, so no live deployment, hosted
-  migration or hosting change has been performed. SoC reachability from the host,
-  hosted request deadlines and custom SMTP still require verification against the
-  real environments before claiming online signup and AI features work.
+  [Deployment and environments](#deployment-and-environments). Both environments
+  have been deployed, with migrations applied by the workflow. Hosted use beyond
+  the sign-up page has not been verified: SoC reachability from the host, hosted
+  request deadlines and custom SMTP still need checking against the real
+  environments before claiming online signup and AI features work.
 
 ## Deployment and environments
 
@@ -592,16 +593,18 @@ treat the figures as one sample, not a service level:
 | --- | --- | --- |
 | Branch | `dev` | `main` |
 | Workflow | `deploy-development.yml` | `deploy-production.yml` |
-| GitHub Environment | `development` | `production` (reviewer required) |
-| Vercel project | `specforge-dev` | `specforge` |
+| GitHub Environment | `development` | `production` |
+| URL | <https://specforge-dev.vercel.app> | <https://specforge-prod.vercel.app> |
 | Vercel target | production target of that project | production target |
 | Supabase project | development project | production project |
 
 Both callers delegate to the reusable `deploy.yml`, so the steps and their order
 exist once: apply migrations, pull that scope's configuration, build, deploy,
 record the URL. The production caller first runs the whole of `ci.yml` on the
-merge commit, and the `production` environment requires a reviewer, so production
-is never reached without a passing suite and an explicit human approval.
+merge commit, so production is never reached without a passing suite. Merging
+into `main` is the human decision. The `production` environment does not yet
+have a required reviewer; adding one (first-time setup step 4) would make
+deployment a second, separate approval.
 
 Vercel's own Git integration is deliberately not connected. The repository owns
 the trigger and the gates, and the Vercel CLI is invoked as a step, which keeps
@@ -804,7 +807,7 @@ Screenshots are ignored under `test-results/`; they are not submission evidence
 unless reviewed and summarized. The one-off legacy migration check is
 `node src/tooling/test-local.mjs migration` and runs only before the two-field
 migration is applied; ordinary tests explicitly skip it. Tests do not call SoCLaaS or hosted Supabase, apart from the opt-in live suite
-below.
+above.
 
 One lint dependency override upgrades `minimatch` under TypeScript ESLint to a
 patched compatible release. Re-evaluate the override when upstream updates.
@@ -839,7 +842,7 @@ literal substring matching, capped at 160 characters and 50 results per page.
 The HTTP lookup accepts optional `selected` (comma-separated UUIDs, maximum five)
 so selected labels resolve independently of search/cursor. Both result groups
 are restricted to current members of the requested organisation. Assignment
-storage and permissions still use UUIDs. No hosted migration was applied.
+storage and permissions still use UUIDs.
 
 ## Three priorities and shared pill dropdowns
 
@@ -854,7 +857,7 @@ updates modification time only for affected tickets, and preserves content
 revisions and historical activity. The migration suppresses the activity trigger
 only inside its locked transaction to avoid inventing user activity. SQL/HTTP
 writes and filters accept only low/medium/high. Earlier migration files and
-historical activity values remain intact. No hosted migration was applied.
+historical activity values remain intact.
 
 `node src/tooling/test-local.mjs ticket-migration` includes an isolated legacy
 priority check in a temporary database inside disposable local Supabase. It
