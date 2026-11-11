@@ -99,10 +99,17 @@ test("a new ticket is editable with AI collapsed and a Developer reads the same 
     const assistantPanel = page.getByRole("complementary", { name: "AI assistant", exact: true });
     await expect(assistantPanel.getByRole("textbox")).toHaveCount(1);
     await expect(page.getByLabel("What needs to change?", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Draft with AI", exact: true })).toHaveCount(0);
-    await page.getByLabel("Description", { exact: true }).fill("A rough idea");
-    await expect(page.getByRole("button", { name: "Draft with AI", exact: true })).toBeVisible();
-    await page.getByLabel("Description", { exact: true }).fill("");
+    // Draft with AI is always offered beside the Description tabs; with nothing
+    // written it explains what to do instead of calling AI.
+    await expect(page.getByLabel("Description", { exact: true })).toHaveAttribute("placeholder", 'Fill in the rough details, then use "Draft with AI" to polish.');
+    const draftButton = page.getByRole("button", { name: "Draft with AI", exact: true });
+    await expect(draftButton).toBeVisible();
+    const header = (await page.getByRole("tab", { name: "Write", exact: true }).boundingBox())!;
+    expect(Math.abs((await draftButton.boundingBox())!.y - header.y)).toBeLessThanOrEqual(4);
+    await draftButton.click();
+    await expect(page.getByLabel("Description", { exact: true })).toBeFocused();
+    await expect(page.getByText("Write a rough idea here first, then choose Draft with AI to turn it into a full ticket.", { exact: true })).toBeVisible();
+    await expect(draftButton).toHaveAccessibleDescription("Write a rough idea here first, then choose Draft with AI to turn it into a full ticket.");
     await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
     await page.getByLabel("Title", { exact: true }).fill("Write the ticket directly");
     await expect(savedTicketStatus(page)).toHaveText(/^Last autosaved: .+/);

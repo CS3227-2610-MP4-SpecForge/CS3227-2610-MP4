@@ -40,9 +40,11 @@ describe("SoC provider interface", () => {
       return envelope('{"reply":"Draft ready.","proposal":{"title":"Remember filter","description":"Preserve on reload."}}');
     })({ intent: "draft", fields, message: "Draft ticket", recent: [] });
     expect(messages[0].role).toBe("system");
-    expect(messages[0].content).toContain("Do not add storage technologies, retention periods, cross-session guarantees, roles, or extra workflows unless supplied");
-    expect(messages[0].content).toContain("Keep material unknowns in an explicit Assumptions / unresolved questions section");
-    expect(messages[0].content).toContain("Use ATX Markdown headings");
+    expect(messages[0].content).toContain("Do not add features, technologies, storage, roles, numbers or workflows the Product Manager did not give");
+    expect(messages[0].content).toContain("Acceptance criteria that follow directly from the request are expected and are not invention");
+    expect(messages[0].content).toContain("Ask about something only when its answer would change what gets built");
+    expect(messages[0].content).toContain("The description must not repeat the title");
+    expect(messages[0].content).toContain("never write a literal backslash-n");
     expect(JSON.parse(messages.at(-1)!.content)).toEqual({ ticket: fields, instruction: "Draft ticket", recent: [] });
   });
   it("discards extra response and proposal fields before returning ticket changes", async () => {
@@ -260,5 +262,33 @@ describe("PM assistant intent output rules", () => {
     let payload: Record<string, unknown> = {};
     await createSocProvider(configuration, async (_url, init) => { payload = JSON.parse(JSON.parse(String(init?.body)).messages[1].content); return envelope('{"reply":"Ok."}'); })({ intent: "edit", fields, message: "Apply my answers to the ticket.", recent: [], answers: [{ question: "Which lists?", answer: null }] });
     expect(payload.answers).toEqual([{ question: "Which lists?", answer: null }]);
+  });
+});
+
+describe("PM assistant draft clean-up", () => {
+  const draft = (proposal: unknown) => createSocProvider(configuration, async () => envelope(JSON.stringify({ reply: "Draft ready.", proposal })))({ intent: "draft", fields: { title: "", description: "Idea" }, message: "Draft", recent: [] });
+  it("turns literal \\n sequences into line breaks outside code fences", async () => {
+    const description = "## Desired behaviour\\nEdit the text.\\n\\n## Acceptance criteria\\n- Done.\n\n```\nprint(\"a\\nb\")\n```";
+    expect((await draft({ title: "T", description })).proposal?.description).toBe("## Desired behaviour\nEdit the text.\n\n## Acceptance criteria\n- Done.\n\n```\nprint(\"a\\nb\")\n```");
+  });
+  it.each([
+    "## Title\nRemove multi-enchantment references\n\n## Desired behaviour\nEdit the text.",
+    "# Remove multi-enchantment references\n\n## Desired behaviour\nEdit the text.",
+    "Title: Remove multi-enchantment references\n\n## Desired behaviour\nEdit the text.",
+    "**Title:** Remove multi-enchantment references\n## Desired behaviour\nEdit the text.",
+  ])("drops a title repeated at the top of the description (case %#)", async description => {
+    expect((await draft({ title: "Remove multi-enchantment references", description })).proposal?.description).toBe("## Desired behaviour\nEdit the text.");
+  });
+  it("keeps a first heading that is not the title", async () => {
+    expect((await draft({ title: "Remove references", description: "## Problem description\nOld text." })).proposal?.description).toBe("## Problem description\nOld text.");
+    expect((await draft({ title: "Sort", description: "Titles must stay sorted." })).proposal?.description).toBe("Titles must stay sorted.");
+    expect((await draft({ title: "Sort", description: "## Titles of levels\nKeep them." })).proposal?.description).toBe("## Titles of levels\nKeep them.");
+  });
+  it("rejects a draft whose description is only a repeated title", async () => {
+    await expect(draft({ title: "T", description: "## Title\nT" })).rejects.toMatchObject({ diagnostic: { reason: "invalid_schema" } });
+  });
+  it("turns literal \\n in edit replacements into line breaks", async () => {
+    const result = await createSocProvider(configuration, async () => envelope(JSON.stringify({ reply: "Added criteria.", edits: [{ field: "description", find: "Edit the text.", replace: "Edit the text.\\n\\n## Acceptance criteria\\n- Done." }] })))({ intent: "edit", fields: { title: "T", description: "Edit the text." }, message: "Add criteria", recent: [] });
+    expect(result.proposal?.description).toBe("Edit the text.\n\n## Acceptance criteria\n- Done.");
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 import { useState, type ReactNode } from "react";
 import { describeAiFailure } from "@/ai-diagnostics";
-import { answerLimit, type AiAnswer } from "@/assistance";
+import { answerLimit, assistanceMessages, type AiAnswer } from "@/assistance";
 import type { ChatTurn } from "@/chat";
 import { sameFields, type RequestFields } from "@/requests";
 import { tooLargeForAi, type Assistant } from "./use-assistant";
@@ -71,10 +71,14 @@ export function ChatPanel({ assistant, fields, revision, canSend, reviewing, onR
     event.preventDefault();
     const text = message.trim();
     if (!text || [...text].length > 4000) return;
-    await assistant.send({ key: crypto.randomUUID(), revision, fields: { ...fields }, intent: "edit", message: text, retry: false });
+    // On an empty ticket the instruction is a rough idea, so it drafts the ticket.
+    const empty = !fields.title.trim() && !fields.description.trim();
+    await assistant.send({ key: crypto.randomUUID(), revision, fields: { ...fields }, intent: empty ? "draft" : "edit", message: text, retry: false });
   }
   function retry(turn: ChatTurn) {
-    void assistant.send({ key: turn.turn_key, revision: turn.base_revision, fields: turn.input_fields, intent: turn.intent, ...(turn.answers ? { answers: turn.answers } : turn.intent === "edit" ? { message: turn.message } : {}), retry: true });
+    // Retries resend exactly what was stored; fixed server messages are not resent.
+    const typed = turn.intent === "edit" || (turn.intent === "draft" && turn.message !== assistanceMessages.draft);
+    void assistant.send({ key: turn.turn_key, revision: turn.base_revision, fields: turn.input_fields, intent: turn.intent, ...(turn.answers ? { answers: turn.answers } : typed ? { message: turn.message } : {}), retry: true });
   }
   function toggle() {
     if (open) { setOpen(false); return; }

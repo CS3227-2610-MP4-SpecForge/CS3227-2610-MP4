@@ -17,4 +17,10 @@
   - `npm run verify` passed on a copy of the working tree without the git-ignored `local/` folder. In this checkout, typecheck also scans `local/`. That folder holds a pre-existing broken experiment test and an old chat-panel snapshot that no longer matches `src/assistance.ts`.
   - No live SoC calls were made, so writing quality with real models is unmeasured.
 - Review: The security preflight set the refund, dedupe, intent and edit rules recorded in the spec. The post-change security review approved; its low findings (index-based answer choices, precise "did not use a request" wording, a retry-refund test) were fixed. The code review found one blocking issue: a deduplicated replay showed the wrong latest result. It was fixed with a browser regression test. Two browser regressions were also fixed: the composer is cleared after a reconciled send, and **Send again** is enabled while a request is unresolved.
-- Open: A bounded live SoC check of the `gaps` and `edit` output shapes on both enabled models before relying on edit-mode quality.
+- Follow-up fixes from manual use with `qwen3.5:9b` (see the spec's follow-up section):
+  - **Draft with AI** is always shown in the Description header.
+  - Typing into the AI box on an empty ticket now drafts, instead of returning plain chat text.
+  - Drafts are cleaned of literal `\n` and a repeated title.
+  - The shared and draft prompts were rewritten to describe a good ticket, with one worked example.
+  - After these: unit 148, integration 78 and browser 52 passed; lint clean.
+- Open: A bounded live SoC comparison of the old and new prompts on both enabled models. The prompt rewrite is unmeasured beyond one manual draft.

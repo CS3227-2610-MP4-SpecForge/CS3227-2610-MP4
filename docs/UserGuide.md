@@ -210,7 +210,8 @@ continue editing. You can publish or update from either tab.
 
 New drafts show editable **Title** and **Description** immediately. Write
 directly, or write a rough idea in **Description** and choose **Draft with AI**
-below it (shown while the title is empty). Rough ideas autosave privately like
+beside the Write and Preview tabs. On an empty ticket you can also type the rough
+idea into the AI assistant's box and choose **Ask AI**. Rough ideas autosave privately like
 any draft. A fresh AI draft fills the editor and has **Undo AI draft** during the
 current editing session while its generated content is unchanged. AI never
 publishes for you; failed, stale or recovered generations require review instead.

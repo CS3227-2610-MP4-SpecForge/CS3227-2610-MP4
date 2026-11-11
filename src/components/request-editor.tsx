@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Sparkles } from "lucide-react";
 import { requestFields, sameFields, type FeatureRequest, type RequestFields, type TicketRead } from "@/requests";
 import { api, ApiError, failureMessage } from "./http";
 import type { ChatTurn } from "@/chat";
@@ -96,7 +97,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
   }
   function edit(key: keyof RequestFields, value: string) {
     const next = { ...latest.current, [key]: value };
-    latest.current = next; setFields(next); setMessage(""); setValidation("");
+    latest.current = next; setFields(next); setMessage(""); setValidation(""); setDraftHint(false);
   }
   function focusDescription() {
     setDescriptionMode("write");
@@ -209,7 +210,20 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
   const blocked = Boolean(problem && problem.kind !== "retry");
   const canAsk = !busy && !applying && !blocked && withinLimits && (published || !dirty);
   const assistant = useAssistant({ path: path + "/chat", canSend: canAsk, onSuggestion: receiveSuggestion });
-  const canDraft = !published && !fields.title.trim() && fields.description.trim() !== "";
+  const [draftHint, setDraftHint] = useState(false);
+  // Say why Draft with AI is unavailable when the reason will not clear by itself.
+  const draftBlocked = blocked ? "Resolve the save problem above before using AI."
+    : !withinLimits ? "Shorten the ticket to within the field limits before using AI."
+    : assistant.usage?.remaining === 0 ? "No AI requests are left this hour."
+    : tooLargeForAi(fields) ? "This ticket is too long for AI."
+    : null;
+  const draftHintText = draftBlocked ?? (draftHint && !fields.description.trim() ? "Write a rough idea here first, then choose Draft with AI to turn it into a full ticket." : null);
+  // Always offered: an empty Description explains what to write instead of
+  // leaving a disabled button with no reason.
+  function draftWithAi() {
+    if (!fields.description.trim()) { setDraftHint(true); focusDescription(); return; }
+    void assistant.send({ key: crypto.randomUUID(), revision: stored.revision, fields: { ...fields }, intent: "draft", retry: false });
+  }
   const pendingStatus = busy ? "Saving…" : problem ? "Save failed — local edits preserved" : dirty ? "Unsaved changes" : null;
   const autosavedAt = published ? null : stored.last_autosaved_at;
   const savedAt = autosavedAt ?? (published || stored.revision > 1 ? stored.updated_at : null);
@@ -235,28 +249,36 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
           <div className="field">
             <div className="ticket-description-header">
               <label htmlFor="request-description">Description</label>
-              <div className="ticket-description-tabs" role="tablist" aria-label="Description mode" onKeyDown={event => {
-                let next: typeof descriptionMode;
-                switch (event.key) {
-                  case "ArrowLeft":
-                  case "ArrowRight": next = descriptionMode === "write" ? "preview" : "write"; break;
-                  case "Home": next = "write"; break;
-                  case "End": next = "preview"; break;
-                  default: return;
-                }
-                event.preventDefault();
-                setDescriptionMode(next);
-                event.currentTarget.querySelector<HTMLButtonElement>(`#description-${next}-tab`)?.focus();
-              }}>
-                {(["write", "preview"] as const).map(mode => <Button key={mode} type="button" className="secondary" role="tab"
-                  id={`description-${mode}-tab`} aria-controls={`description-${mode}-panel`} aria-selected={descriptionMode === mode}
-                  tabIndex={descriptionMode === mode ? 0 : -1} onClick={() => setDescriptionMode(mode)}>
-                  {mode === "write" ? "Write" : "Preview"}
-                </Button>)}
+              <div className="ticket-description-actions">
+                <Button type="button" className="secondary draft-with-ai" aria-describedby={draftHintText ? "draft-hint" : undefined}
+                  disabled={assistant.disabled || draftBlocked !== null} onClick={draftWithAi}>
+                  <Sparkles aria-hidden="true" size={16} />Draft with AI
+                </Button>
+                <div className="ticket-description-tabs" role="tablist" aria-label="Description mode" onKeyDown={event => {
+                  let next: typeof descriptionMode;
+                  switch (event.key) {
+                    case "ArrowLeft":
+                    case "ArrowRight": next = descriptionMode === "write" ? "preview" : "write"; break;
+                    case "Home": next = "write"; break;
+                    case "End": next = "preview"; break;
+                    default: return;
+                  }
+                  event.preventDefault();
+                  setDescriptionMode(next);
+                  event.currentTarget.querySelector<HTMLButtonElement>(`#description-${next}-tab`)?.focus();
+                }}>
+                  {(["write", "preview"] as const).map(mode => <Button key={mode} type="button" className="secondary" role="tab"
+                    id={`description-${mode}-tab`} aria-controls={`description-${mode}-panel`} aria-selected={descriptionMode === mode}
+                    tabIndex={descriptionMode === mode ? 0 : -1} onClick={() => setDescriptionMode(mode)}>
+                    {mode === "write" ? "Write" : "Preview"}
+                  </Button>)}
+                </div>
               </div>
             </div>
+            {draftHintText && <p id="draft-hint" className="hint">{draftHintText}</p>}
             <div id="description-write-panel" role="tabpanel" aria-labelledby="description-write-tab" hidden={descriptionMode !== "write"}>
               <textarea id="request-description" rows={4} required={descriptionMode === "write"} maxLength={48000} value={fields.description}
+                placeholder={`Fill in the rough details, then use "Draft with AI" to polish.`}
                 disabled={busy === "explicit"} onChange={event => edit("description", event.target.value)} />
             </div>
             <div id="description-preview-panel" className="ticket-description-preview" role="tabpanel" aria-labelledby="description-preview-tab"
@@ -266,10 +288,6 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
                 : <p className="hint">Nothing to preview yet.</p>)}
             </div>
           </div>
-          {canDraft && <div className="actions draft-with-ai">
-            <Button type="button" className="secondary" disabled={assistant.disabled || tooLargeForAi(fields)} onClick={() => { void assistant.send({ key: crypto.randomUUID(), revision: stored.revision, fields: { ...fields }, intent: "draft", retry: false }); }}>Draft with AI</Button>
-            <span className="hint">Write your rough idea in Description, then let AI draft the title and description for review.</span>
-          </div>}
           {validation && <Notice danger>{validation}</Notice>}
           <div className="actions"><Button disabled={Boolean(busy) || applying || blocked || (published && !dirty)}>{published ? "Update" : "Publish"}</Button>
             {!published && <Button type="button" className="secondary" disabled={Boolean(busy) || applying || blocked} onClick={() => { if (window.confirm("Delete this private draft? This cannot be undone.")) void save("delete_draft"); }}>Delete draft</Button>}

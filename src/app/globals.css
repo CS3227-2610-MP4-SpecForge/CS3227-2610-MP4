@@ -46,7 +46,7 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field label { font-size: .85rem; font-weight: 650; }
 .field input, .field select, .field textarea { width: 100%; min-height: 46px; border: 1px solid #b9c0d2; border-radius: 8px; padding: 10px 12px; background: var(--surface); color: var(--ink); }
-.field input::placeholder { color: #747a90; }
+.field input::placeholder, .field textarea::placeholder { color: #747a90; }
 .hint { font-size: .78rem; margin: 0; }
 .auth-links { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 20px; font-size: .85rem; display: flex; flex-direction: column; gap: 12px; }
 .auth-links p { margin: 0; }
@@ -206,7 +206,8 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .gap-question legend { font-weight: 600; margin-bottom: 6px; overflow-wrap: anywhere; }
 .gap-option { display: flex; align-items: flex-start; gap: 8px; font-weight: 400; overflow-wrap: anywhere; }
 .gap-option input { margin-top: 3px; flex-shrink: 0; }
-.draft-with-ai { align-items: center; }
+.ticket-description-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space); }
+.ticket-description-actions .draft-with-ai { min-height: 36px; padding: 4px 12px; display: inline-flex; align-items: center; gap: 6px; }
 .suggestion-review { border: 1px solid var(--brand); border-radius: var(--radius); background: var(--surface); padding: 16px; }
 .suggestion-review h2, .suggestion-review h3 { margin: 0 0 8px; }
 .suggestion-diff { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }

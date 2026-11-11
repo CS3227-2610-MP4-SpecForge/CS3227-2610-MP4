@@ -146,6 +146,26 @@ Markdown. This design adds one preset action and does not parse headings.
   replies are sent as data, never interpolated into instructions.
 - Never log prompts, ticket text, replies or provider bodies.
 
+## Follow-up: drafting fixes (2026-11-11)
+
+Found in manual use with `qwen3.5:9b`; requested by the user:
+
+- **Draft with AI** is always shown in the Description header, beside Write and
+  Preview. With an empty Description it focuses the field and explains what to
+  write instead of calling AI. It no longer depends on the title being empty;
+  only a draft of an untitled private ticket fills the editor, others open review.
+- Typing into the AI box on an empty ticket (no title, no description) sends a
+  `draft` request with the PM's text as the rough idea. Gap-check and
+  apply-answers turns keep fixed server messages.
+- Draft and edit output is cleaned on the server before review: literal `\n`
+  outside code fences becomes a line break, and a copy of the title at the top of
+  the description ("## Title" section, "Title:" line, or a heading equal to the
+  title) is dropped.
+- The shared and draft prompts now describe a good ticket: sized to the request,
+  acceptance criteria that follow from the request are expected, questions only
+  when they change what gets built, Summary / Acceptance criteria / optional Open
+  questions, and one short worked example. No live comparison has been run yet.
+
 ## Security preflight requirements (2026-11-11)
 
 The independent preflight refined these points within the approved behaviour:

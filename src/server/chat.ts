@@ -53,8 +53,12 @@ export async function handleChat(request: Request, client: SupabaseClient, actor
     .safeParse(await readBody(request, 262144));
   if (!input.success) return error("Enter a message of 1–4,000 characters and a valid current ticket.", 400);
   if (!dependencies) return error("AI is not configured. Continue editing manually.", 503);
-  // Draft, gap-check and apply-answers turns carry fixed server messages.
-  const message = input.data.answers ? assistanceMessages.answers : input.data.intent === "edit" ? input.data.message! : assistanceMessages[input.data.intent];
+  // Gap-check and apply-answers turns carry fixed server messages. A draft
+  // carries the PM's own rough idea when they typed one, else a fixed message.
+  const message = input.data.answers ? assistanceMessages.answers
+    : input.data.intent === "edit" ? input.data.message!
+    : input.data.intent === "draft" && input.data.message ? input.data.message
+    : assistanceMessages[input.data.intent];
   const worker = dependencies.worker();
   const { data: admission, error: admissionError } = await worker.rpc("begin_chat_turn", { target_org: org, request_id: id, actor_id: actorId, turn_key: input.data.key, base_revision: input.data.revision, input_fields: input.data.fields, user_message: message, retry_failed: input.data.retry, p_intent: input.data.intent, p_answers: input.data.answers ?? null });
   const admissionFailure = failureResponse(admissionError);

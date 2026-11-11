@@ -205,6 +205,8 @@ test("two-field AI workspace keeps clarification separate, applies fresh proposa
   try {
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Description", { exact: true })).toBeVisible();
+    await page.getByLabel("Description", { exact: true }).fill("Rough notes");
+    await expect(saved(page)).toBeVisible();
     await page.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("Clarify this feature");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
     await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
@@ -213,7 +215,7 @@ test("two-field AI workspace keeps clarification separate, applies fresh proposa
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
     const apply = () => page.getByRole("button", { name: "Accept changes", exact: true }).last();
     await expect(apply()).toBeEnabled();
-    await expect(page.getByLabel("Description", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Rough notes");
     await apply().click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
     await expect(saved(page)).toBeVisible();
@@ -255,6 +257,8 @@ test("two-field AI workspace keeps clarification separate, applies fresh proposa
 test("lost chat responses reconcile once and failed turns retry without duplicate messages", async ({ page }) => {
   const { fixture, pm, org, id } = await setupEditor(page);
   try {
+    await page.getByLabel("Description", { exact: true }).fill("Rough notes");
+    await expect(saved(page)).toBeVisible();
     const chat = `**/api/organisations/${org}/requests/${id}/chat`;
     let posts = 0;
     let failedRead = false;
@@ -309,6 +313,8 @@ test("applying a proposal to a published task remains local until explicit Updat
 test("an unadmitted send can use the current task after reconciliation without losing either draft", async ({ page }) => {
   const { fixture, pm, org, id } = await setupEditor(page);
   try {
+    await page.getByLabel("Description", { exact: true }).fill("Rough notes");
+    await expect(saved(page)).toBeVisible();
     const target = { target_org: org, request_id: id, actor_id: pm.id };
     let otherTurn: { id: string; generation: number } | undefined;
     let reads = 0;
@@ -380,6 +386,8 @@ test("the usage meter shows what is left and blocks requests at the limit", asyn
   const { fixture, pm, org, id } = await setupEditor(page);
   try {
     const panel = page.getByRole("complementary", { name: "AI assistant", exact: true });
+    await page.getByLabel("Description", { exact: true }).fill("Rough notes");
+    await expect(saved(page)).toBeVisible();
     await askAi(page, "Clarify this feature");
     await expect(panel.getByText("19 of 20 AI requests left this hour.", { exact: true })).toBeVisible();
     const latest = panel.getByRole("region", { name: "Latest result", exact: true });
@@ -435,6 +443,40 @@ test("rough ideas become private AI drafts with undo and inline review", async (
     const id = page.url().split("/").at(-1)!;
     expect((await pm.client.rpc("read_request", { target_org: org, request_id: id })).data.submitted_at).toBeNull();
     await page.screenshot({ path: "test-results/ticket-first-desktop.png", fullPage: true });
+  } finally { await fixture.cleanup(); }
+});
+
+test("a rough idea typed into the AI box on an empty ticket drafts it", async ({ page }) => {
+  const fixture = localFixture(); const pm = await fixture.actor("PM");
+  const org = (await pm.client.rpc("create_organisation", { organisation_name: "Composer drafts" })).data;
+  try {
+    await login(page, pm); await page.goto(`/organisations/${org}/requests`);
+    await page.getByRole("button", { name: "New task", exact: true }).click();
+    await askAi(page, "Help me write a ticket: remove multi-enchantment references from tutorial dialogue.");
+    await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
+    await expect(page.getByRole("button", { name: "Undo AI draft", exact: true })).toBeVisible();
+    const id = page.url().split("/").at(-1)!;
+    expect((await pm.client.rpc("read_chat", { target_org: org, request_id: id })).data[0]).toMatchObject({ intent: "draft", message: "Help me write a ticket: remove multi-enchantment references from tutorial dialogue." });
+    await page.getByRole("tab", { name: "Preview", exact: true }).click();
+    await expect(page.getByRole("tabpanel", { name: "Preview", exact: true }).getByRole("heading", { name: "Desired behaviour", exact: true })).toBeVisible();
+  } finally { await fixture.cleanup(); }
+});
+
+test("Draft with AI says why it is unavailable after a save conflict", async ({ page }) => {
+  const { fixture, pm, org, id } = await setupEditor(page);
+  try {
+    await page.getByLabel("Description", { exact: true }).fill("Rough notes");
+    await expect(saved(page)).toBeVisible();
+    const current = (await pm.client.rpc("read_request", { target_org: org, request_id: id })).data;
+    expect((await pm.client.rpc("save_draft", { target_org: org, request_id: id, expected_revision: current.revision, content: { ...current.fields, title: "Saved elsewhere" } })).error).toBeNull();
+    await page.getByLabel("Description", { exact: true }).fill("Rough notes, edited here");
+    const draftButton = page.getByRole("button", { name: "Draft with AI", exact: true });
+    await expect(draftButton).toBeDisabled();
+    await expect(draftButton).toHaveAccessibleDescription("Resolve the save problem above before using AI.");
+    page.once("dialog", dialog => dialog.accept());
+    await page.getByRole("button", { name: "Reload saved version and discard edits", exact: true }).click();
+    await expect(draftButton).toBeEnabled();
+    await expect(page.getByText("Resolve the save problem above before using AI.", { exact: true })).toHaveCount(0);
   } finally { await fixture.cleanup(); }
 });
 
@@ -571,7 +613,6 @@ test("a failed first-draft freshness check opens review with a usable manual edi
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Accept changes", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
-    await expect(page.getByRole("button", { name: "Draft with AI", exact: true })).toHaveCount(0);
   } finally { await fixture.cleanup(); }
 });
 

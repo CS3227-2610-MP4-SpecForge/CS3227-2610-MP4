@@ -204,7 +204,9 @@ validation. Idle Publish is clickable; busy or conflicted actions remain blocked
 `ChatPanel` owns a two-column layout: main ticket content plus a collapsible,
 initially open AI sidebar. `useAssistant` (in `use-assistant.ts`) owns the
 conversation state, sending, recovery, polling and usage; the editor creates it
-so **Draft with AI** under Description and the sidebar share one request guard.
+so **Draft with AI** (in the Description header) and the sidebar share one request
+guard. On an empty ticket the sidebar composer sends a `draft` request carrying the
+PM's text.
 Header and review slots let the editor supply its own controls. Undo, review,
 the latest result, the composer and collapsed history render inside the sidebar.
 The main editor is always available on empty drafts, and a first draft fills the
@@ -421,7 +423,10 @@ proposals and older turns are never sent. Output budgets are 2,000 tokens for
 `draft`, 600 for `gaps` and 1,200 for `edit`. Edits return exact-text
 `{field, find, replace}` changes (at most 10). `applyEdits` applies them only when
 each `find` matches exactly once (literal, overlapping matches count), then stores
-the full resulting fields as the proposal for the usual review. Serialized
+the full resulting fields as the proposal for the usual review. Draft descriptions
+and edit replacements are cleaned first: `unescapeLineBreaks` turns literal `\n`
+outside code fences into line breaks, and `stripRepeatedTitle` drops a copy of the
+title at the top of a drafted description. Serialized
 messages stay <=48,000 UTF-8 bytes, with a 90-second deadline, 64KiB response
 bytes and 4,000-character instructions. No tools, automatic retry or fallback.
 These are app caps, not claims about SoC quotas.
