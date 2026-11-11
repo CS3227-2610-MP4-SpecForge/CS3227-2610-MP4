@@ -756,6 +756,27 @@ and stylesheet, and need no Supabase or network. Run them alone with
 browser suite and uploads the Playwright HTML report as the `playwright-report`
 artifact on every run.
 
+Browser runs are designed to be repeatable:
+
+- A global setup (`src/tests/browser/global-setup.ts`) visits every page once
+  before the tests start, so `next dev` compiles routes up front. Do not edit
+  source files during a browser run; the dev server recompiles them mid-run.
+- Timers such as banner lifetimes and the autosave debounce are tested with
+  Playwright's `page.clock` (`runFor`), not fixed sleeps. Because the installed
+  clock also keeps running in real time, give "has expired" checks a short
+  timeout. Lint rejects `waitForTimeout` in `src/tests/browser/`; wait for an
+  observable condition instead, or use `settleAfter` from `ui.fixture.ts` to
+  prove that a held, stale response was ignored.
+- CI retries a failed test once and records a trace on that retry. The job
+  summary lists failed and flaky (passed only on retry) tests, and traces are
+  uploaded as the `playwright-traces` artifact. Treat flaky tests as failures to
+  fix. Local runs never retry.
+- The suite runs on one worker. Two or four workers sign in faster than the
+  app's 30-per-minute auth admission limit (`createAuthAdmission`) and fail.
+  `SPECFORGE_BROWSER_WORKERS` is a measurement knob for that experiment, not a
+  supported setting. `SPECFORGE_TIMING_FILE=<path>` adds a JSON report for
+  timing comparisons.
+
 `verify` runs lint, TypeScript, logic and component tests and a production build. Database tests
 are explicitly skipped in the ordinary test command; run `test:integration` for
 them. Test plan checks are `npx vitest run src/tests/test-plans.test.ts` for the

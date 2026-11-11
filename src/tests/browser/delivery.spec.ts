@@ -1,4 +1,4 @@
-import { savedTicketStatus, selectPill, setDueDate } from "./ui.fixture";
+import { recordTicketWrites, savedTicketStatus, selectPill, setDueDate, settleAfter } from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localFixture } from "../local.fixture";
@@ -184,6 +184,7 @@ test("one ticket action publishes and updates text and delivery together", { tag
   const fixture = localFixture(); const pm = await fixture.actor("PM");
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Whole ticket browser" })).data;
   const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
+  await page.clock.install();
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests/${draft.id}`);
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
@@ -203,9 +204,11 @@ test("one ticket action publishes and updates text and delivery together", { tag
     await selectPill(page, "Priority", "High");
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByRole("button", { name: "Update", exact: true })).toBeVisible();
+    const writes = recordTicketWrites(page, draft.id);
     await page.getByLabel("Title", { exact: true }).fill("Updated everything");
     await setDueDate(page, "2026-12-25");
-    await page.waitForTimeout(1000);
+    await page.clock.runFor(1000); // Past the autosave debounce: published edits must remain local.
+    expect(writes).toEqual([]);
     const before = (await pm.client.rpc("read_request", { target_org: org, request_id: draft.id })).data;
     expect(before.fields.title).toBe("Publish everything"); expect(before.due_date).toBe("2026-12-20");
     await page.getByRole("button", { name: "Update", exact: true }).click();
@@ -465,7 +468,7 @@ test("member search ignores an older load-more response", async ({ page }) => {
     await page.getByRole("combobox", { name: "Assignees", exact: true }).fill("needle");
     await expect(page.getByRole("option", { name: "needle@example.com", exact: true })).toBeVisible();
     const finished = page.waitForResponse(response => response.url().includes("ticket-members?after="));
-    release(); await finished; await page.waitForTimeout(150); // Let the stale page continuation reach React.
+    release(); await settleAfter(page, finished);
     await expect(page.getByRole("option", { name: "old@example.com", exact: true })).toHaveCount(0);
     await expect(page.getByRole("option", { name: "needle@example.com", exact: true })).toBeVisible();
   } finally { release?.(); await fixture.cleanup(); }
@@ -564,7 +567,7 @@ test("posting during an older activity read retains a complete, duplicate-free f
     await page.getByRole("button", { name: "Post comment", exact: true }).click();
     await expect(page.getByText("New boundary event", { exact: true })).toBeVisible();
     const finished = page.waitForResponse(response => response.url().includes("activity?before="));
-    release(); await finished; await page.waitForTimeout(150); // Let the stale page continuation reach React.
+    release(); await settleAfter(page, finished);
     await page.getByRole("button", { name: "Load older activity", exact: true }).click();
     await expect(page.locator(".activity-entry")).toHaveCount(53);
     await expect(page.getByText("Published this ticket", { exact: true })).toHaveCount(1);

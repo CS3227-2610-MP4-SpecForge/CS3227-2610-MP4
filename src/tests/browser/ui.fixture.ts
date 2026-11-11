@@ -1,5 +1,23 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Response } from "@playwright/test";
+
+/** Record non-GET requests for one ticket, to prove that edits stayed local. */
+export function recordTicketWrites(page: Page, requestId: string) {
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (request.method() !== "GET" && request.url().includes(`/requests/${requestId}`)) writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+  });
+  return writes;
+}
+
+/**
+ * Wait until a held response has fully reached the page and React has had two
+ * frames to process it, so a test can assert that a stale response was ignored.
+ */
+export async function settleAfter(page: Page, response: Promise<Response>) {
+  await (await response).finished();
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
 
 /** Fail on serious or critical axe violations on the page, or inside one CSS scope. */
 export async function expectAccessible(page: Page, scope?: string) {

@@ -138,6 +138,9 @@ test("unknown email invites persist and creation/withdrawal banners float withou
   const org = (await owner.client.rpc("create_organisation", { organisation_name: "Banner team" })).data;
   const email = `unknown-${crypto.randomUUID()}@example.com`;
   page.on("dialog", dialog => dialog.accept());
+  // Banner lifetimes are tested by advancing the page clock, not by sleeping. The
+  // clock also keeps running in real time, so expiry checks use a short timeout.
+  await page.clock.install();
   try {
     await page.goto("/sign-in");
     await page.getByLabel("Email address").fill(owner.email);
@@ -152,25 +155,28 @@ test("unknown email invites persist and creation/withdrawal banners float withou
     const banner = page.getByRole("status").filter({ hasText: "Invitation created." });
     await expect(banner).toBeVisible();
     await expect(input).toBeVisible();
-    expect((await input.boundingBox())!.y).toBe(before!.y);
+    // The modal can re-render as the invitation list refreshes; wait for a settled layout.
+    await expect.poll(async () => (await input.boundingBox())?.y).toBe(before!.y);
     const bannerBounds = (await banner.boundingBox())!;
     const modalBounds = (await modal.boundingBox())!;
     expect(bannerBounds.y).toBeLessThan(modalBounds.y);
     expect(Math.abs(bannerBounds.x + bannerBounds.width / 2 - 640)).toBeLessThan(2);
     const outgoing = modal.getByRole("listitem").filter({ hasText: email });
     await expect(outgoing).toBeVisible();
-    await expect(banner).toHaveCount(0, { timeout: 4500 });
+    await page.clock.runFor(3000);
+    await expect(banner).toHaveCount(0, { timeout: 1000 });
     await input.fill(email);
     await page.getByRole("button", { name: "Send invitation", exact: true }).click();
     const duplicateBanner = page.getByRole("status").filter({ hasText: "Invitation already pending." });
     await expect(duplicateBanner).toBeVisible();
-    await page.waitForTimeout(1800); // Trigger again before the original three-second lifetime ends.
+    await page.clock.runFor(1800); // Trigger again before the original three-second lifetime ends.
     await input.fill(email);
     await page.getByRole("button", { name: "Send invitation", exact: true }).click();
     await expect(input).toHaveValue(""); // Wait for the repeated request to finish.
-    await page.waitForTimeout(1700); // Past the first deadline, within the restarted lifetime.
+    await page.clock.runFor(1700); // Past the first deadline, within the restarted lifetime.
     await expect(duplicateBanner).toBeVisible();
-    await expect(duplicateBanner).toHaveCount(0, { timeout: 4500 });
+    await page.clock.runFor(1500);
+    await expect(duplicateBanner).toHaveCount(0, { timeout: 1000 });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await outgoing.getByRole("button", { name: "Cancel invitation", exact: true }).click();
@@ -179,7 +185,8 @@ test("unknown email invites persist and creation/withdrawal banners float withou
     await expect(outgoing).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: "test-results/invitation-banner-mobile.png", fullPage: true });
-    await expect(withdrawn).toHaveCount(0, { timeout: 4500 });
+    await page.clock.runFor(3000);
+    await expect(withdrawn).toHaveCount(0, { timeout: 1000 });
     expect((await owner.client.rpc("list_invitations", { target_org: org })).data).toEqual([]);
   } finally { await fixture.cleanup(); }
 });

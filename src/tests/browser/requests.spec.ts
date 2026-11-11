@@ -1,4 +1,4 @@
-import { expectAccessible, savedTicketStatus as saved, setDueDate } from "./ui.fixture";
+import { expectAccessible, recordTicketWrites, savedTicketStatus as saved, setDueDate } from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { localFixture } from "../local.fixture";
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
@@ -43,6 +43,7 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
   await developer.client.rpc("respond_invitation", { invitation_id: (await developer.client.rpc("list_invitations")).data[0].id, decision: "accept" });
   const context = await browser.newContext({ baseURL: origin });
   const reader = await context.newPage();
+  await page.clock.install();
   try {
     await login(page, pm);
     await page.getByRole("link", { name: /Requirements team Admin/ }).click();
@@ -78,8 +79,10 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     expect(await reader.evaluate(() => "requestInjected" in window)).toBe(false);
     await expect(reader.locator("img")).toHaveCount(0);
     await expect(reader.locator('a[href^="javascript:"]')).toHaveCount(0);
+    const writes = recordTicketWrites(page, editorUrl.split("/").at(-1)!);
     await page.getByLabel("Title", { exact: true }).fill("Updated saved requirements");
-    await page.waitForTimeout(1000); // Allow the draft debounce interval to elapse: published edits must remain local.
+    await page.clock.runFor(1000); // Past the draft debounce interval: published edits must remain local.
+    expect(writes).toEqual([]);
     await reader.reload();
     await expect(reader.getByRole("heading", { name: content.Title, exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Update", exact: true }).click();
