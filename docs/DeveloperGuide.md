@@ -201,12 +201,14 @@ optional. Incomplete draft
 autosaves bypass form validation. Whitespace/limit failures show on-demand
 validation. Idle Publish is clickable; busy or conflicted actions remain blocked.
 
-`ChatPanel` retains its existing request/retry state and owns a two-column layout:
-main ticket content plus a collapsible, initially open AI sidebar. Header and
-review slots let the editor supply its existing controls without duplicating AI
-state. Drafting, writing tools, undo and suggestion review all render inside the
-sidebar. The main editor is always available on empty drafts. Typing a title
-ends first-draft mode so an in-flight draft cannot overwrite manual title entry.
+`ChatPanel` owns a two-column layout: main ticket content plus a collapsible,
+initially open AI sidebar. `useAssistant` (in `use-assistant.ts`) owns the
+conversation state, sending, recovery, polling and usage; the editor creates it
+so **Draft with AI** under Description and the sidebar share one request guard.
+Header and review slots let the editor supply its own controls. Undo, review,
+the latest result, the composer and collapsed history render inside the sidebar.
+The main editor is always available on empty drafts, and a first draft fills the
+editor only while its exact snapshot is still current.
 Collapsing uses `hidden`, preserving the mounted conversation and instruction.
 The layout move preserves provider behaviour and permissions. The whole-ticket
 save contract extension is described below.
@@ -287,7 +289,9 @@ The shared editor keeps serialized draft autosave and explicit published saves.
 Native editor entry and departure guards protect unsaved work during navigation.
 
 `GET /api/organisations/[org]/requests/[id]/chat` reads the complete private chat.
-POST accepts `{key, revision, fields, message, retry}` with a256KiB body cap.
+POST accepts `{key, revision, fields, intent, message?, answers?, retry}` with a
+256KiB body cap. `intent` is `draft`, `gaps` or `edit`; draft, gap-check and
+apply-answers turns use fixed server messages from `src/assistance.ts`.
 No client history, actor identity, provider URL/model or system prompt is accepted.
 Session-bound `read_chat` and RLS enforce verified current PM authorship, including
 for submitted tasks. Authenticated clients cannot mutate chat storage or call
@@ -297,8 +301,14 @@ After verified `getUser` and session chat authorization, the isolated server
 worker calls service-role-only `begin_chat_turn` and `finish_chat_turn`. Both
 independently recheck verified identity/current membership/authorship and use
 organisation-first locks. The privileged key never reaches browser code. Each
-idempotent key binds an immutable editor snapshot/message. Persistent admission
-allows one running turn/request and/account,20admitted attempts/account/hour.
+idempotent key binds an immutable editor snapshot, message, intent and answers.
+Persistent admission allows one running turn/request and/account, 20 charged
+requests and 40 admitted attempts per account per hour. Every failed turn is
+refunded once, only within the window that charged it; attempts are never
+refunded, so the attempt cap bounds SoC spend. An identical completed request
+on the current ticket returns the saved turn with no call or charge.
+`read_ai_usage()` returns the signed-in account's `{remaining, limit, resets_at}`;
+GET and POST chat responses include it, and 429 responses name the limit.
 120-second leases and generation checks reject late workers; expired turns are
 retried only on explicit action, never automatically. Completion rechecks access,
 so output after removal is neither stored nor returned. Conversation rows cap
@@ -403,18 +413,23 @@ followed; existing configuration and review/publication controls remain. These
 small, empty-history cases do not establish reliability on full tickets or implement
 the fictional upload/expiry behavior used as test text.
 
-Application policy: full serialized messages (system, complete private history,
-current editor and message) <=48,000UTF-8bytes;2,000output tokens;90-second deadline;
-64KiB response bytes;4,000-character user messages and no separate AI reply
-character ceiling. No context trimming, tools,
-automatic retry or fallback. Invalid/truncated/provider responses become durable
-failed turns without raw provider diagnostics. Context-full failures preserve history
-and allow manual editing. These are app caps, not claims about SoC quotas.
+Application policy ([PM assistant redesign](../workflow/specs/2026-11-10-pm-ai-assistant-redesign.md)):
+each request sends a shared rule block plus that intent's rules, then one JSON
+payload `{ticket, instruction, recent, answers?}`. `recent` holds at most the three
+latest completed turns as `{message, reply}` with replies cut to 1,000 characters;
+proposals and older turns are never sent. Output budgets are 2,000 tokens for
+`draft`, 600 for `gaps` and 1,200 for `edit`. Edits return exact-text
+`{field, find, replace}` changes (at most 10). `applyEdits` applies them only when
+each `find` matches exactly once (literal, overlapping matches count), then stores
+the full resulting fields as the proposal for the usual review. Serialized
+messages stay <=48,000 UTF-8 bytes, with a 90-second deadline, 64KiB response
+bytes and 4,000-character instructions. No tools, automatic retry or fallback.
+These are app caps, not claims about SoC quotas.
 
 Failure diagnostics use `local_timeout`, `upstream_http` and `network_error`.
 `invalid_output` now has a fixed source/reason pair: truncated, invalid_json,
 invalid_schema, invalid_envelope, missing_content, tool_calls, unexpected_finish,
-body_limit or unsafe_section. TypeScript and storage reject unknown reasons and
+body_limit, unsafe_section or unmatched_edit. TypeScript and storage reject unknown reasons and
 extra keys. Parse exceptions, schema paths, raw provider content and hidden
 reasoning are never persisted. Historical invalid-output rows retain null metadata
 and remain readable. Empty tool-call lists are harmless; actual tool calls fail.
@@ -428,19 +443,22 @@ client error and are not provider diagnostics. No additional content logging or
 live provider calls are needed to distinguish these states.
 
 The [ticket-first AI spec](../workflow/specs/2026-11-08-ticket-first-ai.md)
-supersedes the fixed two-column proposal-in-chat interaction. `ChatPanel` owns
-private turn sending/recovery, the rough-idea starter, writing actions and a
-collapsible discussion, composing the editor as its child. `RequestEditor` owns
+supersedes the fixed two-column proposal-in-chat interaction; the 2026-11-10
+redesign replaces its rough-idea starter and Leave undecided action. `ChatPanel`
+renders the usage meter, latest result (reply, gaps checklist or plain failure
+with Details), one composer, **Check for gaps** and collapsed **Earlier requests**,
+composing the editor as its child. `RequestEditor` owns
 all task replacement, exact local/revision freshness and authorized remote
 rechecks, plus inline review and conditional first-draft Undo. Draft autosave and
 explicit published saves are unchanged. Only a direct, newly requested first-draft
 completion may fill the private editor automatically. Reconciled/polled/history
 results require review. `SuggestionReview` renders a literal text diff, never HTML.
 
-`src/assistance.ts` defines the Draft ticket and Leave undecided messages. They
-are persisted as ordinary immutable turn messages so retries retain their
-inputs. Free-form edits produce validated whole-ticket proposals for review.
-After an ambiguous send, `ChatPanel` reads the saved conversation and checks
+`src/assistance.ts` defines the intents and the fixed draft, gap-check and
+apply-answers messages. Gap questions are stored on `gaps` turns; answers are
+stored on the `edit` turn that applies them, and **Leave undecided** / **Your own
+answer** are added by the client. Questions and options render as plain text.
+After an ambiguous send, `useAssistant` reads the saved conversation and checks
 the original turn key. It offers explicit resend only when that key is absent.
 Reads and sends share an operation guard, and reopening the panel can recover a
 failed read. Recovered proposals use the explicit review flow.

@@ -14,7 +14,7 @@ async function openAi(page: Page) {
   if (await show.isVisible()) await show.click();
 }
 async function askAi(page: Page, message: string) {
-  await page.getByLabel("AI instruction or question", { exact: true }).fill(message);
+  await page.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill(message);
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
 }
 const content = { "Title": "Find saved requirements", "Description": "## Problem description\n\nPMs need to find work.\n\n## Desired behaviour\n\n- Filter requests by title.\n\n<script>window.requestInjected = true</script>\n\n![tracking](https://tracking.invalid/pixel)\n\n[unsafe](javascript:alert(1))" };
@@ -33,7 +33,6 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await login(page, pm);
     await page.getByRole("link", { name: /Requirements team Admin/ }).click();
     await page.getByRole("button", { name: "New task", exact: true }).click();
-    await page.getByRole("button", { name: "Start manually", exact: true }).click();
     await page.getByLabel("Title", { exact: true }).focus();
     await page.keyboard.press("Tab");
     await expect(page.getByLabel("Priority", { exact: true })).toBeFocused();
@@ -87,8 +86,6 @@ async function setupEditor(page: Page) {
   await login(page, pm);
   await page.goto(`/organisations/${org}/requests`);
   await page.getByRole("button", { name: "New task", exact: true }).click();
-  await page.getByRole("button", { name: "Start manually", exact: true }).click();
-  await expect(page.getByLabel("Title", { exact: true })).toBeFocused();
   await openAi(page);
   await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
   return { fixture, pm, org, id: page.url().split("/").at(-1)! };
@@ -109,7 +106,6 @@ test("lost creation/save responses reconcile without duplicate drafts or automat
     await page.getByRole("button", { name: "New task", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: "retrying uses the same creation key" })).toBeVisible();
     await page.getByRole("button", { name: "New task", exact: true }).click();
-    await page.getByRole("button", { name: "Start manually", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     expect((await pm.client.rpc("list_requests", { target_org: org })).data).toHaveLength(1);
     let saveAttempts = 0;
@@ -209,11 +205,11 @@ test("two-field AI workspace keeps clarification separate, applies fresh proposa
   try {
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Description", { exact: true })).toBeVisible();
-    await page.getByLabel("AI instruction or question", { exact: true }).fill("Clarify this feature");
+    await page.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("Clarify this feature");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
     await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("");
-    await page.getByLabel("AI instruction or question", { exact: true }).fill("Please suggest a task proposal.");
+    await page.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("Please suggest a task proposal.");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
     const apply = () => page.getByRole("button", { name: "Accept changes", exact: true }).last();
     await expect(apply()).toBeEnabled();
@@ -221,7 +217,7 @@ test("two-field AI workspace keeps clarification separate, applies fresh proposa
     await apply().click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
     await expect(saved(page)).toBeVisible();
-    await page.getByLabel("AI instruction or question", { exact: true }).fill("slow proposal");
+    await page.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("slow proposal");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
     await expect(page.getByText("AI is responding… You can keep editing.", { exact: true })).toBeVisible();
     await page.getByLabel("Title", { exact: true }).fill("Manual edit during generation");
@@ -229,7 +225,7 @@ test("two-field AI workspace keeps clarification separate, applies fresh proposa
     await expect(apply()).toBeDisabled();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Manual edit during generation");
     await expect(saved(page)).toBeVisible();
-    await page.getByLabel("AI instruction or question", { exact: true }).fill("Please suggest a task proposal.");
+    await page.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("Please suggest a task proposal.");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
     await expect(apply()).toBeEnabled();
     const task = (await pm.client.rpc("read_request", { target_org: org, request_id: id })).data;
@@ -240,15 +236,16 @@ test("two-field AI workspace keeps clarification separate, applies fresh proposa
     await page.reload();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Another editor saved this");
     await openAi(page);
-    await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Latest result", exact: true }).getByText("Here is a proposed task. Review it before applying.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Earlier requests (3)", { exact: true })).toBeVisible();
     await page.screenshot({ path: "test-results/ai-workspace-desktop.png", fullPage: true, caret: "initial" });
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
-    await expect(page.getByLabel("AI instruction or question", { exact: true })).not.toBeVisible();
+    await expect(page.getByLabel("Ask AI to change or explain this ticket", { exact: true })).not.toBeVisible();
     await page.getByRole("button", { name: "Show AI assistant", exact: true }).focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Latest result", exact: true }).getByText("Here is a proposed task. Review it before applying.", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: "test-results/ai-workspace-mobile.png", fullPage: true, caret: "initial" });
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Another editor saved this");
@@ -266,21 +263,21 @@ test("lost chat responses reconcile once and failed turns retry without duplicat
       else if (posts === 1 && !failedRead) { failedRead = true; await route.abort(); return; }
       await route.continue();
     });
-    await page.getByLabel("AI instruction or question", { exact: true }).fill("Clarify response loss");
+    await page.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("Clarify response loss");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "Reopen the AI assistant" })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "AI assistant", exact: true }).getByRole("alert").filter({ hasText: "Reopen the AI assistant" })).toBeVisible();
     expect(failedRead).toBe(true);
     await expect(page.getByRole("button", { name: "Ask AI", exact: true })).toBeDisabled();
-    await expect(page.getByLabel("AI instruction or question", { exact: true })).toHaveValue("Clarify response loss");
+    await expect(page.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toHaveValue("Clarify response loss");
     await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
     await page.getByRole("button", { name: "Show AI assistant", exact: true }).click();
     await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
     await expect(page.getByText("Clarify response loss", { exact: true })).toHaveCount(1);
-    await expect(page.getByLabel("AI instruction or question", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toHaveValue("");
     expect(posts).toBe(1);
-    await page.getByLabel("AI instruction or question", { exact: true }).fill("simulate failure");
+    await page.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("simulate failure");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
-    await page.getByRole("button", { name: "Retry AI turn", exact: true }).click();
+    await page.getByRole("button", { name: "Try again", exact: true }).click();
     await expect.poll(async () => (await pm.client.rpc("read_chat", { target_org: org, request_id: id })).data.at(-1).generation).toBe(2);
     await expect(page.getByText("simulate failure", { exact: true })).toHaveCount(1);
     expect((await pm.client.rpc("read_chat", { target_org: org, request_id: id })).data).toHaveLength(2);
@@ -297,7 +294,7 @@ test("applying a proposal to a published task remains local until explicit Updat
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toContainText("This task is visible to members of the");
     const before = (await pm.client.rpc("read_request", { target_org: org, request_id: id })).data;
-    await page.getByLabel("AI instruction or question", { exact: true }).fill("Please suggest a task proposal.");
+    await page.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("Please suggest a task proposal.");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
     await page.getByRole("button", { name: "Accept changes", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
@@ -326,9 +323,9 @@ test("an unadmitted send can use the current task after reconciliation without l
       } else if (route.request().method() === "GET" && otherTurn && ++reads === 2) await route.abort();
       else await route.continue();
     });
-    await page.getByLabel("AI instruction or question", { exact: true }).fill("My unsent question");
+    await page.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("My unsent question");
     await page.getByRole("button", { name: "Ask AI", exact: true }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "Reopen the AI assistant" })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "AI assistant", exact: true }).getByRole("alert").filter({ hasText: "Reopen the AI assistant" })).toBeVisible();
     const completed = await fixture.admin.rpc("finish_chat_turn", { ...target, turn_id: otherTurn!.id, worker_generation: otherTurn!.generation,
       human_reply: "The other turn finished.", task_proposal: null, failure_code: null, failure_diagnostic: null });
     expect(completed.error).toBeNull();
@@ -337,18 +334,20 @@ test("an unadmitted send can use the current task after reconciliation without l
     await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
     await page.getByRole("button", { name: "Show AI assistant", exact: true }).click();
     await expect(page.getByText("The other turn finished.", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Send reconciled message with current task", exact: true }).click();
+    await page.getByRole("button", { name: "Send again", exact: true }).click();
     await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
     await expect(page.getByText("My unsent question", { exact: true })).toHaveCount(1);
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Changed after failed send");
-    await expect(page.getByLabel("AI instruction or question", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toHaveValue("");
   } finally { await fixture.cleanup(); }
 });
 
 
-test("AI failures show distinct durable local timeout, upstream HTTP and network diagnostics", async ({ page }) => {
+test("AI failures read as one plain sentence with diagnostics behind Details", async ({ page }) => {
   const { fixture } = await setupEditor(page);
   try {
+    const panel = page.getByRole("complementary", { name: "AI assistant", exact: true });
+    const latest = panel.getByRole("region", { name: "Latest result", exact: true });
     for (const [message, expected] of [
       ["simulate upstream 502", "SoC returned HTTP 502 after 1.2 s"],
       ["simulate local timeout", "AI response timed out after 90 seconds."],
@@ -356,21 +355,54 @@ test("AI failures show distinct durable local timeout, upstream HTTP and network
       ["simulate network failure", "The connection to SoC failed after 0.6 s"],
       ["simulate failure", "No detailed diagnostic was recorded for this turn"],
       ["simulate malformed JSON", "SoC completed its response, but it was not valid JSON"],
+      ["simulate unmatched edit", "AI tried to change text that is not in your ticket exactly once"],
       ["simulate truncated response", "SoC reached the 2,000-token output limit before finishing"],
     ]) {
-      await page.getByLabel("AI instruction or question", { exact: true }).fill(message);
-      await page.getByRole("button", { name: "Ask AI", exact: true }).click();
-      await expect(page.getByRole("alert").filter({ hasText: expected })).toBeVisible();
+      await askAi(page, message);
+      await expect(latest.getByRole("alert")).toHaveText("AI couldn't complete this request. Your ticket is unchanged, and this did not use one of your hourly AI requests.");
+      await expect(latest.getByText(expected)).not.toBeVisible();
+      await latest.getByText("Details", { exact: true }).click();
+      await expect(latest.getByText(expected)).toBeVisible();
+      await expect(latest.getByRole("button", { name: "Try again", exact: true })).toBeEnabled();
     }
+    await expect(panel.getByText("20 of 20 AI requests left this hour.", { exact: true })).toBeVisible();
     await page.reload();
     await openAi(page);
-    await expect(page.getByRole("alert").filter({ hasText: "SoC returned HTTP 502 after 1.2 s" })).toBeVisible();
-    await expect(page.getByRole("alert").filter({ hasText: /^AI response timed out after 90 seconds\.$/ })).toBeVisible();
-    await expect(page.getByRole("alert").filter({ hasText: /^AI response timed out after 60 seconds\.$/ })).toBeVisible();
-    await expect(page.getByRole("alert").filter({ hasText: "No upstream HTTP error response was received" })).toBeVisible();
-    await expect(page.getByRole("alert").filter({ hasText: "SoC completed its response, but it was not valid JSON" })).toBeVisible();
-    await expect(page.getByRole("alert").filter({ hasText: "SoC reached the 2,000-token output limit before finishing" })).toBeVisible();
+    await latest.getByText("Details", { exact: true }).click();
+    await expect(latest.getByText("SoC reached the 2,000-token output limit before finishing")).toBeVisible();
+    await panel.getByText("Earlier requests (7)", { exact: true }).click();
+    await expect(panel.getByText("This request failed and did not use one of your hourly AI requests.", { exact: true })).toHaveCount(7);
     await page.screenshot({ path: "test-results/ai-failure-diagnostics.png", fullPage: true, caret: "initial" });
+  } finally { await fixture.cleanup(); }
+});
+
+test("the usage meter shows what is left and blocks requests at the limit", async ({ page }) => {
+  const { fixture, pm, org, id } = await setupEditor(page);
+  try {
+    const panel = page.getByRole("complementary", { name: "AI assistant", exact: true });
+    await askAi(page, "Clarify this feature");
+    await expect(panel.getByText("19 of 20 AI requests left this hour.", { exact: true })).toBeVisible();
+    const latest = panel.getByRole("region", { name: "Latest result", exact: true });
+    await askAi(page, "Explain the edge cases");
+    await expect(panel.getByText("18 of 20 AI requests left this hour.", { exact: true })).toBeVisible();
+    // Repeating an earlier request shows that saved answer as the latest result.
+    await askAi(page, "Clarify this feature");
+    await expect(latest.getByText("Clarify this feature", { exact: true })).toBeVisible();
+    await expect(latest.getByText("Explain the edge cases", { exact: true })).toHaveCount(0);
+    await expect(panel.getByText("18 of 20 AI requests left this hour.", { exact: true })).toBeVisible();
+    const target = { target_org: org, request_id: id, actor_id: pm.id };
+    const current = (await pm.client.rpc("read_request", { target_org: org, request_id: id })).data;
+    for (let i = 0; i < 18; i++) {
+      const admitted = await fixture.admin.rpc("begin_chat_turn", { ...target, turn_key: crypto.randomUUID(), base_revision: current.revision, input_fields: current.fields, user_message: `Seeded ${i}`, retry_failed: false });
+      expect(admitted.error).toBeNull();
+      expect((await fixture.admin.rpc("finish_chat_turn", { ...target, turn_id: admitted.data.turn.id, worker_generation: 1, human_reply: "Seeded reply", task_proposal: null, failure_code: null })).error).toBeNull();
+    }
+    await page.reload(); await openAi(page);
+    await expect(panel.getByText(/^0 of 20 AI requests left this hour\. More at .+\.$/)).toBeVisible();
+    await panel.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("One more");
+    await expect(panel.getByRole("button", { name: "Ask AI", exact: true })).toBeDisabled();
+    await expect(panel.getByRole("button", { name: "Check for gaps", exact: true })).toBeDisabled();
+    await expect(page.getByLabel("Title", { exact: true })).toBeEditable();
   } finally { await fixture.cleanup(); }
 });
 
@@ -380,9 +412,9 @@ test("rough ideas become private AI drafts with undo and inline review", async (
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests`);
     await page.getByRole("button", { name: "New task", exact: true }).click();
-    await page.getByLabel("What needs to change?", { exact: true }).fill("Remember filters when I return to the request list.");
+    await page.getByLabel("Description", { exact: true }).fill("Remember filters when I return to the request list.");
     await expect(saved(page)).toBeVisible();
-    await page.getByRole("button", { name: "Draft ticket", exact: true }).click();
+    await page.getByRole("button", { name: "Draft with AI", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
     await expect(saved(page)).toBeVisible();
     await expect(page.getByRole("button", { name: "Hide AI assistant", exact: true })).toHaveAttribute("aria-expanded", "true");
@@ -413,7 +445,7 @@ test("switching to manual writing during the first-draft freshness check prevent
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests`);
     await page.getByRole("button", { name: "New task", exact: true }).click();
-    await page.getByLabel("What needs to change?", { exact: true }).fill("Keep this original rough idea.");
+    await page.getByLabel("Description", { exact: true }).fill("Keep this original rough idea.");
     await expect(saved(page)).toBeVisible();
     const id = page.url().split("/").at(-1)!;
     let started!: () => void; const intercepted = new Promise<void>(resolve => { started = resolve; });
@@ -422,38 +454,49 @@ test("switching to manual writing during the first-draft freshness check prevent
       if (route.request().method() === "GET") { started(); await hold; }
       await route.continue();
     });
-    await page.getByRole("button", { name: "Draft ticket", exact: true }).click();
+    await page.getByRole("button", { name: "Draft with AI", exact: true }).click();
     await intercepted;
-    await page.getByRole("button", { name: "Start manually", exact: true }).click();
+    await page.getByLabel("Title", { exact: true }).fill("Manual title");
     release();
     await expect(page.getByRole("region", { name: "Suggested ticket changes", exact: true })).toBeVisible();
-    await expect(page.getByLabel("Title", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Manual title");
     await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Keep this original rough idea.");
   } finally { release?.(); await fixture.cleanup(); }
 });
 
-test("private discussion can leave an unanswered question open for review", async ({ page }) => {
-  const { fixture } = await setupEditor(page);
+test("Check for gaps asks structured questions and applies answers in one request for review", async ({ page }) => {
+  const { fixture, pm, org, id } = await setupEditor(page);
   try {
     await page.getByLabel("Title", { exact: true }).fill("Remember my filters");
     const original = "## Problem description\n\nKeep my wording.\n\n## Out of scope\n\nNo cross-device sync.";
     await page.getByLabel("Description", { exact: true }).fill(original);
     await expect(saved(page)).toBeVisible();
-    await askAi(page, "What details are still missing?");
-    await expect(page.getByRole("button", { name: "Leave undecided", exact: true })).toBeVisible();
+    const panel = page.getByRole("complementary", { name: "AI assistant", exact: true });
+    await panel.getByRole("button", { name: "Check for gaps", exact: true }).click();
+    const checklist = panel.getByRole("region", { name: "Open questions", exact: true });
+    await expect(checklist.getByRole("group", { name: "Which lists should keep filters?", exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Suggested ticket changes", exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Description", { exact: true })).toHaveValue(original);
-    await page.getByLabel("AI instruction or question", { exact: true }).fill("Keep this instruction while I write.");
+    await expect(checklist.getByRole("button", { name: "Apply answers", exact: true })).toBeDisabled();
+    await panel.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("Keep this instruction while I write.");
     await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
     await page.getByRole("button", { name: "Show AI assistant", exact: true }).click();
-    await expect(page.getByLabel("AI instruction or question", { exact: true })).toHaveValue("Keep this instruction while I write.");
-    await page.getByRole("button", { name: "Leave undecided", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Suggested ticket changes", exact: true })).toBeVisible();
+    await expect(panel.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toHaveValue("Keep this instruction while I write.");
+    await checklist.getByRole("group", { name: "Which lists should keep filters?", exact: true }).getByLabel("Requests only", { exact: true }).check();
+    await checklist.getByRole("group", { name: "How long should filters persist?", exact: true }).getByLabel("Leave undecided", { exact: true }).check();
+    await page.screenshot({ path: "test-results/ticket-gaps-desktop.png", fullPage: true });
+    await checklist.getByRole("button", { name: "Apply answers", exact: true }).click();
+    const review = page.getByRole("region", { name: "Suggested ticket changes", exact: true });
+    await expect(review).toBeVisible();
     await expect(page.getByLabel("Description", { exact: true })).toHaveValue(original);
-    await page.screenshot({ path: "test-results/ticket-review-desktop.png", fullPage: true });
+    const turns = (await pm.client.rpc("read_chat", { target_org: org, request_id: id })).data;
+    expect(turns).toHaveLength(2);
+    expect(turns[1]).toMatchObject({ intent: "edit", answers: [{ question: "Which lists should keep filters?", answer: "Requests only" }, { question: "How long should filters persist?", answer: null }] });
+    await review.getByRole("button", { name: "Accept changes", exact: true }).click();
+    await expect(page.getByLabel("Description", { exact: true })).toHaveValue(original + "\n\n## Decisions\n\n- Which lists should keep filters? Requests only\n- Unresolved: How long should filters persist?");
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("AI instruction or question", { exact: true })).toBeVisible();
+    await expect(panel.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: "test-results/ticket-review-mobile.png", fullPage: true });
   } finally { await fixture.cleanup(); }
@@ -465,7 +508,7 @@ test("a lost first-draft response preserves the rough idea and requires review a
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests`);
     await page.getByRole("button", { name: "New task", exact: true }).click();
-    await page.getByLabel("What needs to change?", { exact: true }).fill("Keep my original idea after response loss.");
+    await page.getByLabel("Description", { exact: true }).fill("Keep my original idea after response loss.");
     await expect(saved(page)).toBeVisible();
     const id = page.url().split("/").at(-1)!;
     let lose = true;
@@ -473,9 +516,9 @@ test("a lost first-draft response preserves the rough idea and requires review a
       if (route.request().method() === "POST" && lose) { lose = false; await route.fetch(); await route.abort(); }
       else await route.continue();
     });
-    await page.getByRole("button", { name: "Draft ticket", exact: true }).click();
+    await page.getByRole("button", { name: "Draft with AI", exact: true }).click();
     await expect(page.getByRole("button", { name: "Review ticket changes", exact: true })).toBeVisible();
-    await expect(page.getByLabel("What needs to change?", { exact: true })).toHaveValue("Keep my original idea after response loss.");
+    await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Keep my original idea after response loss.");
     await page.getByRole("button", { name: "Review ticket changes", exact: true }).click({ timeout: 10000 });
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("");
     await page.getByRole("button", { name: "Accept changes", exact: true }).click();
@@ -490,9 +533,9 @@ test("undo cannot replace manual edits or a newer remotely saved ticket", async 
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests`);
     await page.getByRole("button", { name: "New task", exact: true }).click();
-    await page.getByLabel("What needs to change?", { exact: true }).fill("Original idea.");
+    await page.getByLabel("Description", { exact: true }).fill("Original idea.");
     await expect(saved(page)).toBeVisible();
-    await page.getByRole("button", { name: "Draft ticket", exact: true }).click();
+    await page.getByRole("button", { name: "Draft with AI", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
     await expect(saved(page)).toBeVisible();
     await page.getByLabel("Title", { exact: true }).fill("My manual edit");
@@ -516,19 +559,19 @@ test("a failed first-draft freshness check opens review with a usable manual edi
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests`);
     await page.getByRole("button", { name: "New task", exact: true }).click();
-    await page.getByLabel("What needs to change?", { exact: true }).fill("Keep my rough idea on read failure.");
+    await page.getByLabel("Description", { exact: true }).fill("Keep my rough idea on read failure.");
     await expect(saved(page)).toBeVisible();
     const id = page.url().split("/").at(-1)!; let fail = true;
     await page.route(`**/api/organisations/${org}/requests/${id}`, async route => {
       if (route.request().method() === "GET" && fail) { fail = false; await route.abort(); }
       else await route.continue();
     });
-    await page.getByRole("button", { name: "Draft ticket", exact: true }).click();
+    await page.getByRole("button", { name: "Draft with AI", exact: true }).click();
     await expect(page.getByRole("region", { name: "Suggested ticket changes", exact: true })).toBeVisible();
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Accept changes", exact: true }).click();
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("AI task proposal");
-    await expect(page.getByLabel("What needs to change?", { exact: true })).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "Draft with AI", exact: true })).toHaveCount(0);
   } finally { await fixture.cleanup(); }
 });
 

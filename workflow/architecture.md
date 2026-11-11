@@ -25,4 +25,6 @@ The PM AI chat uses session-authorized reads plus isolated service-role-only
 turn admission/completion after verified identity. Worker RPCs recheck access;
 ordinary account/task operations remain on the session client. Never accept
 client-supplied actor IDs/history or expose the worker key. SoC context contains
-only one task and its complete private conversation; no silent trimming.
+one ticket, the instruction, any structured gap answers and at most the three
+latest completed replies (cut to 1,000 characters); proposals and older turns
+are never sent. AI usage is charged and refunded only in the database.

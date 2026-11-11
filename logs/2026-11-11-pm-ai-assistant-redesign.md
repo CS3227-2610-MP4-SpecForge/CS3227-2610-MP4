@@ -1,0 +1,20 @@
+# 2026-11-11: PM AI assistant redesign
+
+- Changes: Implemented the [approved spec](../workflow/specs/2026-11-10-pm-ai-assistant-redesign.md).
+  - New drafts have one AI text input; the rough idea is the Description, and **Draft with AI** sits under it.
+  - The sidebar shows remaining usage, the latest result, one composer, **Check for gaps** (a structured checklist; **Apply answers** is one request) and collapsed **Earlier requests**.
+  - Failures show one plain sentence; diagnostics sit behind **Details**.
+  - Each request has an intent (`draft`/`gaps`/`edit`) with its own instructions and output budget (2,000/600/1,200 tokens).
+  - SoC receives only the ticket, the instruction, any structured answers and at most three recent replies, never earlier proposals.
+  - Edits are exact-text replacements applied server-side, so AI edits on long tickets no longer need a whole-ticket rewrite.
+  - Migration `20261111000000_pm_assistant.sql` charges 20 requests per hour and refunds failures within the charging window. A never-refunded cap of 40 attempts per hour bounds SoC spend.
+  - Identical completed requests replay with no call or charge. `read_ai_usage()` exposes the caller's own usage.
+  - Guides and `architecture.md` are updated.
+- Validation:
+  - Unit `npm test`: 140 passed.
+  - `npm run test:integration` against local Supabase: 78 passed.
+  - `npm run test:e2e`: 51 passed, using the local fake AI.
+  - `npm run verify` passed on a copy of the working tree without the git-ignored `local/` folder. In this checkout, typecheck also scans `local/`. That folder holds a pre-existing broken experiment test and an old chat-panel snapshot that no longer matches `src/assistance.ts`.
+  - No live SoC calls were made, so writing quality with real models is unmeasured.
+- Review: The security preflight set the refund, dedupe, intent and edit rules recorded in the spec. The post-change security review approved; its low findings (index-based answer choices, precise "did not use a request" wording, a retry-refund test) were fixed. The code review found one blocking issue: a deduplicated replay showed the wrong latest result. It was fixed with a browser regression test. Two browser regressions were also fixed: the composer is cleared after a reconciled send, and **Send again** is enabled while a request is unresolved.
+- Open: A bounded live SoC check of the `gaps` and `edit` output shapes on both enabled models before relying on edit-mode quality.

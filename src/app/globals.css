@@ -196,10 +196,17 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .ticket-workspace .chat-panel > * { flex-shrink: 0; }
 .ticket-workspace .chat-panel .chat-transcript { max-height: none; overflow: visible; }
 .chat-panel > h2 { margin-bottom: 0; }
-.idea-starter h2 { font-size: 1rem; margin-bottom: 8px; }
-.idea-starter .eyebrow { margin-bottom: 8px; }
-.idea-starter textarea { min-height: 130px; }
-.idea-starter .muted { font-size: .85rem; }
+.assistant-usage { margin: 0; }
+.assistant-latest { gap: 12px; overflow-wrap: anywhere; }
+.assistant-details summary, .assistant-history summary { cursor: pointer; font-weight: 600; }
+.assistant-details summary:focus-visible, .assistant-history summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.assistant-history .chat-transcript { list-style: none; padding: 0; margin: 12px 0 0; }
+.gaps-checklist { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+.gap-question { border: 0; margin: 0; padding: 0; gap: 6px; }
+.gap-question legend { font-weight: 600; margin-bottom: 6px; overflow-wrap: anywhere; }
+.gap-option { display: flex; align-items: flex-start; gap: 8px; font-weight: 400; overflow-wrap: anywhere; }
+.gap-option input { margin-top: 3px; flex-shrink: 0; }
+.draft-with-ai { align-items: center; }
 .suggestion-review { border: 1px solid var(--brand); border-radius: var(--radius); background: var(--surface); padding: 16px; }
 .suggestion-review h2, .suggestion-review h3 { margin: 0 0 8px; }
 .suggestion-diff { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }

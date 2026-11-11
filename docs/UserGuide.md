@@ -209,29 +209,36 @@ including unsaved edits, will appear to readers. Switch back to **Write** to
 continue editing. You can publish or update from either tab.
 
 New drafts show editable **Title** and **Description** immediately. Write
-directly, or use **What needs to change?** in the right AI panel and choose
-**Draft ticket**. **Start manually** dismisses the starter and focuses Title;
-typing a title also switches to manual writing. Rough ideas autosave privately. A fresh AI draft fills the editor and
-has **Undo AI draft** during the current editing session while its generated
-content is unchanged. AI never publishes
-for you; failed, stale or recovered generations require review instead.
+directly, or write a rough idea in **Description** and choose **Draft with AI**
+below it (shown while the title is empty). Rough ideas autosave privately like
+any draft. A fresh AI draft fills the editor and has **Undo AI draft** during the
+current editing session while its generated content is unchanged. AI never
+publishes for you; failed, stale or recovered generations require review instead.
 
-The ticket occupies the main workspace. The right AI panel starts open and
-contains drafting tools, private discussion, suggestions and undo. Use **Hide AI
+The ticket occupies the main workspace. The right **AI assistant** panel starts
+open and contains your remaining usage, the latest result, one instruction box,
+**Check for gaps**, suggestions, undo and collapsed **Earlier requests**. Use **Hide AI
 assistant** or **Show AI assistant** to collapse or reopen it; on phones it
 appears beneath the ticket. Collapsing keeps your conversation, typed instruction
 and pending suggestion. Chat is private to the original PM
 author, including from admins and after publication.
 
-Use the **AI instruction or question** box and **Ask AI** for questions and
-suggested edits. Review suggestions before applying them. Choose **Leave undecided**
-to ask AI to record an open question. Useful answer options may appear as chat text.
+Use the **Ask AI to change or explain this ticket** box and **Ask AI** for
+questions and suggested edits. Review suggestions before applying them.
+
+**Check for gaps** lists up to five open decisions, each with suggested answers,
+**Leave undecided** and **Your own answer**. It never changes the ticket. Answer
+what you can and choose **Apply answers**: one request writes your answers into a
+suggestion, recording undecided questions as unresolved. Unanswered questions are
+left out.
 
 SoC writing remains experimental: a valid response can add unsupported requirements,
 omit supplied details, or contradict an unresolved question. Check the entire draft
 and every suggestion before accepting or publishing. If a writing action returns
 only discussion, no ticket changes are available to review; continue manually or
 send a more specific instruction. Invalid responses preserve your existing work.
+AI edits change exact pieces of text; if the text it names is not in your ticket
+exactly once, nothing is applied.
 
 A complete title/description suggestion can still be reviewed if SoC omits its
 accompanying message; the app displays “Review these suggested ticket changes.”
@@ -265,10 +272,10 @@ conflict. New-draft retries use the same creation key to avoid duplicates.
 
 After a lost response, SpecForge checks the saved conversation automatically.
 If the send reached the server, its turn appears in the conversation. If the
-check finds no turn, you can resend using the current ticket. If the check
-fails, reopen the AI assistant to try again. Failed turns offer **Retry AI
-turn** when their ticket snapshot still matches.
-Failure notices distinguish:
+check finds no turn, **Send again** uses the current ticket. If the check fails,
+reopen the AI assistant to try again. A failure shows one sentence saying your
+ticket is unchanged and did not use one of your hourly AI requests, plus **Try again** while the
+ticket snapshot still matches. **Details** explains what happened:
 
 - **Invalid AI output:** new failures explain whether the response was cut short,
   was not valid JSON, had the wrong ticket structure, or could not be safely used.
@@ -293,13 +300,20 @@ There are no automatic provider retries or fallback models. Manual editing
 remains available when AI fails. Unsaved task text warns before departure and
 is not stored in browser persistent storage.
 
-App limits (not SoC quotas): one active AI turn per request/account,20attempts
-per account/hour,4,000-character messages,90-second provider deadline and
-2,000output tokens per response (debugging policy; no separate AI reply character ceiling). The full serialized task/conversation/system
-context is capped at48,000UTF-8bytes; older messages are never silently removed.
-When context or conversation storage is full, continue editing manually. Chat
-storage is bounded to1MiB, reserving completion space before admission. Long or
-truncated AI responses fail safely; ask for a concise proposal or edit manually.
+**Usage.** The panel shows, for example, **14 of 20 AI requests left this hour**,
+with the reset time once fewer than five remain. Failed requests give their
+request back, but every attempt counts toward the 40-attempt limit.
+Repeating a request that already completed on the unchanged ticket shows the
+saved answer without using a request. At most 40 attempts (including failures)
+are allowed per hour. When a limit is reached, the panel says which one;
+manual editing always remains available.
+
+App limits (not SoC quotas): one active AI request per ticket/account, the
+hourly limits above, 4,000-character instructions and a 90-second provider
+deadline. AI sees the current ticket, your instruction and at most your three
+latest completed requests. If the ticket alone is too long for AI, the panel
+says so before sending. Chat storage is bounded to 1MiB per ticket. Long or
+truncated AI responses fail safely; ask for a concise change or edit manually.
 
 Markdown display supports headings, lists, paragraphs, `**bold text**`,
 `*italic text*` or `_italic text_`, and fenced code. Raw HTML, images and links

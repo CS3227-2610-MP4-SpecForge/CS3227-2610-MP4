@@ -43,23 +43,25 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
     await expect(page.getByLabel("Delivery status", { exact: true })).toBeDisabled();
     await expect(page.getByRole("heading", { name: "Remember filters", exact: true })).toHaveCount(0);
     await expect(page.getByText(/^SF-\d+$/)).toHaveCount(0);
-    const panel = page.getByRole("complementary", { name: "AI discussion", exact: true });
+    const panel = page.getByRole("complementary", { name: "AI assistant", exact: true });
     await expect(panel).toBeVisible();
-    for (const name of ["Refresh chat", "Improve clarity", "Add acceptance criteria", "Find missing details"]) {
+    for (const name of ["Refresh chat", "Improve clarity", "Add acceptance criteria", "Find missing details", "Leave undecided", "Start manually"]) {
       await expect(panel.getByRole("button", { name, exact: true })).toHaveCount(0);
     }
+    await expect(panel.getByRole("button", { name: "Check for gaps", exact: true })).toBeVisible();
+    await expect(panel.getByText("20 of 20 AI requests left this hour.", { exact: true })).toBeVisible();
     const title = (await page.getByLabel("Title", { exact: true }).boundingBox())!;
     const due = (await page.getByLabel("Due date", { exact: true }).boundingBox())!;
     const description = (await page.getByLabel("Description", { exact: true }).boundingBox())!;
     const sidebar = (await panel.boundingBox())!;
     expect(due.y).toBeGreaterThan(title.y); expect(due.y).toBeLessThan(description.y); expect(due.x).toBeLessThan(sidebar.x);
-    await panel.getByLabel("AI instruction or question", { exact: true }).fill("Keep my unsent thought");
+    await panel.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("Keep my unsent thought");
     await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
     await expect(panel).not.toBeVisible();
     await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Show AI assistant", exact: true }).click();
-    await expect(panel.getByLabel("AI instruction or question", { exact: true })).toHaveValue("Keep my unsent thought");
-    await panel.getByLabel("AI instruction or question", { exact: true }).fill("Suggest a proposal for clearer wording.");
+    await expect(panel.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toHaveValue("Keep my unsent thought");
+    await panel.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("Suggest a proposal for clearer wording.");
     await panel.getByRole("button", { name: "Ask AI", exact: true }).click();
     await expect(panel.getByRole("region", { name: "Suggested ticket changes", exact: true })).toBeVisible();
     await page.screenshot({ path: "test-results/ticket-layout-author.png", fullPage: true });
@@ -93,7 +95,14 @@ test("a new ticket is editable with AI collapsed and a Developer reads the same 
     await expect(page.getByLabel("Description", { exact: true })).toBeVisible();
     const about = page.getByRole("region", { name: "About this ticket", exact: true });
     await expect(about.getByRole("status")).toHaveText("Awaiting first autosave");
-    await expect(page.getByRole("complementary", { name: "AI discussion", exact: true }).getByLabel("What needs to change?", { exact: true })).toBeVisible();
+    // One AI text input: the rough idea is the Description itself.
+    const assistantPanel = page.getByRole("complementary", { name: "AI assistant", exact: true });
+    await expect(assistantPanel.getByRole("textbox")).toHaveCount(1);
+    await expect(page.getByLabel("What needs to change?", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Draft with AI", exact: true })).toHaveCount(0);
+    await page.getByLabel("Description", { exact: true }).fill("A rough idea");
+    await expect(page.getByRole("button", { name: "Draft with AI", exact: true })).toBeVisible();
+    await page.getByLabel("Description", { exact: true }).fill("");
     await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
     await page.getByLabel("Title", { exact: true }).fill("Write the ticket directly");
     await expect(savedTicketStatus(page)).toHaveText(/^Last autosaved: .+/);
@@ -184,7 +193,7 @@ test("a new ticket is editable with AI collapsed and a Developer reads the same 
     await expect(reader.locator(".ticket-content").getByRole("region", { name: "Task visibility", exact: true })).toBeVisible();
     expect((await visibility(reader).boundingBox())!.y).toBeGreaterThan((await reader.getByRole("link", { name: "Back to requests", exact: true }).boundingBox())!.y);
     const title = reader.getByRole("heading", { name: "Write the ticket directly", exact: true });
-    await expect(title).toHaveCount(1); await expect(reader.getByRole("complementary", { name: "AI discussion", exact: true })).toHaveCount(0);
+    await expect(title).toHaveCount(1); await expect(reader.getByRole("complementary", { name: "AI assistant", exact: true })).toHaveCount(0);
     await expect(reader.getByText(/^SF-\d+$/)).toHaveCount(0);
     await expect(reader.locator(".badge").filter({ hasText: /Submitted|Private draft/ })).toHaveCount(0);
     expect((await title.boundingBox())!.y).toBeLessThan((await reader.getByRole("region", { name: "Ticket delivery details", exact: true }).boundingBox())!.y);

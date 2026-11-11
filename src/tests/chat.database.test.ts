@@ -36,7 +36,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     const dependencies = { worker: () => fixture.admin, provider: async () => { calls++; return { reply: "x".repeat(8001), proposal: { title: "Search", description: "## Desired behaviour\n\n- Search tasks" } }; } };
     const app = (actor: typeof pm) => createApplication({ origin: "http://localhost:3000", client: () => actor.client, chat: dependencies });
     const path = `http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`;
-    const body = { key: randomUUID(), revision: 1, fields: { title: "", description: "" }, message: "Please propose a task", retry: false };
+    const body = { key: randomUUID(), intent: "edit", revision: 1, fields: { title: "", description: "" }, message: "Please propose a task", retry: false };
     const post = () => new Request(path, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify(body) });
     expect((await app(other)(post())).status).toBe(403); expect(calls).toBe(0);
     const first = await app(pm)(post()); expect(first.status).toBe(200);
@@ -57,8 +57,8 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     const provider = createSocProvider({ baseUrl: "https://soclaas-api.comp.nus.edu.sg/v1", model, key: "fixture-key" }, async () => Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(content) } }] }));
     const app = (actor: typeof pm) => createApplication({ origin: "http://localhost:3000", client: () => actor.client, chat: { worker: () => fixture.admin, provider } });
     const path = `http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`;
-    const post = async () => {
-      const response = await app(pm)(new Request(path, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), revision: 2, fields, message: "Suggest a clearer ticket draft." }) }));
+    const post = async (intent = "draft") => {
+      const response = await app(pm)(new Request(path, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), intent, revision: 2, fields, message: "Suggest a clearer ticket draft." }) }));
       expect(response.status).toBe(200); return (await response.json()).turn;
     };
     const turn = await post();
@@ -68,7 +68,8 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     expect((await (await app(pm)(new Request(path))).json()).turns).toEqual([turn]);
     expect((await app(other)(new Request(path))).status).toBe(403);
     content = { reply: "Keep this clarification", proposal: { title: "Partial" } };
-    expect(await post()).toMatchObject({ status: "failed", proposal: null, reply: null, error_code: "invalid_output", diagnostic: { source: "invalid_output", reason: "invalid_schema" } });
+    // An identical draft would return the saved turn, so check the edit intent's strict output.
+    expect(await post("edit")).toMatchObject({ status: "failed", proposal: null, reply: null, error_code: "invalid_output", diagnostic: { source: "invalid_output", reason: "invalid_schema" } });
     const saved = (await pm.client.rpc("read_request", { target_org: org, request_id: task.id })).data;
     expect(saved).toMatchObject({ fields, revision: 2, submitted_at: null });
   });
@@ -79,7 +80,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     let fail = true; let calls = 0;
     const app = createApplication({ origin: "http://localhost:3000", client: () => pm.client, chat: { worker: () => fixture.admin, provider: async () => { calls++; if (fail) throw new AiFailure("unavailable"); return { reply: "Who is the user?", proposal: null }; } } });
-    const body = { key: randomUUID(), revision: 1, fields: { title: "", description: "" }, message: "Help me", retry: false };
+    const body = { key: randomUUID(), intent: "edit", revision: 1, fields: { title: "", description: "" }, message: "Help me", retry: false };
     const post = () => app(new Request(`http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify(body) }));
     expect((await (await post()).json()).turn).toMatchObject({ status: "failed", message: "Help me", error_code: "unavailable" });
     expect((await post()).status).toBe(200); expect(calls).toBe(1);
@@ -111,7 +112,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     let started!: () => void; let finish!: () => void;
     const start = new Promise<void>(resolve => { started = resolve; }); const wait = new Promise<void>(resolve => { finish = resolve; });
     const app = createApplication({ origin: "http://localhost:3000", client: () => pm.client, chat: { worker: () => fixture.admin, provider: async () => { started(); await wait; return { reply: "Private late reply", proposal: null }; } } });
-    const response = app(new Request(`http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), revision: 1, fields: { title: "", description: "" }, message: "Clarify" }) }));
+    const response = app(new Request(`http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), intent: "edit", revision: 1, fields: { title: "", description: "" }, message: "Clarify" }) }));
     await start;
     expect((await admin.client.rpc("change_member", { target_org: org, target_user: pm.id, decision: "remove" })).error).toBeNull();
     finish(); const result = await response;
@@ -124,13 +125,13 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     const args = { target_org: org, request_id: task.id, actor_id: pm.id, turn_key: randomUUID(), base_revision: 1, input_fields: { title: "", description: "" }, user_message: "Clarify", retry_failed: false };
     for (let i = 0; i < 20; i++) {
-      const admitted = await fixture.admin.rpc("begin_chat_turn", { ...args, turn_key: i === 0 ? args.turn_key : randomUUID() });
+      const admitted = await fixture.admin.rpc("begin_chat_turn", { ...args, turn_key: i === 0 ? args.turn_key : randomUUID(), user_message: i === 0 ? args.user_message : `Clarify ${i}` });
       expect(admitted.error).toBeNull();
       const completed = await fixture.admin.rpc("finish_chat_turn", { target_org: org, request_id: task.id, actor_id: pm.id, turn_id: admitted.data.turn.id, worker_generation: 1, human_reply: "A question", task_proposal: null, failure_code: null });
       expect(completed.error).toBeNull();
     }
     expect((await fixture.admin.rpc("begin_chat_turn", { ...args, user_message: "Changed input" })).error?.code).toBe("22023");
-    expect((await fixture.admin.rpc("begin_chat_turn", { ...args, turn_key: randomUUID() })).error?.code).toBe("PT429");
+    expect((await fixture.admin.rpc("begin_chat_turn", { ...args, turn_key: randomUUID(), user_message: "A new question" })).error?.code).toBe("PT429");
     expect((await pm.client.rpc("read_chat", { target_org: org, request_id: task.id })).data).toHaveLength(20);
   });
 
@@ -162,7 +163,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     const app = createApplication({ origin: "http://localhost:3000", client: () => pm.client, chat: { worker: () => fixture.admin, provider: async () => { throw new AiFailure("upstream_http", { source: "upstream_http", http_status: 502, elapsed_ms: 1234 }); } } });
     const path = `http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`;
-    const response = await app(new Request(path, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), revision: 1, fields: { title: "", description: "" }, message: "Hello" }) }));
+    const response = await app(new Request(path, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), intent: "edit", revision: 1, fields: { title: "", description: "" }, message: "Hello" }) }));
     expect(response.status).toBe(200);
     expect((await response.json()).turn).toMatchObject({ status: "failed", error_code: "upstream_http", diagnostic: { source: "upstream_http", http_status: 502, elapsed_ms: 1234 } });
     expect((await (await app(new Request(path))).json()).turns[0].diagnostic).toEqual({ source: "upstream_http", http_status: 502, elapsed_ms: 1234 });
@@ -187,7 +188,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     expect((await pm.client.rpc("read_chat", { target_org: org, request_id: task.id })).data[0].diagnostic).toBeNull();
     const app = createApplication({ origin: "http://localhost:3000", client: () => pm.client, chat: { worker: () => fixture.admin, provider: async () => { throw new AiFailure("invalid_output", { source: "invalid_output", reason: "invalid_json" }); } } });
     const path = `http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`;
-    const response = await app(new Request(path, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), revision: 1, fields: args.input_fields, message: "Draft again" }) }));
+    const response = await app(new Request(path, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ key: randomUUID(), intent: "edit", revision: 1, fields: args.input_fields, message: "Draft again" }) }));
     expect(response.status).toBe(200);
     expect((await response.json()).turn).toMatchObject({ status: "failed", error_code: "invalid_output", diagnostic: { source: "invalid_output", reason: "invalid_json" } });
     const reload = (await (await app(new Request(path))).json()).turns;

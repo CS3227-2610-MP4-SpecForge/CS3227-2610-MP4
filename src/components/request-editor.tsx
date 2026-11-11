@@ -5,6 +5,7 @@ import { api, ApiError, failureMessage } from "./http";
 import type { ChatTurn } from "@/chat";
 import { SuggestionReview } from "./suggestion-review";
 import { ChatPanel } from "./chat-panel";
+import { tooLargeForAi, useAssistant } from "./use-assistant";
 import { Markdown } from "./markdown";
 import { deliveryOf, deliveryChanges, sameDelivery, type Delivery } from "@/delivery";
 import { TicketDelivery, TicketDeliveryFields, CopyTicketLink } from "./ticket-delivery";
@@ -61,13 +62,11 @@ function RequestMetadata({ item, author, children }: { item: FeatureRequest; aut
   </section>;
 }
 function RequestEditor({ initial, path, listPath, accountId, organisationName }: { initial: TicketRead; path: string; listPath: string; accountId: string; organisationName: string }) {
-  const [starting, setStarting] = useState(!initial.submitted_at && !initial.fields.title.trim());
   const [suggestion, setSuggestion] = useState<ChatTurn | null>(null);
   const suggestionLive = useRef<ChatTurn | null>(null);
   function review(turn: ChatTurn | null) { suggestionLive.current = turn; setSuggestion(turn); }
   const [undo, setUndo] = useState<{ before: RequestFields; after: RequestFields } | null>(null);
   const [applying, setApplying] = useState(false);
-  const startingLive = useRef(!initial.submitted_at && !initial.fields.title.trim());
   const problemLive = useRef<Problem | null>(null);
   const [stored, setStored] = useState<FeatureRequest>(initial);
   const [fields, setFields] = useState(initial.fields);
@@ -96,7 +95,6 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
     persisted.current = item; setStored(item);
   }
   function edit(key: keyof RequestFields, value: string) {
-    if (key === "title" && value.trim()) { startingLive.current = false; setStarting(false); }
     const next = { ...latest.current, [key]: value };
     latest.current = next; setFields(next); setMessage(""); setValidation("");
   }
@@ -174,28 +172,29 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
       return true;
     } finally { operation.current = false; setApplying(false); }
   }
-  function startManually() { startingLive.current = false; setStarting(false); window.requestAnimationFrame(() => document.getElementById("request-title")?.focus()); }
-  async function receiveSuggestion(turn: ChatTurn, firstDraft: boolean) {
+  // A fresh draft of an untitled private ticket fills the editor with undo;
+  // every other suggestion waits for explicit review.
+  async function receiveSuggestion(turn: ChatTurn) {
     if (!turn.proposal) return;
     try {
-      if (firstDraft && startingLive.current && !persisted.current.submitted_at && !turn.input_fields.title.trim()
-        && await replaceIfFresh(turn.input_fields, turn.base_revision, turn.proposal, () => startingLive.current && !persisted.current.submitted_at)) {
-        setUndo({ before: turn.input_fields, after: turn.proposal }); startManually();
+      if (turn.intent === "draft" && !persisted.current.submitted_at && !turn.input_fields.title.trim()
+        && await replaceIfFresh(turn.input_fields, turn.base_revision, turn.proposal, () => !persisted.current.submitted_at)) {
+        setUndo({ before: turn.input_fields, after: turn.proposal });
         setMessage("AI draft created. Edit it freely, or undo while it is unchanged."); return;
       }
-      review(turn); startManually();
-      window.requestAnimationFrame(() => document.getElementById("ticket-suggestion")?.focus());
-    } catch (failure) {
-      setMessage(failureMessage(failure), true); review(turn); startManually();
-      window.requestAnimationFrame(() => document.getElementById("ticket-suggestion")?.focus());
-    }
+      openReview(turn);
+    } catch (failure) { setMessage(failureMessage(failure), true); openReview(turn); }
+  }
+  function openReview(turn: ChatTurn) {
+    review(turn);
+    window.requestAnimationFrame(() => document.getElementById("ticket-suggestion")?.focus());
   }
   async function acceptSuggestion() {
     const candidate = suggestionLive.current;
     if (!candidate?.proposal) return;
     try {
       if (await replaceIfFresh(candidate.input_fields, candidate.base_revision, candidate.proposal, () => suggestionLive.current === candidate)) {
-        review(null); setUndo(null); startManually(); setMessage("AI changes accepted. Review the ticket before publishing.");
+        review(null); setUndo(null); setMessage("AI changes accepted. Review the ticket before publishing.");
       }
     } catch (failure) { setMessage(failureMessage(failure), true); }
   }
@@ -208,11 +207,14 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
     } catch (failure) { setMessage(failureMessage(failure), true); }
   }
   const blocked = Boolean(problem && problem.kind !== "retry");
+  const canAsk = !busy && !applying && !blocked && withinLimits && (published || !dirty);
+  const assistant = useAssistant({ path: path + "/chat", canSend: canAsk, onSuggestion: receiveSuggestion });
+  const canDraft = !published && !fields.title.trim() && fields.description.trim() !== "";
   const pendingStatus = busy ? "Saving…" : problem ? "Save failed — local edits preserved" : dirty ? "Unsaved changes" : null;
   const autosavedAt = published ? null : stored.last_autosaved_at;
   const savedAt = autosavedAt ?? (published || stored.revision > 1 ? stored.updated_at : null);
   return <section className="stack request-page ticket-editor">
-    <ChatPanel path={path + "/chat"} fields={fields} revision={stored.revision} canSend={!busy && !applying && !blocked && withinLimits && (published || !dirty)} starting={starting} onManual={startManually} onRoughIdea={value => edit("description", value)} onSuggestion={receiveSuggestion}
+    <ChatPanel assistant={assistant} fields={fields} revision={stored.revision} canSend={canAsk} reviewing={suggestion !== null} onReview={openReview}
       header={<><BackLink href={listPath} fullPage>Back to requests</BackLink><CopyTicketLink /></>}
       review={<>
 
@@ -264,6 +266,10 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
                 : <p className="hint">Nothing to preview yet.</p>)}
             </div>
           </div>
+          {canDraft && <div className="actions draft-with-ai">
+            <Button type="button" className="secondary" disabled={assistant.disabled || tooLargeForAi(fields)} onClick={() => { void assistant.send({ key: crypto.randomUUID(), revision: stored.revision, fields: { ...fields }, intent: "draft", retry: false }); }}>Draft with AI</Button>
+            <span className="hint">Write your rough idea in Description, then let AI draft the title and description for review.</span>
+          </div>}
           {validation && <Notice danger>{validation}</Notice>}
           <div className="actions"><Button disabled={Boolean(busy) || applying || blocked || (published && !dirty)}>{published ? "Update" : "Publish"}</Button>
             {!published && <Button type="button" className="secondary" disabled={Boolean(busy) || applying || blocked} onClick={() => { if (window.confirm("Delete this private draft? This cannot be undone.")) void save("delete_draft"); }}>Delete draft</Button>}
