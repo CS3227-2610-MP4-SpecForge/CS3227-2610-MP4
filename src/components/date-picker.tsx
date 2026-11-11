@@ -83,8 +83,8 @@ export function DatePicker({ id, label, value, onChange, disabled = false, form 
     if (event.key === "Escape" && expanded) { event.preventDefault(); event.stopPropagation(); close(); }
   }}>
     <label id={`${id}-label`} htmlFor={id}>{label}</label>
-    <button ref={trigger} id={id} form={form} type="button" className="date-picker-trigger" aria-labelledby={`${id}-label`} aria-haspopup="dialog" aria-expanded={expanded} aria-controls={expanded ? `${id}-calendar` : undefined} disabled={disabled} onClick={() => expanded ? close() : show()}>
-      <span className={selected ? "" : "muted"}>{selected ? shortDate.format(selected) : "Unscheduled"}</span><CalendarDays className="ui-icon" aria-hidden="true" />
+    <button ref={trigger} id={id} form={form} type="button" className="date-picker-trigger" aria-labelledby={`${id}-label ${id}-value`} aria-haspopup="dialog" aria-expanded={expanded} aria-controls={expanded ? `${id}-calendar` : undefined} disabled={disabled} onClick={() => expanded ? close() : show()}>
+      <span id={`${id}-value`} className={selected ? "" : "muted"}>{selected ? shortDate.format(selected) : "Unscheduled"}</span><CalendarDays className="ui-icon" aria-hidden="true" />
     </button>
     {expanded && <div ref={popup} id={`${id}-calendar`} className="date-picker-popover" role="dialog" aria-label={`${label} calendar`} style={position}>
       <DayPicker mode="single" required selected={selected} onSelect={date => commit(dateText(date))} month={month} onMonthChange={setMonth} startMonth={firstMonth} endMonth={lastMonth} captionLayout="dropdown" navLayout="around" autoFocus fixedWeeks labels={{ labelDayButton: date => fullDate.format(date), labelNext: () => "Next month", labelPrevious: () => "Previous month", labelMonthDropdown: () => "Calendar month", labelYearDropdown: () => "Calendar year" }} components={{ Chevron: CalendarChevron, YearsDropdown: CalendarYear }} />

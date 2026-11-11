@@ -29,3 +29,5 @@ export { DatePicker } from "./date-picker";
 export { NotificationBanner } from "./notification-banner";
 
 export { useNotifications, useNotificationState } from "./notifications";
+
+export { Modal } from "./modal";

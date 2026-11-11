@@ -2,7 +2,7 @@ export const aiResponseTimeoutMs = 90_000;
 // Give the server time to admit the turn and persist the result around the SoC call.
 export const aiBrowserTimeoutMs = aiResponseTimeoutMs + 20_000;
 
-export const invalidOutputReasons = ["truncated", "invalid_json", "invalid_schema", "invalid_envelope", "missing_content", "tool_calls", "unexpected_finish", "body_limit", "unsafe_section"] as const;
+export const invalidOutputReasons = ["truncated", "invalid_json", "invalid_schema", "invalid_envelope", "missing_content", "tool_calls", "unexpected_finish", "body_limit", "unsafe_section", "unmatched_edit"] as const;
 export type InvalidOutputReason = typeof invalidOutputReasons[number];
 export type AiDiagnostic =
   | { source: "local_deadline"; elapsed_ms: number }
@@ -21,6 +21,7 @@ export function describeAiFailure(code: string | null, diagnostic?: AiDiagnostic
       tool_calls: "SoC returned a tool call instead of a ticket response. No tool was executed. Continue manually or retry explicitly.",
       unexpected_finish: "SoC did not report a normal completed response. Your ticket is unchanged; retry explicitly or continue manually.",
       body_limit: "The SoC response exceeded the app’s 64 KiB response limit. Ask for a shorter response or continue manually.",
+      unmatched_edit: "AI tried to change text that is not in your ticket exactly once, so nothing was applied. Your ticket is unchanged.",
       unsafe_section: "The acceptance-criteria update could not be safely separated from other sections. Your ticket is unchanged; edit the section manually or request a whole-ticket suggestion.",
     };
     return reasons[diagnostic.reason];
@@ -34,7 +35,7 @@ export function describeAiFailure(code: string | null, diagnostic?: AiDiagnostic
   const messages: Record<string, string> = {
     unavailable: "AI failed or timed out. No detailed diagnostic was recorded for this turn. Your message is saved; retry explicitly when ready.",
     invalid_output: "AI returned an incomplete or invalid response. Ask for a concise response, or continue manually.",
-    context_limit: "The full task and conversation exceed the AI context limit. Nothing was omitted. Continue editing the task manually.",
+    context_limit: "The ticket and your instruction exceed the AI context limit. Shorten the ticket or continue editing manually.",
     interrupted: "The previous turn expired. Retry explicitly if needed; an older worker cannot replace the new result.",
     configuration: "AI is not configured for this environment. Continue editing manually.",
   };

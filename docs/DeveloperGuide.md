@@ -87,7 +87,7 @@ presentation; the provider owns event identity, replacement and three-second tim
 cleanup. Error events use red alert styling and informational events use polite
 status styling. Repeated identical events restart the timer without overlap.
 
-ManagementDialog registers its native top-layer element explicitly so notifications
+The shared `Modal` (used by organisation management and AI change review) registers its native top-layer element explicitly so notifications
 from anywhere remain visible above the modal. Host changes preserve the deadline.
 Keep persistent save/conflict state, field guidance and saved AI history contextual.
 Browser coverage checks last-admin error expiry, signup verification navigation,
@@ -201,12 +201,17 @@ optional. Incomplete draft
 autosaves bypass form validation. Whitespace/limit failures show on-demand
 validation. Idle Publish is clickable; busy or conflicted actions remain blocked.
 
-`ChatPanel` retains its existing request/retry state and owns a two-column layout:
-main ticket content plus a collapsible, initially open AI sidebar. Header and
-review slots let the editor supply its existing controls without duplicating AI
-state. Drafting, writing tools, undo and suggestion review all render inside the
-sidebar. The main editor is always available on empty drafts. Typing a title
-ends first-draft mode so an in-flight draft cannot overwrite manual title entry.
+`ChatPanel` owns a two-column layout: main ticket content plus a collapsible,
+initially open AI sidebar. `useAssistant` (in `use-assistant.ts`) owns the
+conversation state, sending, recovery, polling and usage; the editor creates it
+so **Draft with AI** (in the Description header) and the sidebar share one request
+guard. On an empty ticket the sidebar composer sends a `draft` request carrying the
+PM's text.
+Header and footer slots let the editor supply its own controls (Undo AI draft
+sits in the pinned footer). The transcript, change cards, composer and usage bar
+render inside the sidebar; the review modal is rendered by the editor.
+The main editor is always available on empty drafts, and a first draft fills the
+editor only while its exact snapshot is still current.
 Collapsing uses `hidden`, preserving the mounted conversation and instruction.
 The layout move preserves provider behaviour and permissions. The whole-ticket
 save contract extension is described below.
@@ -287,7 +292,9 @@ The shared editor keeps serialized draft autosave and explicit published saves.
 Native editor entry and departure guards protect unsaved work during navigation.
 
 `GET /api/organisations/[org]/requests/[id]/chat` reads the complete private chat.
-POST accepts `{key, revision, fields, message, retry}` with a256KiB body cap.
+POST accepts `{key, revision, fields, intent, message?, answers?, retry}` with a
+256KiB body cap. `intent` is `draft`, `gaps` or `edit`; draft, gap-check and
+apply-answers turns use fixed server messages from `src/assistance.ts`.
 No client history, actor identity, provider URL/model or system prompt is accepted.
 Session-bound `read_chat` and RLS enforce verified current PM authorship, including
 for submitted tasks. Authenticated clients cannot mutate chat storage or call
@@ -297,8 +304,14 @@ After verified `getUser` and session chat authorization, the isolated server
 worker calls service-role-only `begin_chat_turn` and `finish_chat_turn`. Both
 independently recheck verified identity/current membership/authorship and use
 organisation-first locks. The privileged key never reaches browser code. Each
-idempotent key binds an immutable editor snapshot/message. Persistent admission
-allows one running turn/request and/account,20admitted attempts/account/hour.
+idempotent key binds an immutable editor snapshot, message, intent and answers.
+Persistent admission allows one running turn/request and/account, 20 charged
+requests and 40 admitted attempts per account per hour. Every failed turn is
+refunded once, only within the window that charged it; attempts are never
+refunded, so the attempt cap bounds SoC spend. An identical completed request
+on the current ticket returns the saved turn with no call or charge.
+`read_ai_usage()` returns the signed-in account's `{remaining, limit, resets_at}`;
+GET and POST chat responses include it, and 429 responses name the limit.
 120-second leases and generation checks reject late workers; expired turns are
 retried only on explicit action, never automatically. Completion rechecks access,
 so output after removal is neither stored nor returned. Conversation rows cap
@@ -403,18 +416,26 @@ followed; existing configuration and review/publication controls remain. These
 small, empty-history cases do not establish reliability on full tickets or implement
 the fictional upload/expiry behavior used as test text.
 
-Application policy: full serialized messages (system, complete private history,
-current editor and message) <=48,000UTF-8bytes;2,000output tokens;90-second deadline;
-64KiB response bytes;4,000-character user messages and no separate AI reply
-character ceiling. No context trimming, tools,
-automatic retry or fallback. Invalid/truncated/provider responses become durable
-failed turns without raw provider diagnostics. Context-full failures preserve history
-and allow manual editing. These are app caps, not claims about SoC quotas.
+Application policy ([PM assistant redesign](../workflow/specs/2026-11-10-pm-ai-assistant-redesign.md)):
+each request sends a shared rule block plus that intent's rules, then one JSON
+payload `{ticket, instruction, recent, answers?}`. `recent` holds at most the three
+latest completed turns as `{message, reply}` with replies cut to 1,000 characters;
+proposals and older turns are never sent. Output budgets are 2,000 tokens for
+`draft`, 600 for `gaps` and 1,200 for `edit`. Edits return exact-text
+`{field, find, replace}` changes (at most 10). `applyEdits` applies them only when
+each `find` matches exactly once (literal, overlapping matches count), then stores
+the full resulting fields as the proposal for the usual review. Draft descriptions
+and edit replacements are cleaned first: `unescapeLineBreaks` turns literal `\n`
+outside code fences into line breaks, and `stripRepeatedTitle` drops a copy of the
+title at the top of a drafted description. Serialized
+messages stay <=48,000 UTF-8 bytes, with a 90-second deadline, 64KiB response
+bytes and 4,000-character instructions. No tools, automatic retry or fallback.
+These are app caps, not claims about SoC quotas.
 
 Failure diagnostics use `local_timeout`, `upstream_http` and `network_error`.
 `invalid_output` now has a fixed source/reason pair: truncated, invalid_json,
 invalid_schema, invalid_envelope, missing_content, tool_calls, unexpected_finish,
-body_limit or unsafe_section. TypeScript and storage reject unknown reasons and
+body_limit, unsafe_section or unmatched_edit. TypeScript and storage reject unknown reasons and
 extra keys. Parse exceptions, schema paths, raw provider content and hidden
 reasoning are never persisted. Historical invalid-output rows retain null metadata
 and remain readable. Empty tool-call lists are harmless; actual tool calls fail.
@@ -428,19 +449,28 @@ client error and are not provider diagnostics. No additional content logging or
 live provider calls are needed to distinguish these states.
 
 The [ticket-first AI spec](../workflow/specs/2026-11-08-ticket-first-ai.md)
-supersedes the fixed two-column proposal-in-chat interaction. `ChatPanel` owns
-private turn sending/recovery, the rough-idea starter, writing actions and a
-collapsible discussion, composing the editor as its child. `RequestEditor` owns
-all task replacement, exact local/revision freshness and authorized remote
-rechecks, plus inline review and conditional first-draft Undo. Draft autosave and
-explicit published saves are unchanged. Only a direct, newly requested first-draft
-completion may fill the private editor automatically. Reconciled/polled/history
-results require review. `SuggestionReview` renders a literal text diff, never HTML.
+supersedes the fixed two-column proposal-in-chat interaction; the 2026-11-10
+redesign replaces its rough-idea starter and Leave undecided action. The
+[AI chat review spec](../workflow/specs/2026-11-11-ai-chat-review-modal.md)
+replaces the latest-result box and whole-suggestion review. `ChatPanel` renders
+one transcript (each reply with its change card, gaps checklist or plain failure
+with Details), the usage bar, one composer and **Check for gaps**, composing the
+editor as its child. Only the newest unanswered gaps checklist is interactive.
+`src/ticket-changes.ts` splits a turn's `input_fields` → `proposal` into
+changes in the browser (a line diff, each change located by its lines plus the
+unchanged line on each side) and derives open/applied/outdated status from the
+current ticket; nothing per change is stored. `ChangeReview` (in a shared
+`Modal`) applies or undoes one change as an ordinary editor edit and renders text
+as React children or the safe `Markdown` renderer, never HTML. Rejections live in
+`RequestEditor` state for the page session. Only a direct, newly requested
+first-draft completion may fill the private editor automatically, with the
+existing freshness recheck and Undo AI draft.
 
-`src/assistance.ts` defines the Draft ticket and Leave undecided messages. They
-are persisted as ordinary immutable turn messages so retries retain their
-inputs. Free-form edits produce validated whole-ticket proposals for review.
-After an ambiguous send, `ChatPanel` reads the saved conversation and checks
+`src/assistance.ts` defines the intents and the fixed draft, gap-check and
+apply-answers messages. Gap questions are stored on `gaps` turns; answers are
+stored on the `edit` turn that applies them, and **Leave undecided** / **Your own
+answer** are added by the client. Questions and options render as plain text.
+After an ambiguous send, `useAssistant` reads the saved conversation and checks
 the original turn key. It offers explicit resend only when that key is absent.
 Reads and sends share an operation guard, and reopening the panel can recover a
 failed read. Recovered proposals use the explicit review flow.
@@ -673,6 +703,19 @@ Process material lives under `workflow/`:
 - `THIRD_PARTY.md`, `MATT-POCOCK-LICENSE`: provenance and licensing for reused
   workflow material and local adaptations.
 
+Claude Code configuration in `.claude/` makes independent review enforceable:
+
+- `agents/code-reviewer.md` registers the read-only `code-reviewer` subagent,
+  which follows `workflow/agents/code-reviewer.md` and ends with a
+  `Verdict: approved` or `Verdict: needs-fixes` line.
+- `settings.json` runs `hooks/review-gate.mjs`. It records a hash of the
+  uncommitted `src/` diff each time `code-reviewer` finishes. It denies
+  `git commit` until that exact diff is approved. When a turn ends with unreviewed
+  `src/` changes, it asks once for a review (pauses for user input are allowed).
+  Once a session log under `logs/` has also changed, it insists. State is kept in
+  ignored `local/review/state.json`. Set `SPECFORGE_REVIEW_GATE=off` to disable it
+  for a human-driven session. Other agent clients do not run these hooks.
+
 Project-local agent skills are versioned in `.agents/skills/` so that cloning the
 repository reproduces them, and `AGENTS.md` at the root is the entry point agents
 read first. Sanitised session summaries are in `logs/`.
@@ -688,13 +731,53 @@ existing spec or guide and outcomes in the normal session summary.
 ## Checks
 
 ```sh
+npx playwright install chromium
 npm run verify
 npm run test:integration
-npx playwright install chromium
 npm run test:e2e
 ```
 
-`verify` runs lint, TypeScript, HTTP tests and a production build. Database tests
+### Test layers
+
+| Layer | Owns | Lives in | Command |
+| --- | --- | --- | --- |
+| Logic unit | Pure modules and HTTP handlers with fake providers, e.g. ticket diffs, AI parsing | `src/tests/*.test.ts` | `npm test` |
+| Component | One React component's behaviour through roles, labels and keyboard in real Chromium, plus axe | `src/components/*.test.tsx` | `npm test` |
+| Database integration | Permissions, organisation isolation and RPCs against disposable local Supabase | `src/tests/*.database.test.ts` | `npm run test:integration` |
+| Browser end-to-end | Journeys across the server, several components and roles, with the fake AI | `src/tests/browser/*.spec.ts` | `npm run test:e2e` |
+| Accessibility | axe-core scans failing on serious or critical violations | component tests and `expectAccessible` in `src/tests/browser/ui.fixture.ts` | both of the above |
+
+Component tests use Vitest browser mode with the Playwright provider
+(`vitest.config.ts`, project `component`). They render through
+`renderComponent` in `src/tests/render.tsx`, which supplies the app's providers
+and stylesheet, and need no Supabase or network. Run them alone with
+`npx vitest run --project component`. Eight critical journeys are tagged `@smoke`;
+`npm run test:e2e:smoke` runs only those for a fast local check. CI runs the full
+browser suite and uploads the Playwright HTML report as the `playwright-report`
+artifact on every run.
+
+Browser runs are designed to be repeatable:
+
+- A global setup (`src/tests/browser/global-setup.ts`) visits every page once
+  before the tests start, so `next dev` compiles routes up front. Do not edit
+  source files during a browser run; the dev server recompiles them mid-run.
+- Timers such as banner lifetimes and the autosave debounce are tested with
+  Playwright's `page.clock` (`runFor`), not fixed sleeps. Because the installed
+  clock also keeps running in real time, give "has expired" checks a short
+  timeout. Lint rejects `waitForTimeout` in `src/tests/browser/`; wait for an
+  observable condition instead, or use `settleAfter` from `ui.fixture.ts` to
+  prove that a held, stale response was ignored.
+- CI retries a failed test once and records a trace on that retry. The job
+  summary lists failed and flaky (passed only on retry) tests, and traces are
+  uploaded as the `playwright-traces` artifact. Treat flaky tests as failures to
+  fix. Local runs never retry.
+- The suite runs on one worker. Two or four workers sign in faster than the
+  app's 30-per-minute auth admission limit (`createAuthAdmission`) and fail.
+  `SPECFORGE_BROWSER_WORKERS` is a measurement knob for that experiment, not a
+  supported setting. `SPECFORGE_TIMING_FILE=<path>` adds a JSON report for
+  timing comparisons.
+
+`verify` runs lint, TypeScript, logic and component tests and a production build. Database tests
 are explicitly skipped in the ordinary test command; run `test:integration` for
 them. Test plan checks are `npx vitest run src/tests/test-plans.test.ts` for the
 deterministic provider tests and `node src/tooling/test-local.mjs test-plans` for

@@ -22,7 +22,7 @@ const fields = {
 describe.skipIf(!enabled)("live SoC LLM", () => {
   it("answers a PM chat turn with a usable proposal", async () => {
     const provider = createSocProvider(configuration);
-    const result = await provider({ fields, message: "Tighten the description and state the default view explicitly.", history: [] });
+    const result = await provider({ intent: "edit", fields, message: "Tighten the description and state the default view explicitly.", recent: [] });
     expect(result.reply).not.toBe("");
     expect(result.proposal?.title.trim()).not.toBe("");
     expect(result.proposal?.description.trim()).not.toBe("");

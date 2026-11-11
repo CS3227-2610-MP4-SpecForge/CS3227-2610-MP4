@@ -20,9 +20,13 @@ workflows and SoC-assisted drafting and test plans.
   criteria and testing interfaces. Routine fixes and documentation edits use
   proportionate checks without artificial feature paperwork.
 - Implement in the main agent. Use the local `tdd` skill for behavior changes and
-  `codebase-design` for meaningful interface decisions. Use one independent
-  code/architecture reviewer at feature boundaries; sensitive work also needs
+  `codebase-design` for meaningful interface decisions. Sensitive work also needs
   security preflight and review. Role briefs are under `workflow/agents/`.
+- Independent review is a standing user request: after any non-trivial change
+  under `src/` (features and routine fixes alike) and before committing, dispatch
+  the `code-reviewer` subagent on the exact diff, then again after fixing its
+  findings. Hooks in `.claude/settings.json` block `git commit` until the final
+  diff is approved and prompt for review before a turn ends with unreviewed changes.
 - Keep application source under `src/`, the product website under `website/`,
   and process material under `workflow/`. Create a root `GLOSSARY.md` or records
   under `docs/adr/` only when useful.

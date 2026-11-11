@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
 import { localFixture } from "../local.fixture";
+import { expectAccessible } from "./ui.fixture";
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
 
 async function codeFor(email: string) {
@@ -12,7 +13,7 @@ async function codeFor(email: string) {
 }
 
 for (const role of ["PM", "Developer"] as const) {
-  test(`${role} signs up, verifies email, creates an organisation and signs in again`, async ({ page }) => {
+  test(`${role} signs up, verifies email, creates an organisation and signs in again`, { tag: "@smoke" }, async ({ page }) => {
     const email = `browser-${randomUUID()}@example.com`;
     const username = `Tester_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const password = "Disposable-browser-password-2026";
@@ -21,6 +22,7 @@ for (const role of ["PM", "Developer"] as const) {
     page.on("pageerror", error => errors.push(error.name));
     try {
       await page.goto("/sign-up");
+      await expectAccessible(page);
       const usernameInput = page.getByLabel("Username", { exact: true });
       const emailInput = page.getByLabel("Email address", { exact: true });
       const passwordInput = page.getByLabel("Password", { exact: true });
@@ -156,6 +158,7 @@ test("account forms support keyboard focus and do not overflow on mobile", async
   let hydrationWarnings = 0;
   page.on("console", message => { if (message.type() === "error" && message.text().includes("hydrated")) hydrationWarnings++; });
   await page.goto("/sign-in");
+  await expectAccessible(page);
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
   await page.screenshot({ path: "test-results/signin-desktop.png", fullPage: true, caret: "initial" });
@@ -188,7 +191,7 @@ test("signing out respects unsaved ticket edits before ending the session", asyn
     await page.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByRole("button", { name: "Update", exact: true })).toBeVisible();
     await page.getByLabel("Title", { exact: true }).fill("Unsaved title");
-    const accountControl = page.getByRole("button", { name: "Account options", exact: true });
+    const accountControl = page.getByRole("button", { name: /Account options$/ });
     await accountControl.click();
     let warned = false;
     page.once("dialog", async dialog => { warned = true; await dialog.dismiss(); });
@@ -204,7 +207,7 @@ test("signing out respects unsaved ticket edits before ending the session", asyn
   } finally { await fixture.cleanup(); }
 });
 
-test("organisation links navigate directly and Manage switches team context", async ({ page }) => {
+test("organisation links navigate directly and Manage switches team context", { tag: "@smoke" }, async ({ page }) => {
   const fixture = localFixture();
   const actor = await fixture.actor("PM");
   const first = (await actor.client.rpc("create_organisation", { organisation_name: "First team" })).data;

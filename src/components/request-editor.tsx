@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Sparkles } from "lucide-react";
 import { requestFields, sameFields, type FeatureRequest, type RequestFields, type TicketRead } from "@/requests";
 import { api, ApiError, failureMessage } from "./http";
 import type { ChatTurn } from "@/chat";
-import { SuggestionReview } from "./suggestion-review";
+import { ChangeReview } from "./change-review";
 import { ChatPanel } from "./chat-panel";
+import { tooLargeForAi, useAssistant } from "./use-assistant";
 import { Markdown } from "./markdown";
 import { deliveryOf, deliveryChanges, sameDelivery, type Delivery } from "@/delivery";
 import { TicketDelivery, TicketDeliveryFields, CopyTicketLink } from "./ticket-delivery";
@@ -61,13 +63,11 @@ function RequestMetadata({ item, author, children }: { item: FeatureRequest; aut
   </section>;
 }
 function RequestEditor({ initial, path, listPath, accountId, organisationName }: { initial: TicketRead; path: string; listPath: string; accountId: string; organisationName: string }) {
-  const [starting, setStarting] = useState(!initial.submitted_at && !initial.fields.title.trim());
-  const [suggestion, setSuggestion] = useState<ChatTurn | null>(null);
-  const suggestionLive = useRef<ChatTurn | null>(null);
-  function review(turn: ChatTurn | null) { suggestionLive.current = turn; setSuggestion(turn); }
+  const [reviewing, setReviewing] = useState<ChatTurn | null>(null);
+  // Rejected change ids per turn, kept for this page only.
+  const [rejections, setRejections] = useState<Record<string, ReadonlySet<string>>>({});
   const [undo, setUndo] = useState<{ before: RequestFields; after: RequestFields } | null>(null);
   const [applying, setApplying] = useState(false);
-  const startingLive = useRef(!initial.submitted_at && !initial.fields.title.trim());
   const problemLive = useRef<Problem | null>(null);
   const [stored, setStored] = useState<FeatureRequest>(initial);
   const [fields, setFields] = useState(initial.fields);
@@ -96,9 +96,8 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
     persisted.current = item; setStored(item);
   }
   function edit(key: keyof RequestFields, value: string) {
-    if (key === "title" && value.trim()) { startingLive.current = false; setStarting(false); }
     const next = { ...latest.current, [key]: value };
-    latest.current = next; setFields(next); setMessage(""); setValidation("");
+    latest.current = next; setFields(next); setMessage(""); setValidation(""); setDraftHint(false);
   }
   function focusDescription() {
     setDescriptionMode("write");
@@ -174,30 +173,30 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
       return true;
     } finally { operation.current = false; setApplying(false); }
   }
-  function startManually() { startingLive.current = false; setStarting(false); window.requestAnimationFrame(() => document.getElementById("request-title")?.focus()); }
-  async function receiveSuggestion(turn: ChatTurn, firstDraft: boolean) {
+  // A fresh draft of an untitled private ticket fills the editor with undo;
+  // every other suggestion waits on its reply's change card for review.
+  async function receiveSuggestion(turn: ChatTurn) {
     if (!turn.proposal) return;
     try {
-      if (firstDraft && startingLive.current && !persisted.current.submitted_at && !turn.input_fields.title.trim()
-        && await replaceIfFresh(turn.input_fields, turn.base_revision, turn.proposal, () => startingLive.current && !persisted.current.submitted_at)) {
-        setUndo({ before: turn.input_fields, after: turn.proposal }); startManually();
-        setMessage("AI draft created. Edit it freely, or undo while it is unchanged."); return;
-      }
-      review(turn); startManually();
-      window.requestAnimationFrame(() => document.getElementById("ticket-suggestion")?.focus());
-    } catch (failure) {
-      setMessage(failureMessage(failure), true); review(turn); startManually();
-      window.requestAnimationFrame(() => document.getElementById("ticket-suggestion")?.focus());
-    }
-  }
-  async function acceptSuggestion() {
-    const candidate = suggestionLive.current;
-    if (!candidate?.proposal) return;
-    try {
-      if (await replaceIfFresh(candidate.input_fields, candidate.base_revision, candidate.proposal, () => suggestionLive.current === candidate)) {
-        review(null); setUndo(null); startManually(); setMessage("AI changes accepted. Review the ticket before publishing.");
+      if (turn.intent === "draft" && !persisted.current.submitted_at && !turn.input_fields.title.trim()
+        && await replaceIfFresh(turn.input_fields, turn.base_revision, turn.proposal, () => !persisted.current.submitted_at)) {
+        setUndo({ before: turn.input_fields, after: turn.proposal });
+        setMessage("AI draft created. Edit it freely, or undo while it is unchanged.");
       }
     } catch (failure) { setMessage(failureMessage(failure), true); }
+  }
+  function closeReview() {
+    const turn = reviewing;
+    setReviewing(null);
+    if (turn) window.requestAnimationFrame(() => document.getElementById(`review-${turn.id}`)?.focus());
+  }
+  // Accepting or undoing a change is an ordinary edit: it autosaves a private
+  // ticket and stays local on a published one until Update.
+  function applyReviewed(next: RequestFields) {
+    latest.current = { ...next }; setFields(latest.current); setMessage(""); setValidation(""); setDraftHint(false);
+  }
+  function reject(turn: ChatTurn, ids: string[]) {
+    setRejections(current => ({ ...current, [turn.id]: new Set([...(current[turn.id] ?? []), ...ids]) }));
   }
   async function undoDraft() {
     if (!undo) return;
@@ -208,17 +207,31 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
     } catch (failure) { setMessage(failureMessage(failure), true); }
   }
   const blocked = Boolean(problem && problem.kind !== "retry");
+  const canAsk = !busy && !applying && !blocked && withinLimits && (published || !dirty);
+  const assistant = useAssistant({ path: path + "/chat", canSend: canAsk, onSuggestion: receiveSuggestion });
+  const [draftHint, setDraftHint] = useState(false);
+  // Say why Draft with AI is unavailable when the reason will not clear by itself.
+  const draftBlocked = blocked ? "Resolve the save problem above before using AI."
+    : !withinLimits ? "Shorten the ticket to within the field limits before using AI."
+    : assistant.usage?.remaining === 0 ? "No AI requests are left this hour."
+    : tooLargeForAi(fields) ? "This ticket is too long for AI."
+    : null;
+  const draftHintText = draftBlocked ?? (draftHint && !fields.description.trim() ? "Write a rough idea here first, then choose Draft with AI to turn it into a full ticket." : null);
+  // Always offered: an empty Description explains what to write instead of
+  // leaving a disabled button with no reason.
+  function draftWithAi() {
+    if (!fields.description.trim()) { setDraftHint(true); focusDescription(); return; }
+    void assistant.send({ key: crypto.randomUUID(), revision: stored.revision, fields: { ...fields }, intent: "draft", retry: false });
+  }
   const pendingStatus = busy ? "Saving…" : problem ? "Save failed — local edits preserved" : dirty ? "Unsaved changes" : null;
   const autosavedAt = published ? null : stored.last_autosaved_at;
   const savedAt = autosavedAt ?? (published || stored.revision > 1 ? stored.updated_at : null);
   return <section className="stack request-page ticket-editor">
-    <ChatPanel path={path + "/chat"} fields={fields} revision={stored.revision} canSend={!busy && !applying && !blocked && withinLimits && (published || !dirty)} starting={starting} onManual={startManually} onRoughIdea={value => edit("description", value)} onSuggestion={receiveSuggestion}
+    {reviewing && <ChangeReview turn={reviewing} fields={fields} rejected={rejections[reviewing.id] ?? new Set()} onChange={applyReviewed} onReject={ids => reject(reviewing, ids)} onClose={closeReview}
+      blockedReason={blocked ? "Resolve the save problem on the ticket before accepting AI changes." : busy === "explicit" || applying ? "Wait for the ticket to finish saving." : null} />}
+    <ChatPanel assistant={assistant} fields={fields} revision={stored.revision} canSend={canAsk} rejections={rejections} onReview={setReviewing}
       header={<><BackLink href={listPath} fullPage>Back to requests</BackLink><CopyTicketLink /></>}
-      review={<>
-
-        {undo && <div className="actions"><Button className="secondary" disabled={Boolean(busy) || applying || blocked || !sameFields(fields, undo.after)} onClick={undoDraft}>Undo AI draft</Button></div>}
-        {suggestion && <SuggestionReview turn={suggestion} fields={fields} revision={stored.revision} disabled={Boolean(busy) || applying || blocked} onAccept={() => { void acceptSuggestion(); }} onDiscard={() => { review(null); focusDescription(); }} />}
-      </>}>
+      footer={undo && <div className="actions"><Button className="secondary" disabled={Boolean(busy) || applying || blocked || !sameFields(fields, undo.after)} onClick={undoDraft}>Undo AI draft</Button></div>}>
       <div className="card stack ticket-content">
         <TicketVisibility published={published} organisationName={organisationName} />
         <Field id="request-title" label="Title" form="request-content" required maxLength={320} value={fields.title} disabled={busy === "explicit"} onChange={event => edit("title", event.target.value)} />
@@ -233,28 +246,36 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
           <div className="field">
             <div className="ticket-description-header">
               <label htmlFor="request-description">Description</label>
-              <div className="ticket-description-tabs" role="tablist" aria-label="Description mode" onKeyDown={event => {
-                let next: typeof descriptionMode;
-                switch (event.key) {
-                  case "ArrowLeft":
-                  case "ArrowRight": next = descriptionMode === "write" ? "preview" : "write"; break;
-                  case "Home": next = "write"; break;
-                  case "End": next = "preview"; break;
-                  default: return;
-                }
-                event.preventDefault();
-                setDescriptionMode(next);
-                event.currentTarget.querySelector<HTMLButtonElement>(`#description-${next}-tab`)?.focus();
-              }}>
-                {(["write", "preview"] as const).map(mode => <Button key={mode} type="button" className="secondary" role="tab"
-                  id={`description-${mode}-tab`} aria-controls={`description-${mode}-panel`} aria-selected={descriptionMode === mode}
-                  tabIndex={descriptionMode === mode ? 0 : -1} onClick={() => setDescriptionMode(mode)}>
-                  {mode === "write" ? "Write" : "Preview"}
-                </Button>)}
+              <div className="ticket-description-actions">
+                <Button type="button" className="secondary draft-with-ai" aria-describedby={draftHintText ? "draft-hint" : undefined}
+                  disabled={assistant.disabled || draftBlocked !== null} onClick={draftWithAi}>
+                  <Sparkles aria-hidden="true" size={16} />Draft with AI
+                </Button>
+                <div className="ticket-description-tabs" role="tablist" aria-label="Description mode" onKeyDown={event => {
+                  let next: typeof descriptionMode;
+                  switch (event.key) {
+                    case "ArrowLeft":
+                    case "ArrowRight": next = descriptionMode === "write" ? "preview" : "write"; break;
+                    case "Home": next = "write"; break;
+                    case "End": next = "preview"; break;
+                    default: return;
+                  }
+                  event.preventDefault();
+                  setDescriptionMode(next);
+                  event.currentTarget.querySelector<HTMLButtonElement>(`#description-${next}-tab`)?.focus();
+                }}>
+                  {(["write", "preview"] as const).map(mode => <Button key={mode} type="button" className="secondary" role="tab"
+                    id={`description-${mode}-tab`} aria-controls={`description-${mode}-panel`} aria-selected={descriptionMode === mode}
+                    tabIndex={descriptionMode === mode ? 0 : -1} onClick={() => setDescriptionMode(mode)}>
+                    {mode === "write" ? "Write" : "Preview"}
+                  </Button>)}
+                </div>
               </div>
             </div>
+            {draftHintText && <p id="draft-hint" className="hint">{draftHintText}</p>}
             <div id="description-write-panel" role="tabpanel" aria-labelledby="description-write-tab" hidden={descriptionMode !== "write"}>
               <textarea id="request-description" rows={4} required={descriptionMode === "write"} maxLength={48000} value={fields.description}
+                placeholder={`Fill in the rough details, then use "Draft with AI" to polish.`}
                 disabled={busy === "explicit"} onChange={event => edit("description", event.target.value)} />
             </div>
             <div id="description-preview-panel" className="ticket-description-preview" role="tabpanel" aria-labelledby="description-preview-tab"

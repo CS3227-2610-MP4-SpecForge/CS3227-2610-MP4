@@ -70,9 +70,10 @@ export function AccountMenu() {
     onMouseEnter={() => setOpen(true)}
     onMouseLeave={() => { if (!container.current?.contains(document.activeElement) && !error && !pending) setOpen(false); }}
     onBlur={event => { if (!submitting.current && !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
-    <button className="account-trigger" ref={trigger} aria-label="Account options" aria-describedby="account-identity" aria-expanded={open} aria-controls="account-options"
+    <button className="account-trigger" ref={trigger} aria-expanded={open} aria-controls="account-options"
       onClick={() => setOpen(true)}>
-      <span id="account-identity" className="account-identity"><span className="account-username">{account.username}</span><span className="account-email">{account.email}</span></span>
+      <span className="account-identity"><span className="account-username">{account.username}</span><span className="account-email">{account.email}</span></span>
+      <span className="visually-hidden"> Account options</span>
     </button>
     {open && <div className="account-popup" id="account-options">
 

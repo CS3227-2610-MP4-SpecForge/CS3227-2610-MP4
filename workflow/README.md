@@ -24,7 +24,9 @@ For new features or material behavior changes:
    small behavior-preserving refactoring with tests green. Work against public
    behavior; substitute the external SoC provider for deterministic local tests.
 5. Run focused tests while working and the project suite at feature completion.
-   Dispatch one independent code/architecture reviewer using its role brief.
+   Dispatch the `code-reviewer` subagent (`.claude/agents/code-reviewer.md`, which
+   loads its role brief) on the exact diff before committing; this also applies to
+   routine fixes under `src/`. A review gate hook enforces this in Claude Code.
    Sensitive features also get a separate security review. Fix behavioral defects
    through regression tests; run affected checks again after fixes.
 6. The main agent writes one concise, outcome-focused session log using
@@ -38,7 +40,10 @@ No automatic implementer subagent per edit, repeated full-suite runs without a
 reason, or separate handoff documents between these steps. Create a short handoff
 only when transferring unfinished work. Docs-only changes get relevant checks,
 not artificial unit tests. UI changes also get browser checks for consistency,
-accessibility and loading/error/empty states.
+accessibility and loading/error/empty states. Test a UI behaviour that belongs to
+one component with a component test (`src/components/<name>.test.tsx`); add a
+browser journey when it crosses the server or several components. See the
+Developer Guide's test layers.
 
 ## Resuming unfinished work
 

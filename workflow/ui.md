@@ -76,7 +76,15 @@ independent of banner expiry. Clearing that value does not clear unrelated globa
 notifications. It can override the default danger tone per event. Use ordinary
 state for user input and field validation, rather than this notification adapter.
 
-ManagementDialog registers its native dialog with the provider after showModal
+## Modals
+
+Use `Modal` from the shared UI library for overlay windows. It takes `label`,
+`closeLabel`, `onClose`, optional `title`, `footer`, `contentLabel` and
+`className`, and owns `showModal`, the body scroll lock, initial focus, Esc and
+the notification host; callers return focus in `onClose`. Organisation
+management and AI change review both use it.
+
+`Modal` registers its native dialog with the notification provider after showModal
 and unregisters on cleanup. The provider portals the same notification into the
 active modal's top layer, or renders at the page level when there is no modal.
 Host changes do not restart the event timer. Banners float at viewport top centre,

@@ -209,41 +209,65 @@ including unsaved edits, will appear to readers. Switch back to **Write** to
 continue editing. You can publish or update from either tab.
 
 New drafts show editable **Title** and **Description** immediately. Write
-directly, or use **What needs to change?** in the right AI panel and choose
-**Draft ticket**. **Start manually** dismisses the starter and focuses Title;
-typing a title also switches to manual writing. Rough ideas autosave privately. A fresh AI draft fills the editor and
-has **Undo AI draft** during the current editing session while its generated
-content is unchanged. AI never publishes
-for you; failed, stale or recovered generations require review instead.
+directly, or write a rough idea in **Description** and choose **Draft with AI**
+beside the Write and Preview tabs. On an empty ticket you can also type the rough
+idea into the AI assistant's box and choose **Ask AI**. Rough ideas autosave privately like
+any draft. A fresh AI draft fills the editor and has **Undo AI draft** during the
+current editing session while its generated content is unchanged. AI never
+publishes for you; failed, stale or recovered generations require review instead.
 
-The ticket occupies the main workspace. The right AI panel starts open and
-contains drafting tools, private discussion, suggestions and undo. Use **Hide AI
+The ticket occupies the main workspace. The right **AI assistant** panel starts
+open. It shows the whole conversation as one scrolling transcript, oldest first,
+and follows the newest reply; if you have scrolled up, a **New reply ↓** button
+appears instead. The usage bar, **Check for gaps** and the instruction box stay
+at the bottom of the panel. Use **Hide AI
 assistant** or **Show AI assistant** to collapse or reopen it; on phones it
 appears beneath the ticket. Collapsing keeps your conversation, typed instruction
 and pending suggestion. Chat is private to the original PM
 author, including from admins and after publication.
 
-Use the **AI instruction or question** box and **Ask AI** for questions and
-suggested edits. Review suggestions before applying them. Choose **Leave undecided**
-to ask AI to record an open question. Useful answer options may appear as chat text.
+Use the **Ask AI to change or explain this ticket** box and **Ask AI** for
+questions and suggested edits. Review suggestions before applying them.
+
+**Check for gaps** lists up to five open decisions, each with suggested answers,
+**Leave undecided** and **Your own answer**. It never changes the ticket. Answer
+what you can and choose **Apply answers**: one request writes your answers into a
+suggestion, recording undecided questions as unresolved. Unanswered questions are
+left out.
 
 SoC writing remains experimental: a valid response can add unsupported requirements,
 omit supplied details, or contradict an unresolved question. Check the entire draft
 and every suggestion before accepting or publishing. If a writing action returns
 only discussion, no ticket changes are available to review; continue manually or
 send a more specific instruction. Invalid responses preserve your existing work.
+AI edits change exact pieces of text; if the text it names is not in your ticket
+exactly once, nothing is applied.
 
 A complete title/description suggestion can still be reviewed if SoC omits its
 accompanying message; the app displays “Review these suggested ticket changes.”
 Extra response fields are ignored. Incomplete ticket suggestions still fail safely
 rather than replacing either field with partial content.
 
-AI edits appear as **Suggested ticket changes** in the AI panel, with removed/added
-text. Choose **Accept changes** or **Discard**. Conversational proposals have a
-**Review ticket changes** action to open the same review. Acceptance replaces the
-reviewed fields locally. Editing during generation or
-another saved revision makes suggestions outdated; your writing is preserved.
-Recovered or historical AI drafts never automatically replace the editor.
+Each AI reply that suggests ticket changes shows a card with a summary (for
+example “3 changes: title and 2 in Description”), a status (**Not reviewed**,
+**1 of 3 applied**, **All applied**, **Dismissed** or **Outdated**) and **Review
+changes**. Review opens a window with your original text on the left and the
+proposed text on the right, one row per change: the title first, then each
+changed part of the Description. Changed words are highlighted, unchanged lines
+are collapsed, and **Formatted** shows both sides as rendered Markdown.
+
+- **Accept** applies that change to the editor straight away; the row then shows
+  **Applied** with **Undo**.
+- **Reject** marks the row **Rejected**. Rejections last until you reload the page.
+- **Accept all** and **Reject all** act on every change that is still open.
+- **Done**, ✕ or Esc closes the window.
+
+A change can be accepted only while the text it replaces is still in your ticket,
+unchanged and appearing once. If you have edited that part since, the row says
+“You've changed this part since” and cannot be accepted; other changes in the same
+suggestion stay usable. Accepted changes are ordinary edits, so if a save problem
+appears, accepting is paused until you resolve it. Recovered or historical AI
+drafts never automatically replace the editor.
 
 All draft fields autosave750ms after a pause. Accepting AI changes in a draft
 follows that same autosave. **Publish** requires a nonempty title/description and publishes all ticket
@@ -265,10 +289,10 @@ conflict. New-draft retries use the same creation key to avoid duplicates.
 
 After a lost response, SpecForge checks the saved conversation automatically.
 If the send reached the server, its turn appears in the conversation. If the
-check finds no turn, you can resend using the current ticket. If the check
-fails, reopen the AI assistant to try again. Failed turns offer **Retry AI
-turn** when their ticket snapshot still matches.
-Failure notices distinguish:
+check finds no turn, **Send again** uses the current ticket. If the check fails,
+reopen the AI assistant to try again. A failure shows one sentence saying your
+ticket is unchanged and did not use one of your hourly AI requests, plus **Try again** while the
+ticket snapshot still matches. **Details** explains what happened:
 
 - **Invalid AI output:** new failures explain whether the response was cut short,
   was not valid JSON, had the wrong ticket structure, or could not be safely used.
@@ -293,13 +317,20 @@ There are no automatic provider retries or fallback models. Manual editing
 remains available when AI fails. Unsaved task text warns before departure and
 is not stored in browser persistent storage.
 
-App limits (not SoC quotas): one active AI turn per request/account,20attempts
-per account/hour,4,000-character messages,90-second provider deadline and
-2,000output tokens per response (debugging policy; no separate AI reply character ceiling). The full serialized task/conversation/system
-context is capped at48,000UTF-8bytes; older messages are never silently removed.
-When context or conversation storage is full, continue editing manually. Chat
-storage is bounded to1MiB, reserving completion space before admission. Long or
-truncated AI responses fail safely; ask for a concise proposal or edit manually.
+**Usage.** A bar above the instruction box shows, for example, **14/20 AI requests
+left this hour**. It turns red at zero and adds the reset time once fewer than five remain. Failed requests give their
+request back, but every attempt counts toward the 40-attempt limit.
+Repeating a request that already completed on the unchanged ticket shows the
+saved answer without using a request. At most 40 attempts (including failures)
+are allowed per hour. When a limit is reached, the panel says which one;
+manual editing always remains available.
+
+App limits (not SoC quotas): one active AI request per ticket/account, the
+hourly limits above, 4,000-character instructions and a 90-second provider
+deadline. AI sees the current ticket, your instruction and at most your three
+latest completed requests. If the ticket alone is too long for AI, the panel
+says so before sending. Chat storage is bounded to 1MiB per ticket. Long or
+truncated AI responses fail safely; ask for a concise change or edit manually.
 
 Markdown display supports headings, lists, paragraphs, `**bold text**`,
 `*italic text*` or `_italic text_`, and fenced code. Raw HTML, images and links
