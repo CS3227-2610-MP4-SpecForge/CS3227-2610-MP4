@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyChange, changeStatus, reviewStatus, summarizeChanges, ticketChanges, undoChange, wordDiff } from "../ticket-changes";
+import { applyChange, applyChanges, changeStatus, reviewStatus, summarizeChanges, ticketChanges, undoChange, wordDiff } from "../ticket-changes";
 
 const before = { title: "Tutorial text", description: "## Summary\n\nOld intro.\n\n## Acceptance criteria\n\n- Level 3\n- Level 5" };
 const after = { title: "Remove multi-enchantment from tutorials", description: "## Summary\n\nNew intro.\n\n## Acceptance criteria\n\n- Level 3\n- Level 5\n- Level 7" };
@@ -86,6 +86,41 @@ describe("ticket changes", () => {
     expect(reviewStatus(changes, after, new Set())).toBe("All applied");
     expect(reviewStatus(changes, before, new Set(changes.map(change => change.id)))).toBe("Dismissed");
     expect(reviewStatus(changes, { title: "Other", description: "Other" }, new Set())).toBe("Outdated");
+  });
+
+  it("accepts every change at once when anchors repeat, and each row then shows applied", () => {
+    const original = { title: "Keep", description: "Keep\nOld\nKeep" };
+    const proposal = { title: "Keep", description: "Keep\nKeep\nKeep" };
+    const changes = ticketChanges(original, proposal);
+    expect(changes.map(change => [change.before, change.after])).toEqual([["Old", ""], ["", "Keep"]]);
+    expect(applyChanges(changes, original)).toEqual({ fields: proposal, skipped: 0 });
+    for (const change of changes) expect(changeStatus(change, proposal)).toBe("applied");
+    expect(reviewStatus(changes, proposal, new Set())).toBe("All applied");
+    expect(undoChange(changes[1], proposal)).toEqual({ title: "Keep", description: "Keep\nKeep" });
+  });
+
+  it("places a change at its diff position while the field is still the original", () => {
+    const original = { title: "T", description: "a\nb\na\nb" };
+    const [change] = ticketChanges(original, { title: "T", description: "a\nb\na\nNew\nb" });
+    expect(changeStatus(change, original)).toBe("open");
+    expect(applyChange(change, original)).toEqual({ title: "T", description: "a\nb\na\nNew\nb" });
+    const edited = { title: "T", description: "a\nb\na\nb\nEnd" };
+    expect(changeStatus(change, edited)).toBe("outdated");
+  });
+
+  it("skips a batched change that overlaps an earlier one in an edited ticket", () => {
+    const changes = ticketChanges({ title: "T", description: "a\nb\nc\nb\nc\nd" }, { title: "T", description: "a\nB1\nc\nb\nC1\nd" });
+    const edited = { title: "T", description: "a\nb\nc\nd" };
+    for (const change of changes) expect(changeStatus(change, edited)).toBe("open");
+    expect(applyChanges(changes, edited)).toEqual({ fields: { title: "T", description: "a\nB1\nc\nd" }, skipped: 1 });
+  });
+
+  it("applies the open changes of a batch and counts the rest as skipped", () => {
+    const changes = ticketChanges(before, after);
+    const [title, intro] = changes;
+    const edited = { ...applyChange(title, before)!, description: before.description.replace("Old intro.", "Mine.") };
+    expect(applyChanges(changes, edited)).toEqual({ fields: { ...edited, description: edited.description + "\n- Level 7" }, skipped: 2 });
+    expect(changeStatus(intro, edited)).toBe("outdated");
   });
 
   it("highlights only the changed words on each side", () => {

@@ -71,8 +71,11 @@ side (or the start/end of the field). Against the current ticket:
 
 An occurrence of the shorter block that lies inside an occurrence of the longer
 one (an inserted paragraph keeps the blank line before it) is part of that
-longer occurrence, not a second one. Accept all applies open changes in order
-and says how many it skipped if an earlier change made a later one ambiguous.
+longer occurrence, not a second one. While a field is exactly its original or
+proposed text, changes are placed at their diff positions instead. Accept all
+applies open changes as one batch located in a single snapshot and says how many
+it skipped because they overlapped an earlier change (see
+[2026-11-12-accept-all-positions.md](2026-11-12-accept-all-positions.md)).
 
 Accept replaces the single original occurrence; Undo replaces the single
 proposed occurrence. Replacement text is inserted literally. Rejections are kept

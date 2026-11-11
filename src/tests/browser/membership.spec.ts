@@ -1,12 +1,13 @@
 import { test, expect } from "@playwright/test";
 import { localFixture } from "../local.fixture";
+import { expectAccessible } from "./ui.fixture";
 async function reopenManagement(page: import("@playwright/test").Page, name: string) {
   await page.getByRole("button", { name: "Close management", exact: true }).click();
   await page.getByRole("button", { name: `Manage ${name}`, exact: true }).click();
 }
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
 
-test("PM and Developer manage invitations, admin handover and leaving", async ({ page, browser }) => {
+test("PM and Developer manage invitations, admin handover and leaving", { tag: "@smoke" }, async ({ page, browser }) => {
   const fixture = localFixture();
   const a = await fixture.actor("PM");
   const b = await fixture.actor("Developer");
@@ -26,6 +27,7 @@ test("PM and Developer manage invitations, admin handover and leaving", async ({
     await page.getByLabel("Organisation name").fill("Membership journey");
     await page.getByRole("button", { name: "Create organisation", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Manage Membership journey", exact: true })).toBeVisible();
+    await expectAccessible(page);
     const inviteInput = page.getByLabel("Invite by email", { exact: true });
     await expect(inviteInput).toBeVisible();
     const modalContent = page.getByRole("region", { name: "Management content", exact: true });

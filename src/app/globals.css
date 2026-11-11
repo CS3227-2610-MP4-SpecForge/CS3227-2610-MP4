@@ -21,6 +21,9 @@ h3 { font-size: 1rem; margin-bottom: 8px; }
 .header-inner { max-width: 1160px; margin: auto; min-height: 84px; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .brand { display: flex; align-items: center; gap: 12px; font-size: 1.3rem; font-weight: 750; color: var(--ink); text-decoration: none; letter-spacing: -.04em; }
 .brand-mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; background: var(--brand); color: #fff; font-size: 1.1rem; }
+/* Decorative mark drawn by CSS so the link's visible text stays "SpecForge". */
+.brand-mark::before { content: "S"; content: "S" / ""; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--muted); }
 .main-container { max-width: 1160px; margin: auto; padding: 64px 32px 96px; min-height: calc(100dvh - 165px); }
 .site-footer { border-top: 1px solid var(--border); padding: 24px; color: var(--muted); text-align: center; font-size: .8rem; }

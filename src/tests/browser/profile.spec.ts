@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
 import { localFixture } from "../local.fixture";
+import { expectAccessible } from "./ui.fixture";
 
 for (const role of ["PM", "Developer"] as const) {
-  test(`${role} views and edits their profile`, async ({ page }) => {
+  test(`${role} views and edits their profile`, { tag: "@smoke" }, async ({ page }) => {
     const fixture = localFixture();
     const actor = await fixture.actor(role);
     await actor.client.rpc("create_organisation", { organisation_name: "Profile team" });
@@ -13,11 +14,12 @@ for (const role of ["PM", "Developer"] as const) {
       await page.getByLabel("Password", { exact: true }).fill(actor.password);
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(page).toHaveURL(/\/workspace$/);
-      const accountControl = page.getByRole("button", { name: "Account options", exact: true });
+      const accountControl = page.getByRole("button", { name: /Account options$/ });
       await accountControl.click();
       await page.getByRole("link", { name: "Profile", exact: true }).click();
       await expect(page).toHaveURL(/\/profile$/);
       await expect(page.getByRole("heading", { name: "Your profile", exact: true })).toBeVisible();
+      await expectAccessible(page);
       await expect(page.getByLabel("Username", { exact: true })).toHaveValue(actor.username);
       await expect(page.getByText(actor.email, { exact: true }).last()).toBeVisible();
       await expect(page.getByText("Verified", { exact: true })).toBeVisible();
@@ -58,7 +60,7 @@ test("profile handles loading failures, validation, save failures and cancelled 
     await page.getByRole("button", { name: "Retry loading profile" }).click();
     const username = page.getByLabel("Username", { exact: true });
     await expect(username).toHaveValue(actor.username);
-    await expect(page.getByRole("button", { name: "Account options", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Account options$/ })).toBeVisible();
     await expect(page.getByText("No organisations yet. Create a team or accept an invitation to get started.")).toBeVisible();
     await username.fill("Legacy_reserved");
     const save = page.getByRole("button", { name: "Save changes", exact: true });

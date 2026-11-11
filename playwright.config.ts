@@ -5,6 +5,7 @@ if (!["http://localhost:3000", "http://localhost:3001"].includes(origin)) throw 
 export default defineConfig({
   testDir: "./src/tests/browser", fullyParallel: false, workers: 1,
   timeout: 60_000, expect: { timeout: 10_000 },
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: { baseURL: origin, trace: "off" },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {

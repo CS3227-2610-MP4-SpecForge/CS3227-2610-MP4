@@ -15,7 +15,7 @@ test("purple date picker selects dates, validates exact input and preserves opti
   await pm.client.rpc("update_delivery", { target_org: org, request_id: draft.id, expected_revision: 1, changes: { due_date: "2026-12-20" } });
   try {
     await login(page, pm); await page.goto(`/organisations/${org}/requests/${draft.id}`);
-    const field = page.getByRole("button", { name: "Due date", exact: true });
+    const field = page.getByRole("button", { name: /^Due date / });
     const popup = page.getByRole("dialog", { name: "Due date calendar", exact: true });
     await field.click(); await expect(popup).toBeVisible();
     await expect(popup.getByRole("button", { name: "Sunday, 20 December 2026", exact: true })).toBeFocused();
@@ -68,7 +68,7 @@ test.describe("calendar date boundaries", () => {
     const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     try {
       await login(page, pm); await page.goto(`/organisations/${org}/requests/${draft.id}`);
-      const field = page.getByRole("button", { name: "Due date", exact: true });
+      const field = page.getByRole("button", { name: /^Due date / });
       const popup = page.getByRole("dialog", { name: "Due date calendar", exact: true });
       for (const value of ["0001-01-01", "0099-12-31", "2000-02-29", "9999-12-31"]) {
         const request = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith(`/requests/${draft.id}`) && request.postDataJSON().delivery?.changes.due_date === value);
@@ -180,7 +180,7 @@ test("priority and delivery status use accessible colored pill dropdowns", async
   } finally { await fixture.cleanup(); }
 });
 
-test("one ticket action publishes and updates text and delivery together", async ({ page }) => {
+test("one ticket action publishes and updates text and delivery together", { tag: "@smoke" }, async ({ page }) => {
   const fixture = localFixture(); const pm = await fixture.actor("PM");
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Whole ticket browser" })).data;
   const draft = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
@@ -255,7 +255,7 @@ test("email assignees support keyboard selection, self assignment, removal and r
   } finally { await fixture.cleanup(); }
 });
 
-test("author schedules work; assignee updates status and comments; list filters and mobile details work", async ({ page, browser }) => {
+test("author schedules work; assignee updates status and comments; list filters and mobile details work", { tag: "@smoke" }, async ({ page, browser }) => {
   const fixture = localFixture(); const pm = await fixture.actor("PM"); const dev = await fixture.actor("Developer");
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Delivery workspace" })).data;
   await pm.client.rpc("invite_member", { target_org: org, target_email: dev.email });

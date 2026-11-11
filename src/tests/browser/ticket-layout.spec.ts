@@ -1,4 +1,4 @@
-import { savedTicketStatus, setDueDate } from "./ui.fixture";
+import { expectAccessible, savedTicketStatus, setDueDate } from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localFixture } from "../local.fixture";
@@ -22,6 +22,7 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
     await page.getByRole("button", { name: "Sign in", exact: true }).click(); await expect(page).toHaveURL(/\/workspace$/);
     await page.goto(`/organisations/${org}/requests/${draft.id}`);
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Remember filters");
+    await expectAccessible(page);
     await expect(page.getByRole("region", { name: "Task visibility", exact: true })).toHaveText("This task is private and unpublished");
     const card = page.locator(".ticket-content");
     const about = card.getByRole("region", { name: "About this ticket", exact: true });

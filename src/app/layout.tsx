@@ -9,7 +9,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return <html lang="en"><body><NotificationProvider>
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="site-header"><div className="header-inner">
-      <Link className="brand" href="/workspace" aria-label="SpecForge home"><span className="brand-mark" aria-hidden="true">S</span>SpecForge</Link>
+      <Link className="brand" href="/workspace" aria-label="SpecForge home"><span className="brand-mark" aria-hidden="true" />SpecForge</Link>
       <nav aria-label="Main navigation"><AccountMenu /></nav>
     </div></header>
     <main id="main" className="main-container">{children}</main>

@@ -731,13 +731,32 @@ existing spec or guide and outcomes in the normal session summary.
 ## Checks
 
 ```sh
+npx playwright install chromium
 npm run verify
 npm run test:integration
-npx playwright install chromium
 npm run test:e2e
 ```
 
-`verify` runs lint, TypeScript, HTTP tests and a production build. Database tests
+### Test layers
+
+| Layer | Owns | Lives in | Command |
+| --- | --- | --- | --- |
+| Logic unit | Pure modules and HTTP handlers with fake providers, e.g. ticket diffs, AI parsing | `src/tests/*.test.ts` | `npm test` |
+| Component | One React component's behaviour through roles, labels and keyboard in real Chromium, plus axe | `src/components/*.test.tsx` | `npm test` |
+| Database integration | Permissions, organisation isolation and RPCs against disposable local Supabase | `src/tests/*.database.test.ts` | `npm run test:integration` |
+| Browser end-to-end | Journeys across the server, several components and roles, with the fake AI | `src/tests/browser/*.spec.ts` | `npm run test:e2e` |
+| Accessibility | axe-core scans failing on serious or critical violations | component tests and `expectAccessible` in `src/tests/browser/ui.fixture.ts` | both of the above |
+
+Component tests use Vitest browser mode with the Playwright provider
+(`vitest.config.ts`, project `component`). They render through
+`renderComponent` in `src/tests/render.tsx`, which supplies the app's providers
+and stylesheet, and need no Supabase or network. Run them alone with
+`npx vitest run --project component`. Eight critical journeys are tagged `@smoke`;
+`npm run test:e2e:smoke` runs only those for a fast local check. CI runs the full
+browser suite and uploads the Playwright HTML report as the `playwright-report`
+artifact on every run.
+
+`verify` runs lint, TypeScript, logic and component tests and a production build. Database tests
 are explicitly skipped in the ordinary test command; run `test:integration` for
 them. Test plan checks are `npx vitest run src/tests/test-plans.test.ts` for the
 deterministic provider tests and `node src/tooling/test-local.mjs test-plans` for

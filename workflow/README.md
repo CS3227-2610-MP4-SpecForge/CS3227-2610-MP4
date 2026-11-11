@@ -40,7 +40,10 @@ No automatic implementer subagent per edit, repeated full-suite runs without a
 reason, or separate handoff documents between these steps. Create a short handoff
 only when transferring unfinished work. Docs-only changes get relevant checks,
 not artificial unit tests. UI changes also get browser checks for consistency,
-accessibility and loading/error/empty states.
+accessibility and loading/error/empty states. Test a UI behaviour that belongs to
+one component with a component test (`src/components/<name>.test.tsx`); add a
+browser journey when it crosses the server or several components. See the
+Developer Guide's test layers.
 
 ## Resuming unfinished work
 

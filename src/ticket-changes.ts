@@ -2,11 +2,14 @@ import type { RequestFields } from "./requests";
 
 // A suggestion split into independently reviewable changes. Each change is a
 // run of changed lines located by its lines plus the unchanged line on each
-// side; null context means the start or end of the field.
+// side; null context means the start or end of the field. While the field is
+// exactly its original or proposed text, the change is instead placed at the
+// line index the diff found there (beforeAt or afterAt).
 export type ChangeField = keyof RequestFields;
 export type TicketChange = {
   id: string; field: ChangeField; before: string; after: string;
   beforeLines: string[]; afterLines: string[]; lead: string | null; trail: string | null;
+  fieldBefore: string; fieldAfter: string; beforeAt: number; afterAt: number;
 };
 export type ChangeStatus = "open" | "applied" | "outdated";
 export type DiffRow = { kind: "same"; field: ChangeField; lines: string[] } | { kind: "change"; change: TicketChange };
@@ -50,6 +53,7 @@ function fieldRows(field: ChangeField, before: string, after: string): DiffRow[]
       rows.push({ kind: "change", change: {
         id: `${field}:${count++}`, field, before: beforeLines.join("\n"), after: afterLines.join("\n"),
         beforeLines, afterLines, lead: i > 0 ? a[i - 1] : null, trail: ai < a.length ? a[ai] : null,
+        fieldBefore: before, fieldAfter: after, beforeAt: i, afterAt: j,
       } });
     }
     if (ai < a.length) {
@@ -91,7 +95,13 @@ function locate(change: TicketChange, lines: string[], block: string[]) {
 // before it, for example). Such nested matches are part of the longer match,
 // not separate occurrences.
 function occurrences(change: TicketChange, fields: RequestFields) {
-  const lines = fields[change.field].split("\n");
+  const text = fields[change.field];
+  const lines = text.split("\n");
+  const at = (start: number, length: number): Match => ({
+    start, from: change.lead === null ? start : start - 1, to: start + length + (change.trail === null ? 0 : 1),
+  });
+  if (text === change.fieldBefore) return { lines, original: [at(change.beforeAt, change.beforeLines.length)], proposed: [] };
+  if (text === change.fieldAfter) return { lines, original: [], proposed: [at(change.afterAt, change.afterLines.length)] };
   let original = locate(change, lines, change.beforeLines);
   let proposed = locate(change, lines, change.afterLines);
   const inside = (outer: Match[]) => (match: Match) => !outer.some(span => span.from <= match.from && match.to <= span.to);
@@ -124,6 +134,37 @@ export function applyChange(change: TicketChange, fields: RequestFields) {
 /** The ticket with this change reverted, or null when it is not applied. */
 export function undoChange(change: TicketChange, fields: RequestFields) {
   return swap(change, fields, false);
+}
+
+/**
+ * The ticket with every open change among these applied at once. All are
+ * located in the same snapshot and spliced from the bottom up, so applying one
+ * cannot move or blur another's anchor. A change is skipped when it is not
+ * open or its lines or context overlap an earlier change in the batch; pass
+ * only open changes when every skip should mean an overlap.
+ */
+export function applyChanges(changes: TicketChange[], fields: RequestFields) {
+  const taken: { change: TicketChange; match: Match }[] = [];
+  const overlaps = (a: number, b: number, c: number, d: number) => a < d && c < b;
+  const clashes = (one: (typeof taken)[number], two: (typeof taken)[number]) => one.change.field === two.change.field && (
+    one.match.start === two.match.start
+    || overlaps(one.match.start, one.match.start + one.change.beforeLines.length, two.match.from, two.match.to)
+    || overlaps(two.match.start, two.match.start + two.change.beforeLines.length, one.match.from, one.match.to));
+  let skipped = 0;
+  for (const change of changes) {
+    const { original, proposed } = occurrences(change, fields);
+    const candidate = original.length === 1 && proposed.length === 0 ? { change, match: original[0] } : null;
+    if (candidate && !taken.some(other => clashes(other, candidate))) taken.push(candidate); else skipped++;
+  }
+  const next = { ...fields };
+  for (const field of fieldOrder) {
+    const edits = taken.filter(({ change }) => change.field === field).sort((x, y) => y.match.start - x.match.start);
+    if (edits.length === 0) continue;
+    const lines = fields[field].split("\n");
+    for (const { change, match } of edits) lines.splice(match.start, change.beforeLines.length, ...change.afterLines);
+    next[field] = lines.join("\n");
+  }
+  return { fields: next, skipped };
 }
 
 export function summarizeChanges(changes: TicketChange[]) {

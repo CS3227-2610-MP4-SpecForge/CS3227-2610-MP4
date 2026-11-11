@@ -1,4 +1,4 @@
-import { savedTicketStatus as saved, setDueDate } from "./ui.fixture";
+import { expectAccessible, savedTicketStatus as saved, setDueDate } from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { localFixture } from "../local.fixture";
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
@@ -34,7 +34,7 @@ async function acceptAll(page: Page) {
 const content = { "Title": "Find saved requirements", "Description": "## Problem description\n\nPMs need to find work.\n\n## Desired behaviour\n\n- Filter requests by title.\n\n<script>window.requestInjected = true</script>\n\n![tracking](https://tracking.invalid/pixel)\n\n[unsafe](javascript:alert(1))" };
 async function fill(page: Page) { for (const [label, value] of Object.entries(content)) await page.getByLabel(label, { exact: true }).fill(value); }
 
-test("PM autosaves/resumes and publishes; Developer reads only saved published changes", async ({ page, browser }) => {
+test("PM autosaves/resumes and publishes; Developer reads only saved published changes", { tag: "@smoke" }, async ({ page, browser }) => {
   const fixture = localFixture();
   const pm = await fixture.actor("PM");
   const developer = await fixture.actor("Developer");
@@ -66,6 +66,7 @@ test("PM autosaves/resumes and publishes; Developer reads only saved published c
     await reader.reload();
     const requestRow = reader.getByRole("row").filter({ has: reader.getByRole("link", { name: content.Title, exact: true }) });
     await expect(requestRow).toBeVisible();
+    await expectAccessible(reader);
     await expect(requestRow.getByRole("combobox")).toHaveCount(0);
     await reader.getByRole("link", { name: content.Title, exact: true }).click();
     await expect(reader.getByRole("heading", { name: content.Title, exact: true })).toBeVisible();
@@ -214,7 +215,7 @@ test("same-document skip link keeps unsaved-work protection active", async ({ pa
   } finally { page.off("dialog", dismiss); await fixture.cleanup(); }
 });
 
-test("the AI transcript keeps every turn and reviews proposals change by change", async ({ page }) => {
+test("the AI transcript keeps every turn and reviews proposals change by change", { tag: "@smoke" }, async ({ page }) => {
   const { fixture, pm, org, id } = await setupEditor(page);
   try {
     const panel = assistantPanel(page);
@@ -230,6 +231,7 @@ test("the AI transcript keeps every turn and reviews proposals change by change"
     await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Rough notes");
     const dialog = await openReview(page);
     await expect(dialog.getByRole("region", { name: "Change 1 of 2: Title", exact: true })).toBeVisible();
+    await expectAccessible(page, ".review-modal");
     await page.screenshot({ path: "test-results/ai-review-modal-desktop.png", caret: "initial" });
     await dialog.getByRole("button", { name: "Accept all", exact: true }).click();
     await expect(dialog.getByText("2 applied, 0 rejected", { exact: true })).toBeVisible();

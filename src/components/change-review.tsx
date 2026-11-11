@@ -2,7 +2,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatTurn } from "@/chat";
 import type { RequestFields } from "@/requests";
-import { applyChange, changeStatus, summarizeChanges, ticketDiff, undoChange, wordDiff, type ChangeField, type DiffRow, type TicketChange, type WordPart } from "@/ticket-changes";
+import { applyChange, applyChanges, changeStatus, summarizeChanges, ticketDiff, undoChange, wordDiff, type ChangeField, type DiffRow, type TicketChange, type WordPart } from "@/ticket-changes";
 import { Markdown } from "./markdown";
 import { Button, Modal, Notice, useNotifications } from "./ui";
 
@@ -72,11 +72,7 @@ export function ChangeReview({ turn, fields, rejected, blockedReason, onChange, 
   }, [focusFrom]);
   function act(at: number, next: RequestFields | null) { if (next) onChange(next); setFocusFrom({ at }); }
   function acceptAll() {
-    let next = fields; let skipped = 0;
-    for (const change of openChanges) {
-      const applied = applyChange(change, next);
-      if (applied) next = applied; else skipped++;
-    }
+    const { fields: next, skipped } = applyChanges(openChanges, fields);
     act(-1, next);
     if (skipped) notify(`${skipped} change${skipped === 1 ? "" : "s"} could not be applied because an earlier change overlapped ${skipped === 1 ? "it" : "them"}.`, true);
   }
