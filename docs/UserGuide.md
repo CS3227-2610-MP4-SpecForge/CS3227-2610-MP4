@@ -217,8 +217,10 @@ current editing session while its generated content is unchanged. AI never
 publishes for you; failed, stale or recovered generations require review instead.
 
 The ticket occupies the main workspace. The right **AI assistant** panel starts
-open and contains your remaining usage, the latest result, one instruction box,
-**Check for gaps**, suggestions, undo and collapsed **Earlier requests**. Use **Hide AI
+open. It shows the whole conversation as one scrolling transcript, oldest first,
+and follows the newest reply; if you have scrolled up, a **New reply ↓** button
+appears instead. The usage bar, **Check for gaps** and the instruction box stay
+at the bottom of the panel. Use **Hide AI
 assistant** or **Show AI assistant** to collapse or reopen it; on phones it
 appears beneath the ticket. Collapsing keeps your conversation, typed instruction
 and pending suggestion. Chat is private to the original PM
@@ -246,12 +248,26 @@ accompanying message; the app displays “Review these suggested ticket changes.
 Extra response fields are ignored. Incomplete ticket suggestions still fail safely
 rather than replacing either field with partial content.
 
-AI edits appear as **Suggested ticket changes** in the AI panel, with removed/added
-text. Choose **Accept changes** or **Discard**. Conversational proposals have a
-**Review ticket changes** action to open the same review. Acceptance replaces the
-reviewed fields locally. Editing during generation or
-another saved revision makes suggestions outdated; your writing is preserved.
-Recovered or historical AI drafts never automatically replace the editor.
+Each AI reply that suggests ticket changes shows a card with a summary (for
+example “3 changes: title and 2 in Description”), a status (**Not reviewed**,
+**1 of 3 applied**, **All applied**, **Dismissed** or **Outdated**) and **Review
+changes**. Review opens a window with your original text on the left and the
+proposed text on the right, one row per change: the title first, then each
+changed part of the Description. Changed words are highlighted, unchanged lines
+are collapsed, and **Formatted** shows both sides as rendered Markdown.
+
+- **Accept** applies that change to the editor straight away; the row then shows
+  **Applied** with **Undo**.
+- **Reject** marks the row **Rejected**. Rejections last until you reload the page.
+- **Accept all** and **Reject all** act on every change that is still open.
+- **Done**, ✕ or Esc closes the window.
+
+A change can be accepted only while the text it replaces is still in your ticket,
+unchanged and appearing once. If you have edited that part since, the row says
+“You've changed this part since” and cannot be accepted; other changes in the same
+suggestion stay usable. Accepted changes are ordinary edits, so if a save problem
+appears, accepting is paused until you resolve it. Recovered or historical AI
+drafts never automatically replace the editor.
 
 All draft fields autosave750ms after a pause. Accepting AI changes in a draft
 follows that same autosave. **Publish** requires a nonempty title/description and publishes all ticket
@@ -301,8 +317,8 @@ There are no automatic provider retries or fallback models. Manual editing
 remains available when AI fails. Unsaved task text warns before departure and
 is not stored in browser persistent storage.
 
-**Usage.** The panel shows, for example, **14 of 20 AI requests left this hour**,
-with the reset time once fewer than five remain. Failed requests give their
+**Usage.** A bar above the instruction box shows, for example, **14/20 AI requests
+left this hour**. It turns red at zero and adds the reset time once fewer than five remain. Failed requests give their
 request back, but every attempt counts toward the 40-attempt limit.
 Repeating a request that already completed on the unchanged ticket shows the
 saved answer without using a request. At most 40 attempts (including failures)

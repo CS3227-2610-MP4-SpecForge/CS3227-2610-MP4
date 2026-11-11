@@ -87,7 +87,7 @@ presentation; the provider owns event identity, replacement and three-second tim
 cleanup. Error events use red alert styling and informational events use polite
 status styling. Repeated identical events restart the timer without overlap.
 
-ManagementDialog registers its native top-layer element explicitly so notifications
+The shared `Modal` (used by organisation management and AI change review) registers its native top-layer element explicitly so notifications
 from anywhere remain visible above the modal. Host changes preserve the deadline.
 Keep persistent save/conflict state, field guidance and saved AI history contextual.
 Browser coverage checks last-admin error expiry, signup verification navigation,
@@ -207,8 +207,9 @@ conversation state, sending, recovery, polling and usage; the editor creates it
 so **Draft with AI** (in the Description header) and the sidebar share one request
 guard. On an empty ticket the sidebar composer sends a `draft` request carrying the
 PM's text.
-Header and review slots let the editor supply its own controls. Undo, review,
-the latest result, the composer and collapsed history render inside the sidebar.
+Header and footer slots let the editor supply its own controls (Undo AI draft
+sits in the pinned footer). The transcript, change cards, composer and usage bar
+render inside the sidebar; the review modal is rendered by the editor.
 The main editor is always available on empty drafts, and a first draft fills the
 editor only while its exact snapshot is still current.
 Collapsing uses `hidden`, preserving the mounted conversation and instruction.
@@ -449,15 +450,21 @@ live provider calls are needed to distinguish these states.
 
 The [ticket-first AI spec](../workflow/specs/2026-11-08-ticket-first-ai.md)
 supersedes the fixed two-column proposal-in-chat interaction; the 2026-11-10
-redesign replaces its rough-idea starter and Leave undecided action. `ChatPanel`
-renders the usage meter, latest result (reply, gaps checklist or plain failure
-with Details), one composer, **Check for gaps** and collapsed **Earlier requests**,
-composing the editor as its child. `RequestEditor` owns
-all task replacement, exact local/revision freshness and authorized remote
-rechecks, plus inline review and conditional first-draft Undo. Draft autosave and
-explicit published saves are unchanged. Only a direct, newly requested first-draft
-completion may fill the private editor automatically. Reconciled/polled/history
-results require review. `SuggestionReview` renders a literal text diff, never HTML.
+redesign replaces its rough-idea starter and Leave undecided action. The
+[AI chat review spec](../workflow/specs/2026-11-11-ai-chat-review-modal.md)
+replaces the latest-result box and whole-suggestion review. `ChatPanel` renders
+one transcript (each reply with its change card, gaps checklist or plain failure
+with Details), the usage bar, one composer and **Check for gaps**, composing the
+editor as its child. Only the newest unanswered gaps checklist is interactive.
+`src/ticket-changes.ts` splits a turn's `input_fields` → `proposal` into
+changes in the browser (a line diff, each change located by its lines plus the
+unchanged line on each side) and derives open/applied/outdated status from the
+current ticket; nothing per change is stored. `ChangeReview` (in a shared
+`Modal`) applies or undoes one change as an ordinary editor edit and renders text
+as React children or the safe `Markdown` renderer, never HTML. Rejections live in
+`RequestEditor` state for the page session. Only a direct, newly requested
+first-draft completion may fill the private editor automatically, with the
+existing freshness recheck and Undo AI draft.
 
 `src/assistance.ts` defines the intents and the fixed draft, gap-check and
 apply-answers messages. Gap questions are stored on `gaps` turns; answers are

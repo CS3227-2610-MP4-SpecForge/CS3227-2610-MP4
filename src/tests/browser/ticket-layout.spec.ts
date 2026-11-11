@@ -49,7 +49,7 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
       await expect(panel.getByRole("button", { name, exact: true })).toHaveCount(0);
     }
     await expect(panel.getByRole("button", { name: "Check for gaps", exact: true })).toBeVisible();
-    await expect(panel.getByText("20 of 20 AI requests left this hour.", { exact: true })).toBeVisible();
+    await expect(panel.getByText("20/20 AI requests left this hour.", { exact: true })).toBeVisible();
     const title = (await page.getByLabel("Title", { exact: true }).boundingBox())!;
     const due = (await page.getByLabel("Due date", { exact: true }).boundingBox())!;
     const description = (await page.getByLabel("Description", { exact: true }).boundingBox())!;
@@ -63,7 +63,9 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
     await expect(panel.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toHaveValue("Keep my unsent thought");
     await panel.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("Suggest a proposal for clearer wording.");
     await panel.getByRole("button", { name: "Ask AI", exact: true }).click();
-    await expect(panel.getByRole("region", { name: "Suggested ticket changes", exact: true })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "Review changes", exact: true })).toBeVisible();
+    // The open panel is wider and the ticket page grows with it.
+    expect((await panel.boundingBox())!.width).toBeGreaterThanOrEqual(430);
     await page.screenshot({ path: "test-results/ticket-layout-author.png", fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

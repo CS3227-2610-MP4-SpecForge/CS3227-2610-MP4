@@ -1,9 +1,10 @@
 "use client";
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { describeAiFailure } from "@/ai-diagnostics";
 import { answerLimit, assistanceMessages, type AiAnswer } from "@/assistance";
 import type { ChatTurn } from "@/chat";
 import { sameFields, type RequestFields } from "@/requests";
+import { reviewStatus, summarizeChanges, ticketChanges } from "@/ticket-changes";
 import { tooLargeForAi, type Assistant } from "./use-assistant";
 import { Button, Notice, TextareaField } from "./ui";
 import { Markdown } from "./markdown";
@@ -54,25 +55,72 @@ function UsageMeter({ assistant }: { assistant: Assistant }) {
   const usage = assistant.usage;
   if (!usage) return null;
   const reset = usage.resets_at && usage.remaining < 5 ? ` More at ${new Date(usage.resets_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.` : "";
-  return <p className="hint assistant-usage" aria-live="polite">{usage.remaining} of {usage.limit} AI requests left this hour.{reset}</p>;
+  const share = usage.limit > 0 ? Math.min(100, Math.max(0, usage.remaining / usage.limit * 100)) : 0;
+  return <div className="assistant-usage">
+    <div className={`usage-track ${usage.remaining === 0 ? "usage-empty" : ""}`} role="meter" aria-label="AI requests left this hour"
+      aria-valuemin={0} aria-valuemax={usage.limit} aria-valuenow={usage.remaining}>
+      <span className="usage-fill" style={{ width: `${share}%` }} />
+    </div>
+    <p className="hint" aria-live="polite">{usage.remaining}/{usage.limit} AI requests left this hour.{reset}</p>
+  </div>;
 }
 
-export function ChatPanel({ assistant, fields, revision, canSend, reviewing, onReview, children, header, review }: {
-  assistant: Assistant; fields: RequestFields; revision: number; canSend: boolean; reviewing: boolean;
-  onReview(turn: ChatTurn): void; children: ReactNode; header: ReactNode; review: ReactNode;
+function ChangeCard({ turn, fields, rejected, onReview }: { turn: ChatTurn; fields: RequestFields; rejected: ReadonlySet<string>; onReview(): void }) {
+  const changes = useMemo(() => turn.proposal ? ticketChanges(turn.input_fields, turn.proposal) : [], [turn.input_fields, turn.proposal]);
+  if (changes.length === 0) return <p className="hint">No ticket changes suggested.</p>;
+  return <div className="change-card">
+    <div><strong>{summarizeChanges(changes)}</strong><span className="change-card-status">{reviewStatus(changes, fields, rejected)}</span></div>
+    <Button type="button" id={`review-${turn.id}`} className="secondary" aria-haspopup="dialog" onClick={onReview}>Review changes</Button>
+  </div>;
+}
+
+// Read-only questions from an earlier or superseded gaps check.
+function PastQuestions({ turn }: { turn: ChatTurn }) {
+  return <ul className="past-questions">{(turn.questions ?? []).map((question, index) => <li key={index}>{question.prompt}</li>)}</ul>;
+}
+
+const noRejections: ReadonlySet<string> = new Set();
+
+export function ChatPanel({ assistant, fields, revision, canSend, rejections, onReview, children, header, footer }: {
+  assistant: Assistant; fields: RequestFields; revision: number; canSend: boolean; rejections: Record<string, ReadonlySet<string>>;
+  onReview(turn: ChatTurn): void; children: ReactNode; header: ReactNode; footer: ReactNode;
 }) {
   const [open, setOpen] = useState(true);
   const { turns, latest, error, replay, disabled, busy, running, loading, message, setMessage } = assistant;
-  const earlier = turns.filter(turn => turn !== latest).reverse();
   const tooLarge = tooLargeForAi(fields, message);
   const blocked = disabled || tooLarge;
   const isCurrent = (turn: ChatTurn) => turn.base_revision === revision && sameFields(turn.input_fields, fields);
+  // Only the newest gaps check that has not been answered since can be answered.
+  const lastGaps = turns.findLastIndex(turn => turn.status === "completed" && turn.questions);
+  const answerable = lastGaps >= 0 && !turns.slice(lastGaps + 1).some(turn => turn.answers) ? turns[lastGaps] : null;
+  const transcript = useRef<HTMLOListElement>(null);
+  const following = useRef(true);
+  const [atBottom, setAtBottom] = useState(true);
+  const newest = `${turns.at(-1)?.id}:${turns.at(-1)?.status}:${busy}`;
+  const [seen, setSeen] = useState(newest);
+  // Follow new replies only while the reader is at the bottom of the transcript.
+  useLayoutEffect(() => {
+    const list = transcript.current;
+    if (list && following.current) list.scrollTop = list.scrollHeight;
+  }, [newest, open]);
+  function scrolled() {
+    const list = transcript.current!;
+    const bottom = list.scrollHeight - list.scrollTop - list.clientHeight < 48;
+    // Replies that arrived while following were seen, even without a scroll event.
+    if (bottom || following.current) setSeen(newest);
+    following.current = bottom; setAtBottom(bottom);
+  }
+  function jumpToNewest() {
+    const list = transcript.current!;
+    following.current = true; list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
+  }
   async function ask(event: React.FormEvent) {
     event.preventDefault();
     const text = message.trim();
     if (!text || [...text].length > 4000) return;
     // On an empty ticket the instruction is a rough idea, so it drafts the ticket.
     const empty = !fields.title.trim() && !fields.description.trim();
+    following.current = true;
     await assistant.send({ key: crypto.randomUUID(), revision, fields: { ...fields }, intent: empty ? "draft" : "edit", message: text, retry: false });
   }
   function retry(turn: ChatTurn) {
@@ -93,45 +141,51 @@ export function ChatPanel({ assistant, fields, revision, canSend, reviewing, onR
     </div>
     <div className={`ticket-workspace ${open ? "discussion-open" : ""}`}>
       <div className="task-panel stack">{children}</div>
-      <aside id="ticket-discussion" className="card stack chat-panel" aria-label="AI assistant" hidden={!open} aria-busy={busy || running}>
-        <h2>AI assistant</h2>
-        <p className="hint">Private to you. Suggestions change your ticket only when you accept them.</p>
-        <UsageMeter assistant={assistant} />
-        {(busy || running) && <span role="status">AI is responding… You can keep editing.</span>}
-        {!canSend && <span className="hint">Wait for autosave or resolve save errors before asking AI.</span>}
-        {tooLarge && <Notice>This ticket is too long for AI. Shorten it or keep editing manually.</Notice>}
-        {error && <Notice danger>{error}</Notice>}
-        {replay && <Button disabled={!assistant.canReplay || tooLarge} onClick={() => { void assistant.send({ ...replay, revision, fields: { ...fields } }); }}>Send again</Button>}
-        {review}
-        {loading && turns.length === 0 && <Notice>Loading AI assistant…</Notice>}
-        {latest && <section className="stack assistant-latest" aria-label="Latest result">
-          <div className="chat-bubble user-message"><strong>You</strong><p className="request-text">{latest.message}</p></div>
-          {latest.reply && <div className="chat-bubble assistant-message"><strong>AI</strong><Markdown text={latest.reply} /></div>}
-          {latest.proposal && !reviewing && <div><Button type="button" className="secondary" disabled={busy} onClick={() => onReview(latest)}>Review ticket changes</Button>{!isCurrent(latest) && <p className="hint">This suggestion is outdated. Your ticket is unchanged.</p>}</div>}
-          {latest.status === "failed" && <FailureNotice key={latest.id} turn={latest} current={isCurrent(latest)} disabled={blocked} onRetry={() => retry(latest)} />}
-          {latest.status === "completed" && latest.questions && <GapsChecklist key={latest.id} turn={latest} disabled={blocked || !isCurrent(latest)}
-            onApply={answers => { void assistant.send({ key: crypto.randomUUID(), revision, fields: { ...fields }, intent: "edit", answers, retry: false }); }} />}
-          {latest.status === "completed" && latest.questions && !isCurrent(latest) && <p className="hint">The ticket changed. Check for gaps again to answer against the current ticket.</p>}
-        </section>}
-        <form className="stack" onSubmit={ask}>
-          <TextareaField id="chat-message" label="Ask AI to change or explain this ticket" rows={3} maxLength={8000} placeholder="Make this shorter, or explain the edge cases…" value={message} disabled={busy} onChange={event => setMessage(event.target.value)} />
-          {[...message].length > 4000 && <Notice danger>AI requests are limited to 4,000 characters.</Notice>}
-          <div className="actions">
-            <Button disabled={blocked || !message.trim() || [...message].length > 4000}>Ask AI</Button>
-            <Button type="button" className="secondary" disabled={blocked || !fields.description.trim()} onClick={() => { void assistant.send({ key: crypto.randomUUID(), revision, fields: { ...fields }, intent: "gaps", retry: false }); }}>Check for gaps</Button>
-          </div>
-        </form>
-        {earlier.length > 0 && <details className="assistant-history">
-          <summary>Earlier requests ({earlier.length})</summary>
-          <ol className="chat-transcript stack" aria-label="Earlier requests">
-            {earlier.map(turn => <li className="chat-turn" key={turn.id}>
+      <aside id="ticket-discussion" className="card chat-panel" aria-label="AI assistant" hidden={!open} aria-busy={busy || running}>
+        <div className="chat-panel-header">
+          <h2>AI assistant</h2>
+          <p className="hint">Private to you. Suggestions change your ticket only when you accept them.</p>
+        </div>
+        <div className="chat-transcript-frame">
+          <ol ref={transcript} className="chat-transcript" aria-label="Conversation" onScroll={scrolled} tabIndex={0}>
+            {loading && turns.length === 0 && <li><Notice>Loading AI assistant…</Notice></li>}
+            {!loading && turns.length === 0 && <li className="hint chat-empty">Ask for a change, or use Check for gaps to find what the ticket is missing.</li>}
+            {turns.map(turn => <li className="chat-turn" key={turn.id}>
               <div className="chat-bubble user-message"><strong>You</strong><p className="request-text">{turn.message}</p></div>
-              {turn.reply && <div className="chat-bubble assistant-message"><strong>AI</strong><Markdown text={turn.reply} /></div>}
-              {turn.status === "failed" && <p className="hint">This request failed and did not use one of your hourly AI requests.</p>}
-              {turn.proposal && <div><Button type="button" className="secondary" disabled={busy} onClick={() => onReview(turn)}>Review ticket changes</Button>{!isCurrent(turn) && <p className="hint">This suggestion is outdated. Your ticket is unchanged.</p>}</div>}
+              {turn.status !== "running" && <div className="chat-bubble assistant-message">
+                <strong>AI</strong>
+                {turn.reply && <Markdown text={turn.reply} />}
+                {turn.status === "completed" && turn.proposal && <ChangeCard turn={turn} fields={fields} rejected={rejections[turn.id] ?? noRejections} onReview={() => onReview(turn)} />}
+                {turn.status === "completed" && turn.questions && (turn === answerable
+                  ? <GapsChecklist key={turn.id} turn={turn} disabled={blocked || !isCurrent(turn)}
+                    onApply={answers => { following.current = true; void assistant.send({ key: crypto.randomUUID(), revision, fields: { ...fields }, intent: "edit", answers, retry: false }); }} />
+                  : <PastQuestions turn={turn} />)}
+                {turn === answerable && !isCurrent(turn) && <p className="hint">The ticket changed. Check for gaps again to answer against the current ticket.</p>}
+                {turn.status === "failed" && (turn === latest
+                  ? <FailureNotice key={turn.id} turn={turn} current={isCurrent(turn)} disabled={blocked} onRetry={() => retry(turn)} />
+                  : <p className="hint">This request failed and did not use one of your hourly AI requests.</p>)}
+              </div>}
             </li>)}
+            {(busy || running) && <li className="chat-bubble assistant-message chat-pending"><strong>AI</strong><span role="status">AI is responding… You can keep editing.</span></li>}
           </ol>
-        </details>}
+          {!atBottom && seen !== newest && <Button type="button" className="secondary new-reply" onClick={jumpToNewest}>New reply ↓</Button>}
+        </div>
+        <div className="stack chat-panel-footer">
+          {footer}
+          {!canSend && <span className="hint">Wait for autosave or resolve save errors before asking AI.</span>}
+          {tooLarge && <Notice>This ticket is too long for AI. Shorten it or keep editing manually.</Notice>}
+          {error && <Notice danger>{error}</Notice>}
+          {replay && <Button disabled={!assistant.canReplay || tooLarge} onClick={() => { void assistant.send({ ...replay, revision, fields: { ...fields } }); }}>Send again</Button>}
+          <UsageMeter assistant={assistant} />
+          <form className="stack" onSubmit={ask}>
+            <TextareaField id="chat-message" label="Ask AI to change or explain this ticket" rows={3} maxLength={8000} placeholder="Make this shorter, or explain the edge cases…" value={message} disabled={busy} onChange={event => setMessage(event.target.value)} />
+            {[...message].length > 4000 && <Notice danger>AI requests are limited to 4,000 characters.</Notice>}
+            <div className="actions">
+              <Button disabled={blocked || !message.trim() || [...message].length > 4000}>Ask AI</Button>
+              <Button type="button" className="secondary" disabled={blocked || !fields.description.trim()} onClick={() => { following.current = true; void assistant.send({ key: crypto.randomUUID(), revision, fields: { ...fields }, intent: "gaps", retry: false }); }}>Check for gaps</Button>
+            </div>
+          </form>
+        </div>
       </aside>
     </div>
   </div>;

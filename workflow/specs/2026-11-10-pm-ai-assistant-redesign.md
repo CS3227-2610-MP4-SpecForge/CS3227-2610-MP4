@@ -5,6 +5,9 @@ default open decisions. Branch `pm-features`. Supersedes the panel
 layout and context rules of [ticket-first AI](2026-11-08-ticket-first-ai.md) where
 they conflict; its review, freshness, undo and privacy rules stay.
 
+The panel layout, history and whole-suggestion review described below are
+replaced by [AI chat transcript and per-change review](2026-11-11-ai-chat-review-modal.md).
+
 ## Problem and user
 
 A Product Manager uses AI to draft and refine one ticket. Feedback calls the

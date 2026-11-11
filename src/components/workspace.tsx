@@ -1,10 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, failureMessage } from "./http";
-import { Button, Field, Notice, useNotifications, useNotificationState } from "./ui";
+import { Button, Field, Modal, Notice, useNotificationState } from "./ui";
 import { Membership } from "./membership";
 type Organisation = { id: string; name: string; isAdmin: boolean };
 type Account = { id: string; email: string; role: "PM" | "Developer" };
@@ -65,20 +64,5 @@ export function Workspace() {
 }
 
 function ManagementDialog({ name, onClose, children }: { name: string; onClose(): void; children: React.ReactNode }) {
-  const { registerHost } = useNotifications();
-  const ref = useRef<HTMLDialogElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const dialog = ref.current!;
-    const previousOverflow = document.body.style.overflow;
-    dialog.showModal();
-    const unregister = registerHost(dialog);
-    contentRef.current?.focus({ preventScroll: true });
-    document.body.style.overflow = "hidden";
-    return () => { unregister(); dialog.close(); document.body.style.overflow = previousOverflow; };
-  }, [registerHost]);
-  return <dialog ref={ref} className="management-dialog" aria-label={`Manage ${name}`} onClose={() => { if (!ref.current?.open) onClose(); }}>
-    <header className="management-dialog-toolbar"><Button className="secondary management-dialog-close" onClick={onClose} aria-label="Close management"><X className="ui-icon" aria-hidden="true" focusable="false" /></Button></header>
-    <div ref={contentRef} tabIndex={-1} className="management-dialog-content" role="region" aria-label="Management content">{children}</div>
-  </dialog>;
+  return <Modal label={`Manage ${name}`} contentLabel="Management content" closeLabel="Close management" onClose={onClose}>{children}</Modal>;
 }

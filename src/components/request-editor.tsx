@@ -4,7 +4,7 @@ import { Sparkles } from "lucide-react";
 import { requestFields, sameFields, type FeatureRequest, type RequestFields, type TicketRead } from "@/requests";
 import { api, ApiError, failureMessage } from "./http";
 import type { ChatTurn } from "@/chat";
-import { SuggestionReview } from "./suggestion-review";
+import { ChangeReview } from "./change-review";
 import { ChatPanel } from "./chat-panel";
 import { tooLargeForAi, useAssistant } from "./use-assistant";
 import { Markdown } from "./markdown";
@@ -63,9 +63,9 @@ function RequestMetadata({ item, author, children }: { item: FeatureRequest; aut
   </section>;
 }
 function RequestEditor({ initial, path, listPath, accountId, organisationName }: { initial: TicketRead; path: string; listPath: string; accountId: string; organisationName: string }) {
-  const [suggestion, setSuggestion] = useState<ChatTurn | null>(null);
-  const suggestionLive = useRef<ChatTurn | null>(null);
-  function review(turn: ChatTurn | null) { suggestionLive.current = turn; setSuggestion(turn); }
+  const [reviewing, setReviewing] = useState<ChatTurn | null>(null);
+  // Rejected change ids per turn, kept for this page only.
+  const [rejections, setRejections] = useState<Record<string, ReadonlySet<string>>>({});
   const [undo, setUndo] = useState<{ before: RequestFields; after: RequestFields } | null>(null);
   const [applying, setApplying] = useState(false);
   const problemLive = useRef<Problem | null>(null);
@@ -174,30 +174,29 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
     } finally { operation.current = false; setApplying(false); }
   }
   // A fresh draft of an untitled private ticket fills the editor with undo;
-  // every other suggestion waits for explicit review.
+  // every other suggestion waits on its reply's change card for review.
   async function receiveSuggestion(turn: ChatTurn) {
     if (!turn.proposal) return;
     try {
       if (turn.intent === "draft" && !persisted.current.submitted_at && !turn.input_fields.title.trim()
         && await replaceIfFresh(turn.input_fields, turn.base_revision, turn.proposal, () => !persisted.current.submitted_at)) {
         setUndo({ before: turn.input_fields, after: turn.proposal });
-        setMessage("AI draft created. Edit it freely, or undo while it is unchanged."); return;
-      }
-      openReview(turn);
-    } catch (failure) { setMessage(failureMessage(failure), true); openReview(turn); }
-  }
-  function openReview(turn: ChatTurn) {
-    review(turn);
-    window.requestAnimationFrame(() => document.getElementById("ticket-suggestion")?.focus());
-  }
-  async function acceptSuggestion() {
-    const candidate = suggestionLive.current;
-    if (!candidate?.proposal) return;
-    try {
-      if (await replaceIfFresh(candidate.input_fields, candidate.base_revision, candidate.proposal, () => suggestionLive.current === candidate)) {
-        review(null); setUndo(null); setMessage("AI changes accepted. Review the ticket before publishing.");
+        setMessage("AI draft created. Edit it freely, or undo while it is unchanged.");
       }
     } catch (failure) { setMessage(failureMessage(failure), true); }
+  }
+  function closeReview() {
+    const turn = reviewing;
+    setReviewing(null);
+    if (turn) window.requestAnimationFrame(() => document.getElementById(`review-${turn.id}`)?.focus());
+  }
+  // Accepting or undoing a change is an ordinary edit: it autosaves a private
+  // ticket and stays local on a published one until Update.
+  function applyReviewed(next: RequestFields) {
+    latest.current = { ...next }; setFields(latest.current); setMessage(""); setValidation(""); setDraftHint(false);
+  }
+  function reject(turn: ChatTurn, ids: string[]) {
+    setRejections(current => ({ ...current, [turn.id]: new Set([...(current[turn.id] ?? []), ...ids]) }));
   }
   async function undoDraft() {
     if (!undo) return;
@@ -228,13 +227,11 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
   const autosavedAt = published ? null : stored.last_autosaved_at;
   const savedAt = autosavedAt ?? (published || stored.revision > 1 ? stored.updated_at : null);
   return <section className="stack request-page ticket-editor">
-    <ChatPanel assistant={assistant} fields={fields} revision={stored.revision} canSend={canAsk} reviewing={suggestion !== null} onReview={openReview}
+    {reviewing && <ChangeReview turn={reviewing} fields={fields} rejected={rejections[reviewing.id] ?? new Set()} onChange={applyReviewed} onReject={ids => reject(reviewing, ids)} onClose={closeReview}
+      blockedReason={blocked ? "Resolve the save problem on the ticket before accepting AI changes." : busy === "explicit" || applying ? "Wait for the ticket to finish saving." : null} />}
+    <ChatPanel assistant={assistant} fields={fields} revision={stored.revision} canSend={canAsk} rejections={rejections} onReview={setReviewing}
       header={<><BackLink href={listPath} fullPage>Back to requests</BackLink><CopyTicketLink /></>}
-      review={<>
-
-        {undo && <div className="actions"><Button className="secondary" disabled={Boolean(busy) || applying || blocked || !sameFields(fields, undo.after)} onClick={undoDraft}>Undo AI draft</Button></div>}
-        {suggestion && <SuggestionReview turn={suggestion} fields={fields} revision={stored.revision} disabled={Boolean(busy) || applying || blocked} onAccept={() => { void acceptSuggestion(); }} onDiscard={() => { review(null); focusDescription(); }} />}
-      </>}>
+      footer={undo && <div className="actions"><Button className="secondary" disabled={Boolean(busy) || applying || blocked || !sameFields(fields, undo.after)} onClick={undoDraft}>Undo AI draft</Button></div>}>
       <div className="card stack ticket-content">
         <TicketVisibility published={published} organisationName={organisationName} />
         <Field id="request-title" label="Title" form="request-content" required maxLength={320} value={fields.title} disabled={busy === "explicit"} onChange={event => edit("title", event.target.value)} />
