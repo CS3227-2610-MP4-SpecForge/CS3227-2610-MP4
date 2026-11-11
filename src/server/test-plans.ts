@@ -2,7 +2,7 @@ import { aiDiagnostic, diagnosticSources } from "./ai-diagnostics";
 import type { AiDiagnostic } from "../ai-diagnostics";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { error, json, readBody } from "./http";
+import { error, json, logFailure, readBody, serviceUnavailable } from "./http";
 import { taskFields } from "./requests";
 import { testCaseKinds, testPlanLimits } from "../test-plans";
 import { AiFailure } from "./soc";
@@ -31,13 +31,13 @@ const savedSchema = z.object({
   saved_by: z.uuid(), saved_by_username: z.string(), created_at: z.string(), updated_at: z.string(),
 }).nullable();
 
-function failureResponse(failure: { code?: string } | null) {
+function failureResponse(request: Request, failure: { code?: string } | null) {
   if (!failure) return null;
   if (failure.code === "42501") return error("Test plans are unavailable for this ticket, or access has changed.", 403);
   if (failure.code === "22023") return error("The test plan or ticket snapshot is invalid. Generate a new plan from the current ticket.", 400);
   if (failure.code === "P0001") return error("The ticket or the saved plan changed. Reload the ticket before saving this plan.", 409);
   if (failure.code === "PT429") return error("AI is busy or a usage limit was reached. Wait for a running generation or plan manually.", 429);
-  return error("Test plan service unavailable. Nothing was changed.", 503);
+  return serviceUnavailable(request, failure, "Test plan service unavailable. Nothing was changed.");
 }
 
 export async function handleTestPlans(request: Request, client: SupabaseClient, actorId: string, dependencies?: TestPlanDependencies): Promise<Response | null> {
@@ -48,9 +48,9 @@ export async function handleTestPlans(request: Request, client: SupabaseClient, 
   // Authorize with the user's own session before constructing privileged worker
   // access or contacting SoC. The worker RPCs independently recheck identity.
   const { data: current, error: readError } = await client.rpc("read_test_plan", { target_org: org, request_id: id });
-  const denied = failureResponse(readError); if (denied) return denied;
+  const denied = failureResponse(request, readError); if (denied) return denied;
   const view = z.object({ saved: savedSchema, turns: z.array(turnSchema) }).safeParse(current);
-  if (!view.success) return error("Test plan service unavailable.", 503);
+  if (!view.success) return serviceUnavailable(request, view.error, "Test plan service unavailable.");
   const expired = (turns: typeof view.data.turns) => turns.map(turn =>
     turn.status === "running" && Date.parse(turn.lease_until) <= Date.now() ? { ...turn, status: "failed" as const, error_code: "interrupted" } : turn);
 
@@ -63,9 +63,9 @@ export async function handleTestPlans(request: Request, client: SupabaseClient, 
       target_org: org, request_id: id, plan: input.data.plan,
       ticket_revision: input.data.ticketRevision, expected_plan_revision: input.data.planRevision,
     });
-    const saveFailure = failureResponse(saveError); if (saveFailure) return saveFailure;
+    const saveFailure = failureResponse(request, saveError); if (saveFailure) return saveFailure;
     const parsed = savedSchema.safeParse(saved);
-    return parsed.success && parsed.data ? json({ saved: parsed.data }) : error("Test plan service unavailable.", 503);
+    return parsed.success && parsed.data ? json({ saved: parsed.data }) : serviceUnavailable(request, parsed.error, "Test plan service unavailable.");
   }
 
   if (request.method !== "POST") return error("Not found.", 404);
@@ -74,15 +74,15 @@ export async function handleTestPlans(request: Request, client: SupabaseClient, 
     focus: limited(testPlanLimits.focus).trim().min(1).nullable().default(null), retry: z.boolean().default(false),
   }).safeParse(await readBody(request, 262144));
   if (!input.success) return error(`Enter an optional focus note of up to ${testPlanLimits.focus} characters and a valid current ticket.`, 400);
-  if (!dependencies) return error("AI is not configured. Plan manually.", 503);
+  if (!dependencies) return serviceUnavailable(request, undefined, "AI is not configured. Plan manually.");
   const worker = dependencies.worker();
   const { data: admission, error: admissionError } = await worker.rpc("begin_test_plan_turn", {
     target_org: org, request_id: id, actor_id: actorId, turn_key: input.data.key,
     base_revision: input.data.revision, input_fields: input.data.fields, focus_note: input.data.focus, retry_failed: input.data.retry,
   });
-  const admissionFailure = failureResponse(admissionError); if (admissionFailure) return admissionFailure;
+  const admissionFailure = failureResponse(request, admissionError); if (admissionFailure) return admissionFailure;
   const parsed = turnSchema.safeParse(admission?.turn);
-  if (!parsed.success || typeof admission.dispatch !== "boolean") return error("Test plan service unavailable.", 503);
+  if (!parsed.success || typeof admission.dispatch !== "boolean") return serviceUnavailable(request, parsed.error, "Test plan service unavailable.");
   const turn = parsed.data;
   if (!admission.dispatch) return json({ turn }, turn.status === "running" ? 202 : 200);
 
@@ -98,12 +98,13 @@ export async function handleTestPlans(request: Request, client: SupabaseClient, 
       if (safe.success && safe.data.source === diagnosticSources[code]) diagnostic = safe.data;
       else code = "unavailable";
     }
+    logFailure(request, failure, { diagnostic });
   }
   const { data: completed, error: completionError } = await worker.rpc("finish_test_plan_turn", {
     target_org: org, request_id: id, actor_id: actorId, turn_id: turn.id, worker_generation: turn.generation,
     human_reply: result?.reply ?? null, generated_plan: result?.plan ?? null, failure_code: code, failure_diagnostic: diagnostic,
   });
-  const completionFailure = failureResponse(completionError); if (completionFailure) return completionFailure;
+  const completionFailure = failureResponse(request, completionError); if (completionFailure) return completionFailure;
   const final = turnSchema.safeParse(completed);
-  return final.success ? json({ turn: final.data }) : error("Test plan service unavailable.", 503);
+  return final.success ? json({ turn: final.data }) : serviceUnavailable(request, final.error, "Test plan service unavailable.");
 }

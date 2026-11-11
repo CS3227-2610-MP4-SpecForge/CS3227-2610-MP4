@@ -2,7 +2,7 @@ import { handleChat, type ChatDependencies } from "./chat";
 import { handleTestPlans, type TestPlanDependencies } from "./test-plans";
 import { handleDelivery } from "./delivery";
 import { handleRequests } from "./requests";
-import { error, json, InputError, readBody } from "./http";
+import { error, json, InputError, readBody, serviceUnavailable } from "./http";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { legacyUsernamePrefix, reservedUsernameMessage, usernameHint, usernamePattern } from "../usernames";
@@ -46,7 +46,7 @@ export function createApplication(options: Options) {
         const { error: failure } = await options.client().auth.signUp({ email, password, options: { data: { role, username } } });
         // Auth can mask existing accounts as success and surface username collisions as opaque 500s.
         if (failure && failure.status !== 500 && failure.code !== "user_already_exists" && failure.code !== "email_exists") {
-          if (unavailable(failure)) return error("Service temporarily unavailable. Try again later.", 503);
+          if (unavailable(failure)) return serviceUnavailable(request, failure, "Service temporarily unavailable. Try again later.");
           return error("Unable to create the account. Try again later.", failure.status === 429 ? 429 : 400);
         }
         return json({ message: "Check your email for a verification code. If no code arrives, try a different username or sign in if you already have an account." }, 202);
@@ -55,7 +55,7 @@ export function createApplication(options: Options) {
         const input = verification.safeParse(await readBody(request));
         if (!input.success) return error("Enter a valid email and verification code.", 400);
         const { error: failure } = await options.client().auth.verifyOtp({ ...input.data, type: "signup" });
-        if (unavailable(failure)) return error("Service temporarily unavailable. Try again later.", 503);
+        if (unavailable(failure)) return serviceUnavailable(request, failure, "Service temporarily unavailable. Try again later.");
         if (failure) return error("Invalid or expired verification code.", failure.status === 429 ? 429 : 400);
         return json({ message: "Email verified." });
       }
@@ -63,14 +63,14 @@ export function createApplication(options: Options) {
         const input = credentials.safeParse(await readBody(request));
         if (!input.success) return error("Check the account fields and try again.", 400);
         const { data, error: failure } = await options.client().auth.signInWithPassword(input.data);
-        if (unavailable(failure)) return error("Service temporarily unavailable. Try again later.", 503);
+        if (unavailable(failure)) return serviceUnavailable(request, failure, "Service temporarily unavailable. Try again later.");
         if (failure || !data.user?.email_confirmed_at) return error("Email or password is incorrect, or email is not verified.", failure?.status === 429 ? 429 : 401);
         return json({ message: "Signed in." });
       }
       if (path === "/api/auth/signout" && request.method === "POST") {
         if (!z.strictObject({}).safeParse(await readBody(request)).success) return error("Invalid request.", 400);
         const { error: failure } = await options.client().auth.signOut({ scope: "local" });
-        if (failure) return error("Unable to sign out. Try again.", 503);
+        if (failure) return serviceUnavailable(request, failure, "Unable to sign out. Try again.");
         return json({ message: "Signed out." });
       }
       if (path === "/api/auth/resend" && request.method === "POST") {
@@ -78,14 +78,14 @@ export function createApplication(options: Options) {
         if (!input.success) return error("Enter a valid email address.", 400);
         const { error: failure } = await options.client().auth.resend({ type: "signup", email: input.data.email });
         if (failure?.status === 429) return error("Too many attempts. Try again later.", 429);
-        if (unavailable(failure)) return error("Service temporarily unavailable. Try again later.", 503);
+        if (unavailable(failure)) return serviceUnavailable(request, failure, "Service temporarily unavailable. Try again later.");
         return json({ message: "If this account needs verification, a new code has been sent." }, 202);
       }
       if (path === "/api/invitations" || path.startsWith("/api/invitations/") || path === "/api/organisations" || path === "/api/account" || path.startsWith("/api/organisations/")) {
         const client = options.client();
         const { data, error: failure } = await client.auth.getUser();
         if (failure?.status === 429) return error("Too many attempts. Try again later.", 429);
-        if (unavailable(failure)) return error("Service temporarily unavailable. Try again later.", 503);
+        if (unavailable(failure)) return serviceUnavailable(request, failure, "Service temporarily unavailable. Try again later.");
         if (failure || !data.user) return error("Sign in to continue.", 401);
         if (!data.user.email_confirmed_at) return error("Verify your email to continue.", 403);
         const chatResponse = await handleChat(request, client, data.user.id, options.chat);
@@ -129,11 +129,11 @@ export function createApplication(options: Options) {
           if (rpcError?.code === "42501") return error("You no longer have permission for this action.", 403);
           if (rpcError?.code === "22023") return error("Invalid membership action.", 400);
           if (rpcError?.code === "P0001") return error(rpc === "change_member" ? "This change is unavailable. Keep at least one admin; promote another member first if needed." : "Invitation changed or expired. Refresh and try again.", 409);
-          if (rpcError) return error("Membership service unavailable. Try again later.", 503);
+          if (rpcError) return serviceUnavailable(request, rpcError, "Membership service unavailable. Try again later.");
           if (result?.status === "limited") return error("Invitation limit reached. Try again in an hour.", 429);
           if (result?.status === "member") return error("This account is already a member of the organisation.", 409);
           if (resultKey) {
-            if (!Array.isArray(result)) return error("Membership service unavailable. Try again later.", 503);
+            if (!Array.isArray(result)) return serviceUnavailable(request, undefined, "Membership service unavailable. Try again later.");
             return json({ [resultKey]: result });
           }
           return json({ message: inviting ? (result?.status === "pending" ? "Invitation already pending." : "Invitation created.") : result?.status === "cancelled" ? "The invitation has been withdrawn" : "Membership updated." }, inviting ? 202 : 200);
@@ -146,18 +146,18 @@ export function createApplication(options: Options) {
             if (renameError?.code === "23505") return error("That username is already taken. Choose another.", 409);
             if (renameError?.code === "22023") return error(usernameHint, 400);
             if (renameError?.code === "42501") return error("Profile unavailable. Sign in again.", 403);
-            if (renameError) return error("Unable to save your profile. Check the saved username before retrying.", 503);
+            if (renameError) return serviceUnavailable(request, renameError, "Unable to save your profile. Check the saved username before retrying.");
           }
           const { data: profile, error: profileError } = await client.from("profiles").select("app_role,username").eq("id", data.user.id).single();
           const identity = z.object({ app_role: z.enum(["PM", "Developer"]), username: z.string() }).safeParse(profile);
-          if (profileError || !identity.success) return error("Account unavailable. Try again later.", 503);
+          if (profileError || !identity.success) return serviceUnavailable(request, profileError ?? identity.error, "Account unavailable. Try again later.");
           return json({ account: { id: data.user.id, email: data.user.email, role: identity.data.app_role, username: identity.data.username, createdAt: data.user.created_at } });
         }
         if (path === "/api/organisations" && request.method === "POST") {
           const input = organisationInput.safeParse(await readBody(request));
           if (!input.success) return error("Enter an organisation name of 1–80 characters.", 400);
           const { data: id, error: creationError } = await client.rpc("create_organisation", { organisation_name: input.data.name });
-          if (creationError || !z.uuid().safeParse(id).success) return error("Unable to create the organisation. Try again later.", 503);
+          if (creationError || !z.uuid().safeParse(id).success) return serviceUnavailable(request, creationError ?? undefined, "Unable to create the organisation. Try again later.");
           return json({ organisation: { id, name: input.data.name, isAdmin: true } }, 201);
         }
         if (request.method === "GET") {
@@ -165,23 +165,23 @@ export function createApplication(options: Options) {
           if (path === "/api/organisations") {
             const { data: rows, error: queryError } = await query.order("joined_at");
             const parsed = z.array(membership).safeParse(rows);
-            if (queryError || !parsed.success) return error("Organisations unavailable. Try again later.", 503);
+            if (queryError || !parsed.success) return serviceUnavailable(request, queryError ?? parsed.error, "Organisations unavailable. Try again later.");
             return json({ organisations: parsed.data.map(organisationView) });
           }
           const id = path.slice("/api/organisations/".length);
           if (!z.uuid().safeParse(id).success) return error("Organisation not found.", 404);
           const { data: row, error: queryError } = await query.eq("organisation_id", id).maybeSingle();
-          if (queryError) return error("Organisation unavailable. Try again later.", 503);
+          if (queryError) return serviceUnavailable(request, queryError, "Organisation unavailable. Try again later.");
           if (!row) return error("Organisation not found.", 404);
           const parsed = membership.safeParse(row);
-          if (!parsed.success) return error("Organisation unavailable. Try again later.", 503);
+          if (!parsed.success) return serviceUnavailable(request, parsed.error, "Organisation unavailable. Try again later.");
           return json({ organisation: organisationView(parsed.data) });
         }
       }
       return error("Not found.", 404);
     } catch (failure) {
       if (failure instanceof InputError) return error("Invalid request.", failure.status);
-      return error("Service temporarily unavailable. Try again later.", 503);
+      return serviceUnavailable(request, failure, "Service temporarily unavailable. Try again later.");
     }
   };
 }

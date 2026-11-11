@@ -3,7 +3,7 @@ import type { AiDiagnostic } from "../ai-diagnostics";
 import { answerLimit, assistanceMessages, assistantIntents } from "../assistance";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { error, json, readBody } from "./http";
+import { error, json, logFailure, readBody, serviceUnavailable } from "./http";
 import { taskFields } from "./requests";
 import { AiFailure, aiQuestion, questionLimits, type AiProvider, type AiReply } from "./soc";
 export type ChatDependencies = { worker(): SupabaseClient; provider: AiProvider };
@@ -21,13 +21,13 @@ const limits: Record<string, string> = {
   "AI attempt limit reached": "Too many AI attempts this hour. Keep editing manually and try again later.",
   "Conversation capacity reached": "This ticket's AI history is full. Keep editing manually.",
 };
-function failureResponse(failure: { code?: string; message?: string } | null) {
+function failureResponse(request: Request, failure: { code?: string; message?: string } | null) {
   if (!failure) return null;
   if (failure.code === "42501") return error("Chat unavailable or access has changed.", 403);
   if (failure.code === "22023") return error("The request or ticket snapshot is invalid. Send a new request using the current ticket.", 400);
   if (failure.code === "P0001") return error("The ticket or AI request changed. Check the saved ticket before continuing.", 409);
   if (failure.code === "PT429") return error(limits[failure.message ?? ""] ?? "AI is busy. Keep editing manually and try again later.", 429);
-  return error("AI is unavailable right now. Your ticket is unchanged.", 503);
+  return serviceUnavailable(request, failure, "AI is unavailable right now. Your ticket is unchanged.");
 }
 async function usageOf(client: SupabaseClient) {
   const { data } = await client.rpc("read_ai_usage");
@@ -42,17 +42,17 @@ export async function handleChat(request: Request, client: SupabaseClient, actor
   // Authorize with the user's session before constructing privileged worker
   // access or contacting SoC. Worker RPCs independently recheck that identity.
   const { data: history, error: readError } = await client.rpc("read_chat", { target_org: org, request_id: id });
-  const denied = failureResponse(readError); if (denied) return denied;
+  const denied = failureResponse(request, readError); if (denied) return denied;
   if (request.method === "GET") {
     const parsed = z.array(turnSchema).safeParse(history);
-    return parsed.success ? json({ turns: parsed.data.map(turn => turn.status === "running" && Date.parse(turn.lease_until) <= Date.now() ? { ...turn, status: "failed", error_code: "interrupted" } : turn), usage: await usageOf(client) }) : error("Chat service unavailable.", 503);
+    return parsed.success ? json({ turns: parsed.data.map(turn => turn.status === "running" && Date.parse(turn.lease_until) <= Date.now() ? { ...turn, status: "failed", error_code: "interrupted" } : turn), usage: await usageOf(client) }) : serviceUnavailable(request, parsed.error, "Chat service unavailable.");
   }
   if (request.method !== "POST") return error("Not found.", 404);
   const input = z.strictObject({ key: z.uuid(), revision: z.number().int().positive().max(2147483647), fields: taskFields, intent, message: z.string().trim().refine(value => [...value].length <= 4000).optional(), answers: answers.optional(), retry: z.boolean().default(false) })
     .refine(value => value.intent === "edit" ? value.answers !== undefined || Boolean(value.message) : value.answers === undefined)
     .safeParse(await readBody(request, 262144));
   if (!input.success) return error("Enter a message of 1–4,000 characters and a valid current ticket.", 400);
-  if (!dependencies) return error("AI is not configured. Continue editing manually.", 503);
+  if (!dependencies) return serviceUnavailable(request, undefined, "AI is not configured. Continue editing manually.");
   // Gap-check and apply-answers turns carry fixed server messages. A draft
   // carries the PM's own rough idea when they typed one, else a fixed message.
   const message = input.data.answers ? assistanceMessages.answers
@@ -61,10 +61,10 @@ export async function handleChat(request: Request, client: SupabaseClient, actor
     : assistanceMessages[input.data.intent];
   const worker = dependencies.worker();
   const { data: admission, error: admissionError } = await worker.rpc("begin_chat_turn", { target_org: org, request_id: id, actor_id: actorId, turn_key: input.data.key, base_revision: input.data.revision, input_fields: input.data.fields, user_message: message, retry_failed: input.data.retry, p_intent: input.data.intent, p_answers: input.data.answers ?? null });
-  const admissionFailure = failureResponse(admissionError);
+  const admissionFailure = failureResponse(request, admissionError);
   if (admissionFailure) return admissionFailure.status === 429 ? json({ ...(await admissionFailure.json()), usage: await usageOf(client) }, 429) : admissionFailure;
   const parsed = turnSchema.safeParse(admission?.turn);
-  if (!parsed.success || typeof admission.dispatch !== "boolean") return error("Chat service unavailable.", 503);
+  if (!parsed.success || typeof admission.dispatch !== "boolean") return serviceUnavailable(request, parsed.error, "Chat service unavailable.");
   const turn = parsed.data;
   if (!admission.dispatch) return json({ turn, usage: await usageOf(client) }, turn.status === "running" ? 202 : 200);
   let result: AiReply | null = null;
@@ -83,9 +83,10 @@ export async function handleChat(request: Request, client: SupabaseClient, actor
       if (safe.success && safe.data.source === diagnosticSources[code]) diagnostic = safe.data;
       else code = "unavailable";
     }
+    logFailure(request, failure, { diagnostic });
   }
   const { data: completed, error: completionError } = await worker.rpc("finish_chat_turn", { target_org: org, request_id: id, actor_id: actorId, turn_id: turn.id, worker_generation: turn.generation, human_reply: result?.reply ?? null, task_proposal: result?.proposal ?? null, task_questions: result?.questions ?? null, failure_code: code, failure_diagnostic: diagnostic });
-  const completionFailure = failureResponse(completionError); if (completionFailure) return completionFailure;
+  const completionFailure = failureResponse(request, completionError); if (completionFailure) return completionFailure;
   const final = turnSchema.safeParse(completed);
-  return final.success ? json({ turn: final.data, usage: await usageOf(client) }) : error("Chat service unavailable.", 503);
+  return final.success ? json({ turn: final.data, usage: await usageOf(client) }) : serviceUnavailable(request, final.error, "Chat service unavailable.");
 }

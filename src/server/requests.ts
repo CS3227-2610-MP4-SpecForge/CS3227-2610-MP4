@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { taskFields, requestRecord, ticketListQuery, ticketReadRecord, date, priority, status } from "./ticket-schemas";
 export { taskFields } from "./ticket-schemas";
-import { error, json, readBody } from "./http";
+import { error, json, readBody, serviceUnavailable } from "./http";
 
 const fields = taskFields;
 const revision = z.number().int().min(1).max(2147483647);
@@ -65,14 +65,14 @@ export async function handleRequests(request: Request, client: SupabaseClient): 
   if (failure?.code === "42501") return error("Request unavailable or access has changed.", 403);
   if (failure?.code === "22023") return error("Check title, description, due date, assignees and field limits before publishing or updating.", 400);
   if (failure?.code === "P0001") return error("The saved request changed. Your text is preserved; reload the saved version before continuing.", 409);
-  if (failure) return error("Request service unavailable. Your text is preserved; check the saved version before retrying.", 503);
+  if (failure) return serviceUnavailable(request, failure, "Request service unavailable. Your text is preserved; check the saved version before retrying.");
   if (deleted) return json({ message: "Draft deleted." });
   if (rpc === "list_ticket_page") {
     const page = z.object({ items: z.array(ticketReadRecord), next_offset: z.number().int().nonnegative().nullable() }).safeParse(data);
-    if (!page.success) return error("Request service unavailable. Check the saved version before retrying.", 503);
+    if (!page.success) return serviceUnavailable(request, page.error, "Request service unavailable. Check the saved version before retrying.");
     return json({ requests: page.data.items, nextOffset: page.data.next_offset });
   }
   const parsed = (rpc === "read_request" ? ticketReadRecord : requestRecord).safeParse(data);
-  if (!parsed.success) return error("Request service unavailable. Check the saved version before retrying.", 503);
+  if (!parsed.success) return serviceUnavailable(request, parsed.error, "Request service unavailable. Check the saved version before retrying.");
   return json({ request: parsed.data }, rpc === "create_request" ? 201 : 200);
 }

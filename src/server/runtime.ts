@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createApplication, createAuthAdmission } from "./application";
 import { createTestPlanProvider } from "./test-plan-ai";
+import { logFailure } from "./http";
 const admitAuth = createAuthAdmission();
 
 // Each external HTTP request has one deadline and no automatic transport retries.
@@ -16,7 +17,7 @@ const boundedFetch: typeof fetch = (input, init) => fetch(input, {
 
 export async function handleRequest(request: Request) {
   const origin = process.env.APP_ORIGIN ?? (process.env.NODE_ENV !== "production" ? "http://localhost:3000" : "");
-  const configurationUnavailable = () => Response.json({ error: "Service temporarily unavailable. Try again later." }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+  const configurationUnavailable = () => (logFailure(request, undefined, { status: 503 }), Response.json({ error: "Service temporarily unavailable. Try again later." }, { status: 503, headers: { "Cache-Control": "private, no-store" } }));
   try {
     const parsed = new URL(origin);
     if (parsed.origin !== origin || !["http:", "https:"].includes(parsed.protocol) || (process.env.NODE_ENV === "production" && parsed.protocol !== "https:")) return configurationUnavailable();

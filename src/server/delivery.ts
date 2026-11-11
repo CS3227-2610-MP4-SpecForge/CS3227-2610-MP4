@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { assigneeUsernames, requestRecord, date, priority, status } from "./ticket-schemas";
-import { error, json, readBody } from "./http";
+import { error, json, readBody, serviceUnavailable } from "./http";
 
 const revision = z.number().int().positive().max(2147483647);
 const changes = z.strictObject({ due_date: date.nullable().optional(), priority: priority.optional(), status: status.optional(), assignee_ids: z.array(z.uuid()).max(5).refine(ids => new Set(ids).size === ids.length).optional() }).refine(value => Object.keys(value).length > 0);
@@ -44,8 +44,8 @@ export async function handleDelivery(request: Request, client: SupabaseClient): 
   if (failure?.code === "22023") return error("Check the deadline, current members and field limits.", 400);
   if (failure?.code === "P0001") return error("The saved ticket changed or this comment key was already used. Your input is preserved; reload before continuing.", 409);
   if (failure?.code === "P0002") return error("Comment limit reached. Wait a minute before retrying.", 429);
-  if (failure) return error("Ticket service unavailable. Your input is preserved; check the saved version before retrying.", 503);
+  if (failure) return serviceUnavailable(request, failure, "Ticket service unavailable. Your input is preserved; check the saved version before retrying.");
   const parsed = schema.safeParse(data);
-  if (!parsed.success) return error("Ticket service unavailable. Refresh before continuing.", 503);
+  if (!parsed.success) return serviceUnavailable(request, parsed.error, "Ticket service unavailable. Refresh before continuing.");
   return json(rpc === "update_delivery" ? { request: parsed.data } : rpc === "comment_ticket" ? { entry: parsed.data } : parsed.data);
 }

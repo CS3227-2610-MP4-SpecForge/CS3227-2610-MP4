@@ -571,6 +571,19 @@ treat the figures as one sample, not a service level:
   a 90-second deadline and browser chat waits up to 110 seconds.
 - Keep all real keys and sensitive request contents out of logs. The SoC adapter is server-only; demo provisioning and privileged browser actions
   remain unimplemented.
+- Server failure logging: every unexpected failure that becomes a 503 (the
+  `createApplication` catch-all and RPC, schema or configuration failures in the
+  handlers, plus the invalid-`APP_ORIGIN` 503 in `runtime.ts`) and every AI provider failure inside a chat or test plan turn writes
+  one JSON line through `console.error` via `logFailure`/`serviceUnavailable` in
+  `src/server/http.ts`. Vercel collects these as function logs. A line holds only
+  `event: "server_failure"`, the method (`OTHER` if unusual), the route pattern
+  (static route words kept, every other segment `:id`, unknown prefixes
+  `/:unknown`, no query), our response `status`, the error class name, a
+  validated `code` (SQLSTATE, PostgREST, Auth or `AiFailure` code), an Auth
+  `upstreamStatus` and, for AI, the strict allowlisted diagnostic. Messages,
+  bodies, headers, cookies, emails, IDs and AI text are excluded by construction.
+  Expected 4xx outcomes log nothing. Lines are not rate-limited, so an upstream
+  outage produces one line per failed request.
 - Hosted verification needs custom SMTP: Supabase's default sender restricts
   recipients. Configure and test delivery and the confirmation template before
   claiming ordinary online signup works.
