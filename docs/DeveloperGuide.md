@@ -800,6 +800,14 @@ npm run test:integration
 npm run test:e2e
 ```
 
+`npm run verify` runs, in order: `format:check`, lint, type check, unit and
+component tests, and the production build. Run `npm run format` to apply the
+formatting. Prettier (`.prettierrc.json`) formats code and JSON only, with a
+120-character print width; `.prettierignore` keeps Markdown, workflow YAML and
+the `workflow/`, `logs/` and `website/` folders hand-formatted. Run
+`git config blame.ignoreRevsFile .git-blame-ignore-revs` once so that
+`git blame` skips the bulk reformat commit.
+
 ### Test layers
 
 | Layer | Owns | Lives in | Command |

@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "overrides": { "@typescript-eslint/typescript-estree": { "minimatch": "^11.0.1" } },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
+  },
   "engines": {
     "node": "22.x"
   },
@@ -13,6 +17,8 @@
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint .",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
     "test": "vitest run",
     "test:e2e": "node src/tooling/test-local.mjs browser",
     "test:e2e:smoke": "node src/tooling/test-local.mjs browser @smoke",
@@ -21,7 +27,7 @@
     "db:stop": "node src/tooling/database.mjs stop",
     "db:reset": "node src/tooling/database.mjs reset",
     "db:env": "node src/tooling/database.mjs env",
-    "verify": "npm run lint && npm run typecheck && npm test && npm run build"
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@daypicker/react": "10.0.2",
@@ -44,6 +50,7 @@
     "axe-core": "^4.14.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.4.5",
+    "prettier": "3.10.1",
     "supabase": "^2.121.0",
     "typescript": "^6.0.3",
     "vitest": "^5.1.0",

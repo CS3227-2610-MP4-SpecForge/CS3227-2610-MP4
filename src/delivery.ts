@@ -1,8 +1,21 @@
-export const ticketStatuses = { to_do: "To do", in_progress: "In progress", in_review: "In review", done: "Done", cancelled: "Cancelled" } as const;
+export const ticketStatuses = {
+  to_do: "To do",
+  in_progress: "In progress",
+  in_review: "In review",
+  done: "Done",
+  cancelled: "Cancelled",
+} as const;
 export const ticketPriorities = { low: "Low", medium: "Medium", high: "High" } as const;
 export type TicketStatus = keyof typeof ticketStatuses;
 export type TicketPriority = keyof typeof ticketPriorities;
-export type Delivery = { ticket_number: number; delivery_revision: number; due_date: string | null; priority: TicketPriority; status: TicketStatus; assignee_ids: string[] };
+export type Delivery = {
+  ticket_number: number;
+  delivery_revision: number;
+  due_date: string | null;
+  priority: TicketPriority;
+  status: TicketStatus;
+  assignee_ids: string[];
+};
 export function deliveryOf(item: Delivery): Delivery {
   const { ticket_number, delivery_revision, due_date, priority, status, assignee_ids } = item;
   return { ticket_number, delivery_revision, due_date, priority, status, assignee_ids };
@@ -12,13 +25,28 @@ export function deliveryChanges(next: Delivery, saved: Delivery) {
   if (next.due_date !== saved.due_date) changes.due_date = next.due_date;
   if (next.priority !== saved.priority) changes.priority = next.priority;
   if (next.status !== saved.status) changes.status = next.status;
-  if (JSON.stringify(next.assignee_ids) !== JSON.stringify(saved.assignee_ids)) changes.assignee_ids = next.assignee_ids;
+  if (JSON.stringify(next.assignee_ids) !== JSON.stringify(saved.assignee_ids))
+    changes.assignee_ids = next.assignee_ids;
   return changes;
 }
-export function sameDelivery(a: Delivery, b: Delivery) { return Object.keys(deliveryChanges(a, b)).length === 0; }
+export function sameDelivery(a: Delivery, b: Delivery) {
+  return Object.keys(deliveryChanges(a, b)).length === 0;
+}
 export type TicketMember = { user_id: string; email: string; app_role: "PM" | "Developer"; username: string };
-export type TicketActivity = { id: string; request_id: string; actor_id: string | null; actor_username: string | null; kind: "published" | "delivery_updated" | "requirements_updated" | "comment"; body: string | null; changes: Record<string, { from: unknown; to: unknown }>; assignment_usernames: { from: (string | null)[]; to: (string | null)[] } | null; created_at: string };
-export function localDay(now = new Date()) { return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`; }
+export type TicketActivity = {
+  id: string;
+  request_id: string;
+  actor_id: string | null;
+  actor_username: string | null;
+  kind: "published" | "delivery_updated" | "requirements_updated" | "comment";
+  body: string | null;
+  changes: Record<string, { from: unknown; to: unknown }>;
+  assignment_usernames: { from: (string | null)[]; to: (string | null)[] } | null;
+  created_at: string;
+};
+export function localDay(now = new Date()) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
 export function deadlineLabel(item: Delivery & { submitted_at: string | null }, today = localDay()) {
   if (!item.due_date) return "Unscheduled";
   if (!item.submitted_at || item.status === "done" || item.status === "cancelled") return item.due_date;

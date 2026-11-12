@@ -7,7 +7,12 @@ import { chromium, type FullConfig } from "@playwright/test";
 // segments use random IDs: the page compiles even though it renders an error
 // or a sign-in redirect.
 const routes = [
-  "/", "/sign-in", "/sign-up", "/verify-email", "/workspace", "/profile",
+  "/",
+  "/sign-in",
+  "/sign-up",
+  "/verify-email",
+  "/workspace",
+  "/profile",
   `/organisations/${randomUUID()}/requests`,
   `/organisations/${randomUUID()}/requests/${randomUUID()}`,
 ];

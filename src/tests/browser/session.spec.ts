@@ -37,7 +37,10 @@ test("an ended session shows the sign-in banner and keeps unsaved ticket text", 
 
     // Following the link asks before leaving the unsaved text.
     let warned = false;
-    page.once("dialog", async dialog => { warned = true; await dialog.dismiss(); });
+    page.once("dialog", async dialog => {
+      warned = true;
+      await dialog.dismiss();
+    });
     await banner.getByRole("link", { name: "Sign in again", exact: true }).click();
     expect(warned).toBe(true);
     await expect(description).toHaveValue("Unsaved idea typed after the session ended");
@@ -45,5 +48,7 @@ test("an ended session shows the sign-in banner and keeps unsaved ticket text", 
     await banner.getByRole("link", { name: "Sign in again", exact: true }).click();
     await expect(page).toHaveURL(/\/sign-in$/);
     await expect(page.getByRole("alert").filter({ hasText: "Your session has ended." })).toHaveCount(0);
-  } finally { await fixture.cleanup(); }
+  } finally {
+    await fixture.cleanup();
+  }
 });

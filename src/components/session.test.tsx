@@ -8,11 +8,23 @@ import { RequestScreen } from "./request-editor";
 
 const ticketPath = "/api/organisations/org-1/requests/ticket-1";
 const ticket: TicketRead = {
-  id: "ticket-1", organisation_id: "org-1", author_id: "pm-1", revision: 1,
+  id: "ticket-1",
+  organisation_id: "org-1",
+  author_id: "pm-1",
+  revision: 1,
   fields: { title: "Saved title", description: "Saved idea" },
-  submitted_at: null, created_at: "2026-11-12T00:00:00Z", updated_at: "2026-11-12T00:00:00Z", last_autosaved_at: null,
-  ticket_number: 1, delivery_revision: 1, due_date: null, priority: "medium", status: "to_do", assignee_ids: [],
-  author_username: "pm", assignee_usernames: [],
+  submitted_at: null,
+  created_at: "2026-11-12T00:00:00Z",
+  updated_at: "2026-11-12T00:00:00Z",
+  last_autosaved_at: null,
+  ticket_number: 1,
+  delivery_revision: 1,
+  due_date: null,
+  priority: "medium",
+  status: "to_do",
+  assignee_ids: [],
+  author_username: "pm",
+  assignee_usernames: [],
 };
 const expired = "Your session has ended. Sign in again to continue.";
 
@@ -25,7 +37,10 @@ function serveTicket(saveStatus: number, saveError: string) {
   const saves: unknown[] = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
-    if (init?.method === "POST" && url === ticketPath) { saves.push(init.body); return reply({ error: saveError }, saveStatus); }
+    if (init?.method === "POST" && url === ticketPath) {
+      saves.push(init.body);
+      return reply({ error: saveError }, saveStatus);
+    }
     if (url === ticketPath) return reply({ request: ticket });
     if (url === "/api/account") return reply({ account: { id: "pm-1", role: "PM" } });
     if (url === "/api/organisations/org-1") return reply({ organisation: { name: "Requirements team" } });
@@ -45,8 +60,13 @@ async function typeUnsavedIdea() {
 }
 
 // The runner's page is "/", a public page; tests run on the ticket's own path.
-beforeEach(() => { history.replaceState(null, "", "/organisations/org-1/requests/ticket-1"); });
-afterEach(() => { vi.restoreAllMocks(); history.replaceState(null, "", "/"); });
+beforeEach(() => {
+  history.replaceState(null, "", "/organisations/org-1/requests/ticket-1");
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  history.replaceState(null, "", "/");
+});
 
 describe("session expiry", () => {
   it("shows one persistent sign-in banner on a 401 and keeps the editor's unsaved text", async () => {
@@ -75,16 +95,22 @@ describe("session expiry", () => {
     await renderComponent(<RequestScreen organisationId="org-1" requestId="ticket-1" />);
     const description = await typeUnsavedIdea();
 
-    await expect.element(page.getByText("You no longer have permission to edit this request.", { exact: true }).first()).toBeVisible();
+    await expect
+      .element(page.getByText("You no longer have permission to edit this request.", { exact: true }).first())
+      .toBeVisible();
     await expect.element(page.getByRole("button", { name: "Reload saved version and discard edits" })).toBeVisible();
     expect(page.getByText(expired).elements()).toHaveLength(0);
     await expect.element(description).toHaveValue("Unsaved idea");
   });
 
   it("treats rejected sign-in credentials as a form error, not an ended session", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(reply({ error: "Email or password is incorrect, or email is not verified." }, 401));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      reply({ error: "Email or password is incorrect, or email is not verified." }, 401),
+    );
     await renderComponent(<p>Sign in page</p>);
-    await expect(api("/api/auth/signin", { email: "a@example.test", password: "x" })).rejects.toThrow("Email or password is incorrect");
+    await expect(api("/api/auth/signin", { email: "a@example.test", password: "x" })).rejects.toThrow(
+      "Email or password is incorrect",
+    );
     await new Promise(resolve => setTimeout(resolve, 100));
     expect(page.getByText(expired).elements()).toHaveLength(0);
   });
@@ -114,11 +140,13 @@ describe("session expiry", () => {
     function Loader() {
       const [error, setError] = useNotificationState(true);
       const { notify } = useNotifications();
-      return <>
-        <button onClick={() => api("/api/account").catch(failure => setError(failureMessage(failure)))}>Load</button>
-        <button onClick={() => notify("2 changes could not be applied.", true)}>Apply</button>
-        {error && <p data-testid="inline">{error}</p>}
-      </>;
+      return (
+        <>
+          <button onClick={() => api("/api/account").catch(failure => setError(failureMessage(failure)))}>Load</button>
+          <button onClick={() => notify("2 changes could not be applied.", true)}>Apply</button>
+          {error && <p data-testid="inline">{error}</p>}
+        </>
+      );
     }
     await renderComponent(<Loader />);
     const toasts = () => [...document.querySelectorAll(".notification-banner")].map(toast => toast.textContent);

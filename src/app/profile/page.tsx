@@ -1,2 +1,4 @@
 import { Profile } from "@/components/profile";
-export default function Page() { return <Profile />; }
+export default function Page() {
+  return <Profile />;
+}

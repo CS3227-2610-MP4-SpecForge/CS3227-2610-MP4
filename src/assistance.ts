@@ -2,9 +2,10 @@
 // budgets by intent; these fixed messages label draft, gap-check and
 // apply-answers turns in history so retries and dedupe compare the same input.
 export const assistantIntents = ["draft", "gaps", "edit"] as const;
-export type AssistantIntent = typeof assistantIntents[number];
+export type AssistantIntent = (typeof assistantIntents)[number];
 export const assistanceMessages = {
-  draft: "Draft ticket from the current rough idea. Return a complete title and Markdown description; mark unresolved decisions explicitly.",
+  draft:
+    "Draft ticket from the current rough idea. Return a complete title and Markdown description; mark unresolved decisions explicitly.",
   gaps: "Check this ticket for gaps.",
   answers: "Apply my answers to the ticket.",
 } as const;

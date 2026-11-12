@@ -7,7 +7,12 @@ import { SessionBanner } from "@/components/session";
 
 /** Render one component inside the providers every app page supplies. */
 export function renderComponent(ui: ReactNode) {
-  return render(<NotificationProvider><SessionBanner />{ui}</NotificationProvider>);
+  return render(
+    <NotificationProvider>
+      <SessionBanner />
+      {ui}
+    </NotificationProvider>,
+  );
 }
 
 /** Fail on serious or critical accessibility violations in the rendered page. */
@@ -15,6 +20,9 @@ export async function expectAccessible(root: Element = document.body) {
   const result = await axe.run(root, { resultTypes: ["violations"] });
   const violations = result.violations
     .filter(violation => violation.impact === "serious" || violation.impact === "critical")
-    .map(violation => `${violation.id}: ${violation.help} (${violation.nodes.map(node => node.target.join(" ")).join(", ")})`);
+    .map(
+      violation =>
+        `${violation.id}: ${violation.help} (${violation.nodes.map(node => node.target.join(" ")).join(", ")})`,
+    );
   expect(violations).toEqual([]);
 }

@@ -27,7 +27,15 @@ describe("health response", () => {
     expect(result.body).toEqual({ status: "unavailable", revision: sha, database: "unavailable", ai: "configured" });
   });
   it("treats a throwing database probe as unavailable", async () => {
-    const result = await read(await healthResponse({ revision: sha, database: async () => { throw new Error(`down at ${secretUrl}`); }, ai: () => true }));
+    const result = await read(
+      await healthResponse({
+        revision: sha,
+        database: async () => {
+          throw new Error(`down at ${secretUrl}`);
+        },
+        ai: () => true,
+      }),
+    );
     expect(result.status).toBe(503);
     expect(result.text).not.toContain(secretUrl);
   });
@@ -67,21 +75,32 @@ describe("database probe", () => {
     expect(init?.signal).toBeInstanceOf(AbortSignal);
   });
   it("is unavailable on an error status, a wrong answer, a network failure or missing settings", async () => {
-    expect(await createDatabaseProbe(secretUrl, secretKey, async () => Response.json({ code: "PGRST002" }, { status: 503 }))()).toBe(false);
+    expect(
+      await createDatabaseProbe(secretUrl, secretKey, async () =>
+        Response.json({ code: "PGRST002" }, { status: 503 }),
+      )(),
+    ).toBe(false);
     expect(await createDatabaseProbe(secretUrl, secretKey, async () => Response.json(null))()).toBe(false);
-    expect(await createDatabaseProbe(secretUrl, secretKey, async () => { throw new TypeError("fetch failed"); })()).toBe(false);
+    expect(
+      await createDatabaseProbe(secretUrl, secretKey, async () => {
+        throw new TypeError("fetch failed");
+      })(),
+    ).toBe(false);
     expect(await createDatabaseProbe(undefined, secretKey, async () => Response.json(true))()).toBe(false);
     expect(await createDatabaseProbe(secretUrl, undefined, async () => Response.json(true))()).toBe(false);
   });
   it("gives up after its deadline", async () => {
-    const hang: typeof fetch = (_input, init) => new Promise((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal?.reason)));
+    const hang: typeof fetch = (_input, init) =>
+      new Promise((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal?.reason)));
     expect(await createDatabaseProbe(secretUrl, secretKey, hang, 50)()).toBe(false);
   });
 });
 
 describe("health route", () => {
   const origin = "http://localhost:3000";
-  const noClient = () => { throw new Error("The health check must not use the session client."); };
+  const noClient = () => {
+    throw new Error("The health check must not use the session client.");
+  };
   it("serves GET /api/health without a session or origin header", async () => {
     const health = vi.fn(async () => healthResponse({ revision: sha, database: async () => true, ai: () => true }));
     const app = createApplication({ origin, client: noClient, health });
