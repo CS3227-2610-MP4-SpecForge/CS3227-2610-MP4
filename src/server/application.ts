@@ -7,7 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { legacyUsernamePrefix, reservedUsernameMessage, usernameHint, usernamePattern } from "../usernames";
 
-type Options = { origin: string; client(): SupabaseClient; admitAuth?: () => boolean; chat?: ChatDependencies; testPlans?: TestPlanDependencies };
+type Options = { origin: string; client(): SupabaseClient; admitAuth?: () => boolean; chat?: ChatDependencies; testPlans?: TestPlanDependencies; health?: () => Promise<Response> };
 export function createAuthAdmission() {
   let window = 0;
   let count = 0;
@@ -36,6 +36,8 @@ export function createApplication(options: Options) {
     }
     try {
       const path = new URL(request.url).pathname;
+      // Public and sessionless; a GET, so it already skips the origin check.
+      if (path === "/api/health" && request.method === "GET" && options.health) return await options.health();
       if (request.method === "POST" && ["signup", "signin", "verify", "resend"].some(action => path === `/api/auth/${action}`) && !admitAuth()) {
         return json({ error: "Too many attempts. Try again in a minute." }, 429);
       }

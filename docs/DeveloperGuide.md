@@ -629,11 +629,11 @@ treat the figures as one sample, not a service level:
 
 Both callers delegate to the reusable `deploy.yml`, so the steps and their order
 exist once: apply migrations, pull that scope's configuration, build, deploy,
-record the URL. The production caller first runs the whole of `ci.yml` on the
-merge commit, so production is never reached without a passing suite. Merging
-into `main` is the human decision. The `production` environment does not yet
-have a required reviewer; adding one (first-time setup step 4) would make
-deployment a second, separate approval.
+record the URL, then check the release (below). The production caller first
+runs the whole of `ci.yml` on the merge commit, so production is never reached
+without a passing suite. Merging into `main` is the human decision. The
+`production` environment does not yet have a required reviewer; adding one
+(first-time setup step 4) would make deployment a second, separate approval.
 
 Vercel's own Git integration is deliberately not connected. The repository owns
 the trigger and the gates, and the Vercel CLI is invoked as a step, which keeps
@@ -643,6 +643,31 @@ Migrations run before the deployment, so the schema cannot trail the code that
 expects it. A failed `supabase db push` stops the run before anything is
 deployed. CLI output is suppressed because it can carry credentials; only the
 outcome is reported.
+
+### Release check
+
+`GET /api/health` is public, needs no session and is never cached. It answers
+`{ status, revision, database, ai }`:
+
+- `revision` is the commit SHA built into the app, or `unknown` for a local
+  build. The deploy moves `.git` aside, so the Build step passes `github.sha`
+  as `SPECFORGE_REVISION`, and `next.config.ts` fixes it into the build.
+- `database` is `ok` when the anon-callable `public.health_check()` answers
+  `true` within 3 seconds using the publishable key. The function reads no
+  table. Otherwise it is `unavailable` and the response is 503.
+- `ai` is `configured` when the SoC URL, key and an enabled model are set, or
+  `missing`. It never calls the model.
+
+The response contains only these fixed words and the SHA: no key, URL, model ID
+or error text. The last step of `deploy.yml`, **Check the release**, runs
+`src/tooling/check-health.mjs` against the environment's `site-url` (set by each
+caller). It polls for up to 3 minutes and passes only when the public URL
+reports this run's commit with `database: ok` and `ai: configured`. This also
+catches an older deployment that is still answering. To check a site by hand:
+
+```sh
+node src/tooling/check-health.mjs https://specforge-dev.vercel.app <commit-sha>
+```
 
 ### Configuration boundary
 

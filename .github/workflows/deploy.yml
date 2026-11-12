@@ -21,6 +21,10 @@ on:
         required: false
         default: false
         type: boolean
+      site-url:
+        description: Public origin of this environment, checked after the deploy.
+        required: true
+        type: string
     secrets:
       VERCEL_TOKEN:
         required: true
@@ -42,7 +46,7 @@ jobs:
   deploy:
     name: ${{ inputs.environment }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     environment:
       name: ${{ inputs.environment }}
       url: ${{ steps.deploy.outputs.url }}
@@ -104,7 +108,11 @@ jobs:
       - name: Pull ${{ inputs.vercel-environment }} configuration
         run: vercel pull --yes --environment=${{ inputs.vercel-environment }} --token=${{ secrets.VERCEL_TOKEN }}
 
+      # The deploy moves .git aside, so the build cannot read the commit from Git.
+      # next.config.ts fixes this value into the build for /api/health.
       - name: Build
+        env:
+          SPECFORGE_REVISION: ${{ github.sha }}
         run: vercel build ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
 
       # The repository's git metadata is moved aside for the duration of the
@@ -123,7 +131,7 @@ jobs:
       #
       # A blocked deployment never leaves the "Building" state, and the CLI waits
       # on it indefinitely, so the deploy carries its own deadline. Without one
-      # the job runs until the 20 minute limit and reports only a cancellation.
+      # the job runs until the 25 minute limit and reports only a cancellation.
       - name: Deploy
         id: deploy
         run: |
@@ -145,3 +153,10 @@ jobs:
           fi
           echo "url=$url" >>"$GITHUB_OUTPUT"
           echo "Deployed ${{ inputs.environment }} to $url" >>"$GITHUB_STEP_SUMMARY"
+
+      # The public URL must answer with this commit, a reachable database and
+      # configured AI. This also catches an older deployment still answering.
+      - name: Check the release
+        env:
+          SITE_URL: ${{ inputs.site-url }}
+        run: node src/tooling/check-health.mjs "$SITE_URL" "$GITHUB_SHA"

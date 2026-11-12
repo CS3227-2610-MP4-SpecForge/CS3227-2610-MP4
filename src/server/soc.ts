@@ -108,6 +108,10 @@ const intentRules: Record<AiIntent, string> = {
 };
 
 export type SocConfiguration = { baseUrl: string; model: string; key: string };
+/** True when the settings name the SoC service, a key and an enabled model. Makes no request. */
+export function socConfigured(configuration: SocConfiguration) {
+  return configuration.baseUrl === "https://soclaas-api.comp.nus.edu.sg/v1" && Boolean(configuration.key) && ["qwen3.5:9b", "gemma4:26b"].includes(configuration.model);
+}
 export type SocMessage = { role: string; content: string };
 
 // One bounded SoC request: configuration check, context bound, single deadline,
@@ -116,7 +120,7 @@ export type SocMessage = { role: string; content: string };
 // transport or the failure mapping is duplicated per feature.
 export function requestSocJson(configuration: SocConfiguration, messages: SocMessage[], transport: typeof fetch = fetch, maxTokens = 2000): Promise<unknown> {
   return (async () => {
-    if (configuration.baseUrl !== "https://soclaas-api.comp.nus.edu.sg/v1" || !configuration.key || !["qwen3.5:9b", "gemma4:26b"].includes(configuration.model)) throw new AiFailure("configuration");
+    if (!socConfigured(configuration)) throw new AiFailure("configuration");
     // Serialized-byte bound includes complete history and system instructions.
     // No context trimming; below the smallest discovered enabled context (65,536
     // tokens), even at one token per UTF-8 byte plus reserved output/overhead.

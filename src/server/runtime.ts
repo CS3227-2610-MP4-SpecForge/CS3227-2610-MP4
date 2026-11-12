@@ -1,12 +1,13 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
-import { createSocProvider, AiFailure } from "./soc";
+import { createSocProvider, AiFailure, socConfigured } from "./soc";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createApplication, createAuthAdmission } from "./application";
 import { createTestPlanProvider } from "./test-plan-ai";
 import { logFailure } from "./http";
+import { createDatabaseProbe, healthResponse } from "./health";
 const admitAuth = createAuthAdmission();
 
 // Each external HTTP request has one deadline and no automatic transport retries.
@@ -40,7 +41,13 @@ export async function handleRequest(request: Request) {
     return true;
   };
   const socConfiguration = () => ({ baseUrl: process.env.SOCLAAS_BASE_URL ?? "", key: process.env.SOCLAAS_API_KEY ?? "", model: process.env.SOCLAAS_CHAT_MODEL ?? "" });
-  const response = await createApplication({ origin, admitAuth, chat: {
+  // SPECFORGE_REVISION is fixed at build time by next.config.ts.
+  const health = () => healthResponse({
+    revision: process.env.SPECFORGE_REVISION ?? "",
+    database: createDatabaseProbe(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY),
+    ai: () => socConfigured(socConfiguration()),
+  });
+  const response = await createApplication({ origin, admitAuth, health, chat: {
     worker,
     async provider(input) {
       if (fakeRequested()) return (await import("../tests/fake-ai")).localFakeAi(input);

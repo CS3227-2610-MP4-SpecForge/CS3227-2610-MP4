@@ -29,4 +29,5 @@ jobs:
       environment: development
       vercel-environment: production
       production: true
+      site-url: https://specforge-dev.vercel.app
     secrets: inherit

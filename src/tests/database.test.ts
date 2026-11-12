@@ -2,10 +2,14 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { localEnabled, localFixture } from "./local.fixture";
 import { createApplication } from "../server/application";
+import { createDatabaseProbe } from "../server/health";
 
 describe.skipIf(!localEnabled)("local Supabase organisation interface", () => {
   let fixture: ReturnType<typeof localFixture>;
   afterEach(async () => { await fixture?.cleanup(); });
+  it("answers the release health check with the publishable key", async () => {
+    expect(await createDatabaseProbe(process.env.LOCAL_SUPABASE_URL, process.env.LOCAL_SUPABASE_ANON_KEY)()).toBe(true);
+  });
   it("persists unknown-email invitations and only the later verified email owner can accept", async () => {
     fixture = localFixture();
     const owner = await fixture.actor("PM");
