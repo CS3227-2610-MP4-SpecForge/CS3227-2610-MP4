@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { legacyUsernamePrefix, reservedUsernameMessage, usernameHint, usernamePattern } from "../usernames";
+import { reservedUsername, reservedUsernameMessage, usernameHint, usernamePattern } from "../usernames";
 import { error, json, readBody, serviceUnavailable } from "./http";
 import type { Route } from "./routes";
 
@@ -28,7 +28,7 @@ export const signupUsername = z
   .string(usernameHint)
   .regex(new RegExp(`^${usernamePattern}$`), usernameHint)
   .toLowerCase()
-  .refine(value => !value.startsWith(legacyUsernamePrefix), reservedUsernameMessage);
+  .refine(value => !reservedUsername(value), reservedUsernameMessage);
 const signup = z.strictObject({ email, password, role: z.enum(["PM", "Developer"]), username: signupUsername });
 const verification = z.strictObject({ email, token: z.string().regex(/^\d{6,10}$/) });
 const credentials = z.strictObject({ email, password: z.string().min(1).max(128) });

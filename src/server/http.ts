@@ -46,7 +46,7 @@ export async function readBody(request: Request, limit = 8192): Promise<unknown>
 // Failure logging: one JSON line of allowlisted fields. Messages, bodies,
 // headers and identifiers are excluded by construction, never by redaction.
 const methods = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
-const areas = new Set(["auth", "invitations", "organisations", "account"]);
+const areas = new Set(["auth", "invitations", "organisations", "account", "demo-kits"]);
 const routeWords = new Set([
   ...areas,
   "signup",

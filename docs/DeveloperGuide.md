@@ -138,6 +138,7 @@ failed SoC call is not a 503: it comes back as a failed, refunded turn.
 | GET | `/health` | Anyone | 200, 503 |
 | POST | `/auth/signup`, `/auth/verify`, `/auth/signin`, `/auth/resend` | Anyone; 30 per minute per server instance | 200 or 202, 400, 401 (sign-in), 429 |
 | POST | `/auth/signout` | Anyone | 200 |
+| POST | `/demo-kits` | Anyone; empty JSON body; 10 per minute per server instance, then 5 per 10 minutes and 30 per Singapore day per environment | 201, 400, 405, 429 (with `limit` and `Retry-After`), 503 |
 | GET, POST | `/account` | Signed in | 200, 400, 409 (username taken) |
 | GET, POST | `/organisations` | Signed in | 200, 201 (created), 400 |
 | GET | `/organisations/[org]` | Member | 200, 404 |
@@ -510,8 +511,29 @@ transaction, so no user activity was invented.
 - Supabase HTTP requests have a 10-second timeout; the separate SoC adapter has
   a 90-second deadline and browser chat waits up to 110 seconds.
 - Keep all real keys and sensitive request contents out of logs. The SoC adapter
-  is server-only; demo provisioning and privileged browser actions remain
-  unimplemented.
+  is server-only; privileged browser actions remain unimplemented.
+- Demo kits (`src/server/demo-kits.ts`,
+  [spec](../workflow/specs/2026-11-12-demo-kits.md)) are the one public path that
+  uses `SUPABASE_SECRET_KEY`. `POST /api/demo-kits` first sheds load in memory
+  (10 per minute per instance, separate from the sign-in counter), then reserves
+  a slot through the service-role-only `reserve_demo_kit` RPC. That RPC
+  serialises under an advisory lock and counts in `private.demo_kit_windows`
+  using the database clock: at most `DEMO_KITS_PER_10_MINUTES` (default and
+  maximum 5) and `DEMO_KITS_PER_DAY` (default and maximum 30). Any other value,
+  including 0, turns the endpoint off with a 503. Only after a reservation does
+  it call the Admin API: it creates two confirmed accounts with random
+  `@example.com` emails and passwords and `app_metadata.demo_kit` set to a random
+  32-hex code, or deletes the first if the second fails. Credentials appear only
+  in the 201 body and the sign-in page's component state, which `pagehide`
+  clears. Failures log only the allowlisted line below.
+- The trusted demo marker is `raw_app_meta_data.demo_kit`, which only the Admin
+  API can write. Auth writes it after inserting the user, so the deferred
+  constraint trigger `check_demo_profile` checks at commit: a marked account must
+  be named `demo_pm_`/`demo_dev_` plus its code's first 8 characters, and no
+  other account may use a `demo_` name. `rename_username` and the API also
+  reject `demo_` names. Residual risks: one caller can use up the shared daily
+  cap, and each demo PM adds its own AI quota (at most 30 × 20 requests an hour
+  per environment).
 - Server failure logging: every unexpected failure that becomes a 503 (the
   `createApplication` catch-all and RPC, schema or configuration failures in the
   handlers, plus the invalid-`APP_ORIGIN` 503 in `runtime.ts`) and every AI
@@ -850,7 +872,9 @@ Browser runs are designed to be repeatable:
 
 `node src/tooling/test-local.mjs <mode>` runs one slice against the local stack:
 
-- Database: `profile`, `requests`, `chat`, `delivery`, `test-plans`.
+- Database: `profile`, `requests`, `chat`, `delivery`, `test-plans`,
+  `demo-kits` (which empties the local demo-kit counters first, through the local
+  database container).
 - Browser: `requests-browser`, `delivery-browser`, `layout-browser`, each with an
   optional test-name regex as a final argument, e.g.
   `node src/tooling/test-local.mjs requests-browser "a lost first-draft response"`.
@@ -959,6 +983,27 @@ Application runtime configuration — `APP_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SOCLAAS_BASE_URL`,
 `SOCLAAS_API_KEY`, `SOCLAAS_CHAT_MODEL` — is set in each Render service's
 Environment tab, pointing each environment at its own Supabase project.
+`DEMO_KITS_PER_10_MINUTES` and `DEMO_KITS_PER_DAY` are optional and only lower
+the demo-kit caps (defaults 5 and 30); see [Security](#security).
+
+**Removing demo kits.** From a maintainer machine, with that environment's
+`NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SECRET_KEY` exported (never committed):
+
+```sh
+npm run demo:remove -- --project <project-ref> --all
+```
+
+This is a dry run: it prints how many kits and accounts it found, how many
+organisations they created, and how many memberships of other accounts would
+end. Add `--yes` to delete, or use `--kit <code>` instead of `--all` for one kit.
+`--project` must match the configured URL (`local` for the local stack), or
+nothing runs. It selects accounts only by the exact `app_metadata.demo_kit`
+marker, lists every page of users before deleting, and re-reads each account
+just before deleting it. It prints counts only. Its warning covers only organisations the
+kits created: a demo account that joined someone else's organisation also takes
+its drafts, comments, activity and test plans there with it. A kit request that
+times out after Auth has already created an account leaves a marked account
+with no known password; `demo:remove` finds it like any other kit account.
 `APP_ORIGIN` must be the exact HTTPS origin of that environment: the server fails
 closed on a missing or non-HTTPS origin in production rather than inferring one
 from request headers.

@@ -3,6 +3,7 @@
 ## Contents
 
 - [Current features](#current-features) and [where to run it](#where-to-run-it)
+- [Try it with a demo kit](#try-it-with-a-demo-kit): no email needed
 - [Five-minute walkthrough](#five-minute-walkthrough)
 - [Try the local app](#try-the-local-app): accounts, verification and organisations
 - [Your profile](#your-profile)
@@ -24,7 +25,8 @@ Each role has its own AI feature, both on SoC LLM. Product Managers get private
 ticket drafting, inline suggestions and discussion. Developers get generated test
 plans on published tickets ([below](#test-plans-developer-ai)).
 
-Demo kits remain future work.
+A [demo kit](#try-it-with-a-demo-kit) gives you a ready-made Product Manager
+login and Developer login without using your own email.
 
 ## Where to run it
 
@@ -36,7 +38,30 @@ Both are deployed by the team's GitHub Actions workflows (see
 hosted environment needs the verification email to reach you. On a hosted
 environment that email holds a confirmation link: open it, then sign in with your
 email and password. If no email arrives, use the local app below, where every
-email is captured locally.
+email is captured locally, or use a demo kit.
+
+## Try it with a demo kit
+
+A demo kit is two ready-to-use logins: one **Product Manager** and one
+**Developer**. Their emails are made up, so no email is sent and nothing needs
+verifying.
+
+1. On the **Sign in** page, choose **Create demo kit** under **Try SpecForge**.
+2. Copy both logins. They are shown **only once**: reloading or leaving the page
+   clears them, and they cannot be recovered.
+3. Sign in with each login in its own browser or private window. A kit starts
+   empty: as the PM, create an organisation and invite the Developer's demo
+   email, then accept the invitation as the Developer. The
+   [walkthrough](#five-minute-walkthrough) continues from step 4.
+
+Demo accounts work exactly like ordinary accounts, including AI limits and
+renaming. Usernames starting with `demo_` are reserved for kits.
+
+To protect the service, each environment creates at most **5 kits every 10
+minutes** and **30 per day** (the day resets at midnight Singapore time). When a
+limit is reached the page says which one and when to try again; you can always
+create an ordinary account with your own email instead. Kits stay until the team
+removes them, which also deletes organisations they created.
 
 ## Five-minute walkthrough
 
