@@ -149,7 +149,7 @@ describe("account and organisation HTTP interface", () => {
       expect(response.status).toBe(202);
       expect(await response.json()).toEqual({
         message:
-          "Check your email for a verification code. If no code arrives, try a different username or sign in if you already have an account.",
+          "Check your email for a verification link. If no email arrives, try a different username or sign in if you already have an account.",
       });
       expect(submitted).toMatchObject({ email: "pm@example.com", data: { role, username: "atlas_pm" } });
       expect(submitted).not.toHaveProperty("email_confirm");
@@ -198,7 +198,7 @@ describe("account and organisation HTTP interface", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(await response.json()).toEqual({
       message:
-        "Check your email for a verification code. If no code arrives, try a different username or sign in if you already have an account.",
+        "Check your email for a verification link. If no email arrives, try a different username or sign in if you already have an account.",
     });
   });
   it("rejects malformed verification codes without contacting Supabase", async () => {

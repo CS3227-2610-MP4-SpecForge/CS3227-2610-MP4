@@ -10,6 +10,7 @@ const ticketMigration = process.argv[2] === "ticket-migration";
 const delivery = process.argv[2] === "delivery";
 const testPlans = process.argv[2] === "test-plans";
 const migration = process.argv[2] === "migration";
+const demoKits = process.argv[2] === "demo-kits";
 const browserFilter = process.argv[3];
 if (
   process.argv.length > 4 ||
@@ -22,7 +23,8 @@ if (
     !chat &&
     !delivery &&
     !ticketMigration &&
-    !testPlans)
+    !testPlans &&
+    !demoKits)
 )
   throw new Error("Unsupported test mode.");
 let status;
@@ -69,19 +71,22 @@ const result = spawnSync(
                 ? ["src/tests/chat.database.test.ts", "src/tests/assistant.database.test.ts"]
                 : testPlans
                   ? ["src/tests/test-plans.database.test.ts"]
-                  : migration
-                    ? ["src/tests/migration.database.test.ts"]
-                    : requests
-                      ? ["src/tests/requests.database.test.ts"]
-                      : [
-                          "src/tests/profile.database.test.ts",
-                          "src/tests/database.test.ts",
-                          "src/tests/requests.database.test.ts",
-                          "src/tests/chat.database.test.ts",
-                          "src/tests/assistant.database.test.ts",
-                          "src/tests/delivery.database.test.ts",
-                          "src/tests/test-plans.database.test.ts",
-                        ]),
+                  : demoKits
+                    ? ["src/tests/demo-kits.database.test.ts"]
+                    : migration
+                      ? ["src/tests/migration.database.test.ts"]
+                      : requests
+                        ? ["src/tests/requests.database.test.ts"]
+                        : [
+                            "src/tests/profile.database.test.ts",
+                            "src/tests/database.test.ts",
+                            "src/tests/requests.database.test.ts",
+                            "src/tests/chat.database.test.ts",
+                            "src/tests/assistant.database.test.ts",
+                            "src/tests/delivery.database.test.ts",
+                            "src/tests/test-plans.database.test.ts",
+                            "src/tests/demo-kits.database.test.ts",
+                          ]),
       ],
   {
     stdio: "inherit",

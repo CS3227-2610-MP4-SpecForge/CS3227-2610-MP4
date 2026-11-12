@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Building2 } from "lucide-react";
-import { legacyUsernamePrefix, reservedUsernameMessage, usernameHint, usernamePattern } from "@/usernames";
+import { reservedUsername, reservedUsernameMessage, usernameHint, usernamePattern } from "@/usernames";
 import { api, ApiError, failureMessage } from "./http";
 import { BackLink, Button, Field, Notice, useNotificationState } from "./ui";
 import { publishAccount } from "./account-events";
@@ -60,7 +60,7 @@ export function Profile() {
       setValidation(usernameHint);
       return;
     }
-    if (username.toLowerCase().startsWith(legacyUsernamePrefix)) {
+    if (reservedUsername(username)) {
       setValidation(reservedUsernameMessage);
       return;
     }

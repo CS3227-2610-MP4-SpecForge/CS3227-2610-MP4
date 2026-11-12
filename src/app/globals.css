@@ -288,6 +288,63 @@ button:disabled {
 .auth-links p {
   margin: 0;
 }
+.demo-kit {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+.demo-kit h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+.demo-kit h3 {
+  font-size: 0.9rem;
+  margin: 0 0 8px;
+}
+.demo-kit p,
+.demo-kit .notice {
+  margin: 0;
+}
+.demo-kit-logins {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.demo-kit-logins:empty {
+  margin-top: -12px;
+}
+.demo-kit-login {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 12px 14px;
+}
+.demo-kit-login dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  align-items: center;
+}
+.demo-kit-login dt {
+  font-weight: 650;
+  font-size: 0.8rem;
+}
+.demo-kit-login dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.demo-kit-login code {
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+}
 .text-button {
   background: transparent;
   color: var(--brand);

@@ -8,6 +8,11 @@ Status: approved by the user on 2026-11-12, with these decisions:
 - Session expiry: show a persistent banner and keep unsaved work, with no
   automatic redirect (workstream B).
 
+Implementation: workstreams A to H are implemented and reviewed locally; see the
+[acceptance index](../../docs/AcceptanceIndex.md) and
+[the close-out log](../../logs/2026-11-12-mp3-feedback-closeout.md). Hosted
+checks, the Reflections rewrite and the user actions below remain.
+
 Approval covers the whole plan; each workstream still gets its own review,
 session log and commit. A session taking over should pick the next workstream
 in the suggested order, check its evidence against the current checkout, and
@@ -79,14 +84,22 @@ them.
    the 2026-11-11 development deploy failed with "Your Team exceeded our fair use
    limits and has been blocked". Resolve this in Vercel or choose another host.
    Hosted checks in workstream C cannot pass until it is fixed.
+   *Update: hosting moved to Render
+   ([log](../../logs/2026-11-12-render-hosting.md)); the first Render deploy has
+   not run yet.*
 2. Add a required reviewer to the `production` GitHub Environment, then restore
    the reviewer wording in the Developer Guide and `deploy-production.yml`.
+   *Update: the post-change security review also recommends limiting the
+   `production` environment to `main` and `development` to `dev`, because both
+   deploy workflows accept a manual run on any branch.*
 3. Check each Supabase project's Site URL, custom SMTP and Auth rate limits
    (workstream D), then run one hosted
    sign-up, ticket and AI journey per role. The 2026-11-10 deployment log
    records that nothing hosted beyond the sign-up page has been tried.
 4. Confirm the production Vercel project's name. The Developer Guide's
    first-time setup step 3 says `specforge`, but the URL is `specforge-prod`.
+   *Update: superseded by the Render move, which names both services
+   `specforge-dev` and `specforge-prod` in `render.yaml`.*
 
 ## Workstreams
 

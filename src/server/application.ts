@@ -3,6 +3,7 @@ import { accountRoutes } from "./account";
 import { admittedAuthPaths, authRoutes, createAuthAdmission, unavailable } from "./auth";
 import { handleChat, type ChatDependencies } from "./chat";
 import { handleDelivery } from "./delivery";
+import { demoKitPath, handleDemoKit, type DemoKitDependencies } from "./demo-kits";
 import { error, InputError, json, serviceUnavailable } from "./http";
 import { organisationRoutes } from "./organisations";
 import { handleRequests } from "./requests";
@@ -18,6 +19,7 @@ type Options = {
   chat?: ChatDependencies;
   testPlans?: TestPlanDependencies;
   health?: () => Promise<Response>;
+  demoKits?: DemoKitDependencies;
 };
 
 /** Paths that need a signed-in, email-verified user, even when no route then matches. */
@@ -34,7 +36,7 @@ const sessionRoutes: Route<SessionContext>[] = [...organisationRoutes, ...accoun
 
 /**
  * The single entry point for /api. Order matters: origin check, then the public
- * health check, then auth admission and auth routes, then the identity check
+ * health check and demo kits, then auth admission and auth routes, then the identity check
  * before any organisation, ticket or account route.
  */
 export function createApplication(options: Options) {
@@ -47,6 +49,8 @@ export function createApplication(options: Options) {
       const path = new URL(request.url).pathname;
       // Public and sessionless; a GET, so it already skips the origin check.
       if (path === "/api/health" && request.method === "GET" && options.health) return await options.health();
+      // Public and sessionless, with its own admission; never reaches the session check.
+      if (path === demoKitPath && options.demoKits) return await handleDemoKit(request, options.demoKits);
       if (request.method === "POST" && admittedAuthPaths.includes(path) && !admitAuth()) {
         return json({ error: "Too many attempts. Try again in a minute." }, 429);
       }

@@ -1,7 +1,19 @@
+import { execFileSync } from "node:child_process";
 import { createHmac, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
 export const localEnabled = process.env.SPECFORGE_LOCAL_TESTS === "1";
+
+/** Empties the demo-kit creation windows on the disposable local stack only; no API can do this. */
+export function resetLocalDemoKitWindows() {
+  if (process.env.LOCAL_SUPABASE_URL !== "http://127.0.0.1:55321")
+    throw new Error("Only disposable local Supabase is allowed.");
+  execFileSync(
+    "docker",
+    ["exec", "supabase_db_specforge", "psql", "-U", "postgres", "-qtAc", "truncate private.demo_kit_windows"],
+    { stdio: ["ignore", "ignore", "pipe"] },
+  );
+}
 export function localFixture() {
   const url = process.env.LOCAL_SUPABASE_URL;
   if (url !== "http://127.0.0.1:55321") throw new Error("Only disposable local Supabase is allowed.");
