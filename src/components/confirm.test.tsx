@@ -44,6 +44,13 @@ describe("useConfirm", () => {
     await expectAccessible();
   });
 
+  it("sizes the dialog to its content instead of the viewport height", async () => {
+    await ask(cancelInvitation);
+    const dialog = page.getByRole("dialog", { name: "Cancel invitation?" });
+    await expect.element(dialog).toBeVisible();
+    expect(dialog.element().getBoundingClientRect().height).toBeLessThan(window.innerHeight / 2);
+  });
+
   it("resolves true when confirmed and closes", async () => {
     await ask(cancelInvitation);
     await page.getByRole("button", { name: "Cancel invitation" }).click();

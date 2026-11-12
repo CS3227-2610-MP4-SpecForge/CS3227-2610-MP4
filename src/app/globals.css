@@ -2029,7 +2029,8 @@ button:disabled {
 }
 .modal.confirm-modal {
   width: 440px;
-  height: auto;
+  /* Not auto: the native dialog is pinned top and bottom, so auto would stretch it. */
+  height: fit-content;
 }
 .confirm-modal .modal-toolbar {
   border-bottom: 0;
