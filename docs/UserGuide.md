@@ -33,8 +33,10 @@ Demo kits remain future work.
 
 Both are deployed by the team's GitHub Actions workflows (see
 [Deployment](DeveloperGuide.md#deployment-and-environments)). Signing up on a
-hosted environment needs the verification email to reach you; if no code
-arrives, use the local app below, where every email is captured locally.
+hosted environment needs the verification email to reach you. On a hosted
+environment that email holds a confirmation link: open it, then sign in with your
+email and password. If no email arrives, use the local app below, where every
+email is captured locally.
 
 ## Five-minute walkthrough
 
@@ -98,7 +100,7 @@ your own inbox instead of the local one.
    password of 12–128 characters. Select **Product Manager** or **Developer**
    from the **Application role** dropdown. Usernames
    use 3–24 letters, digits, or underscores and are stored in lowercase. Each
-   username is unique across SpecForge. If no verification code arrives, try a
+   username is unique across SpecForge. If no verification email arrives, try a
    different username or sign in if you already have an account. Your username
    can be changed from your profile; your application role is fixed after signup. Accounts created before this
    change have a generated username beginning with `legacy_`.

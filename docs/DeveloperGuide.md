@@ -170,7 +170,7 @@ requirement across all profiles. The additive migration assigns reserved
 `createdAt` from the protected profile.
 
 The app gives the same signup response for accepted requests and ambiguous Auth
-provisioning failures, with guidance to try a different username if no code
+provisioning failures, with guidance to try a different username if no verification email
 arrives. The raw Supabase Auth signup endpoint may return different statuses for
 a username collision and an existing email because repeat signups can skip the
 profile trigger. This difference remains visible to callers of that endpoint.

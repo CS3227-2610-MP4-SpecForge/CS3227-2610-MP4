@@ -66,7 +66,7 @@ export const authRoutes: Route<AuthContext>[] = [
       return json(
         {
           message:
-            "Check your email for a verification code. If no code arrives, try a different username or sign in if you already have an account.",
+            "Check your email for a verification link. If no email arrives, try a different username or sign in if you already have an account.",
         },
         202,
       );
