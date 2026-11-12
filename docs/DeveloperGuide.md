@@ -526,6 +526,12 @@ transaction, so no user activity was invented.
   bodies, headers, cookies, emails, IDs and AI text are excluded by construction.
   Expected 4xx outcomes log nothing. Lines are not rate-limited, so an upstream
   outage produces one line per failed request.
+- Accepted disclosure on `GET /api/health`: anyone can learn the deployed
+  commit, whether the database answers and whether AI is configured, which lets
+  an attacker match the live build to the public source. Each request makes one
+  Supabase call of up to 3 seconds with no throttle; the key and function are
+  public anyway, but if abuse appears, cache the result for a few seconds or
+  rate-limit the route.
 - Hosted verification needs custom SMTP: Supabase's default sender restricts
   recipients. Configure and test delivery and the confirmation template before
   claiming ordinary online signup works.
