@@ -23,6 +23,7 @@
     "test:e2e": "node src/tooling/test-local.mjs browser",
     "test:e2e:smoke": "node src/tooling/test-local.mjs browser @smoke",
     "test:integration": "node src/tooling/test-local.mjs",
+    "screenshots": "node src/tooling/screenshots.mjs",
     "db:start": "node src/tooling/database.mjs start",
     "db:stop": "node src/tooling/database.mjs stop",
     "db:reset": "node src/tooling/database.mjs reset",

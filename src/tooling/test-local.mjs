@@ -1,6 +1,8 @@
 import { execFileSync, spawnSync } from "node:child_process";
 const cli = new URL("../../node_modules/.bin/supabase", import.meta.url).pathname;
-const browser = ["browser", "requests-browser", "delivery-browser", "layout-browser"].includes(process.argv[2]);
+const browser = ["browser", "requests-browser", "delivery-browser", "layout-browser", "screenshots"].includes(
+  process.argv[2],
+);
 const profile = process.argv[2] === "profile";
 const requests = process.argv[2] === "requests";
 const chat = process.argv[2] === "chat";
@@ -44,13 +46,15 @@ const result = spawnSync(
         "node_modules/@playwright/test/cli.js",
         "test",
         ...(browserFilter ? ["--grep", browserFilter] : []),
-        ...(process.argv[2] === "requests-browser"
-          ? ["src/tests/browser/requests.spec.ts"]
-          : process.argv[2] === "delivery-browser"
-            ? ["src/tests/browser/delivery.spec.ts"]
-            : process.argv[2] === "layout-browser"
-              ? ["src/tests/browser/ticket-layout.spec.ts"]
-              : []),
+        ...(process.argv[2] === "screenshots"
+          ? ["--config", "src/tooling/screenshots.config.ts"]
+          : process.argv[2] === "requests-browser"
+            ? ["src/tests/browser/requests.spec.ts"]
+            : process.argv[2] === "delivery-browser"
+              ? ["src/tests/browser/delivery.spec.ts"]
+              : process.argv[2] === "layout-browser"
+                ? ["src/tests/browser/ticket-layout.spec.ts"]
+                : []),
       ]
     : [
         "node_modules/vitest/vitest.mjs",

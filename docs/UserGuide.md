@@ -1,5 +1,18 @@
 # SpecForge User Guide
 
+## Contents
+
+- [Current features](#current-features) and [where to run it](#where-to-run-it)
+- [Five-minute walkthrough](#five-minute-walkthrough)
+- [Try the local app](#try-the-local-app): accounts, verification and organisations
+- [Your profile](#your-profile)
+- [Notifications](#notifications) and [when your session ends](#when-your-session-ends)
+- [Invitations and membership](#invitations-and-membership)
+- [Ticket delivery and team discussion](#ticket-delivery-and-team-discussion)
+- [Tasks and AI chat](#tasks-and-ai-chat) (Product Managers)
+- [Test plans](#test-plans-developer-ai) (Developers)
+- [Failures](#failures)
+
 ## Current features
 
 This version supports email/password signup, email-code verification, login,
@@ -22,6 +35,57 @@ Both are deployed by the team's GitHub Actions workflows (see
 [Deployment](DeveloperGuide.md#deployment-and-environments)). Signing up on a
 hosted environment needs the verification email to reach you; if no code
 arrives, use the local app below, where every email is captured locally.
+
+## Five-minute walkthrough
+
+This tour uses both roles. Use two browsers, or one normal and one private
+window, so each account stays signed in. The sections after this one explain
+every step in more detail.
+
+1. **Create two accounts.** In the first window choose **Create an account**,
+   pick **Product Manager**, and verify the email with its code (see
+   [Try the local app](#try-the-local-app) for where local codes arrive). In the
+   second window create and verify a **Developer** account.
+2. **Create an organisation.** As the PM, enter a name under **Create an
+   organisation** and choose **Create organisation**. You become its admin.
+
+   ![An empty workspace with the Create an organisation panel](images/workspace-empty.png)
+
+3. **Invite the Developer.** Choose **Manage** on the organisation card, enter
+   the Developer's email under **Invite by email**, and choose **Send invitation**. In the
+   Developer's window, choose **Refresh membership**, then **Accept** under
+   **Your invitations**.
+4. **Draft a ticket with AI.** As the PM, open the organisation and choose
+   **New task**. Type a rough idea into **Description**, for example "Remember
+   filters when I return to the request list", then choose **Draft with AI**.
+   The draft fills the editor; **Undo AI draft** puts your idea back.
+5. **Review a change.** Ask the **AI assistant** for an improvement, such as
+   "Suggest clearer wording". When its reply shows a change card, choose
+   **Review changes**.
+
+   ![The ticket editor with the AI assistant open and a change card](images/ticket-editor-ai.png)
+
+   The window shows your text beside the proposed text. **Accept** or **Reject**
+   each change, or use **Accept all**, then **Done**.
+
+   ![Reviewing one proposed title change](images/change-review.png)
+
+   If a request fails, the reply says your ticket is unchanged and the request
+   was not counted. Open **Details** to see what happened, then **Try again**.
+   (This example failure was simulated locally.)
+
+   ![A failed AI request with its Details open](images/ai-failure-details.png)
+
+6. **Publish.** Choose **Publish**. The banner above the title changes from
+   private to visible to the organisation's members.
+7. **Assign.** In **Assignees**, type part of the Developer's email, pick them
+   from the list, and choose **Update** to save the assignment.
+8. **Plan the tests.** As the Developer, open the ticket from the organisation's
+   Requests table, choose **Show test plan**, then **Generate test cases**.
+   Check the cases and choose **Save to ticket**; every member can now see the
+   saved plan.
+
+   ![Three suggested test cases ready to review and save](images/test-plan-panel.png)
 
 ## Try the local app
 
@@ -303,7 +367,7 @@ suggestion stay usable. Accepted changes are ordinary edits, so if a save proble
 appears, accepting is paused until you resolve it. Recovered or historical AI
 drafts never automatically replace the editor.
 
-All draft fields autosave750ms after a pause. Accepting AI changes in a draft
+All draft fields autosave 750 ms after a pause. Accepting AI changes in a draft
 follows that same autosave. **Publish** requires a nonempty title/description and publishes all ticket
 fields together. Due date and assignees are optional. Published
 edits, including delivery details and accepted AI changes, remain local until
@@ -335,8 +399,8 @@ ticket snapshot still matches. **Details** explains what happened:
 
 - **Local deadline.** The notice reads “AI response timed out after 90 seconds.”
   Earlier timeouts show their recorded duration in whole seconds.
-- **Upstream HTTP error:** SoC returned an actual status such as502,504 or429;
-  the notice includes that status and app-observed elapsed time. A502 alone
+- **Upstream HTTP error:** SoC returned an actual status such as 502, 504 or 429;
+  the notice includes that status and app-observed elapsed time. A 502 alone
   does not prove the upstream cause was a timeout.
 - **Network failure:** the connection or response stream failed without an
   upstream HTTP error response.
@@ -363,7 +427,7 @@ App limits (not SoC quotas): one active AI request per ticket/account, the
 hourly limits above, 4,000-character instructions and a 90-second provider
 deadline. AI sees the current ticket, your instruction and at most your three
 latest completed requests. If the ticket alone is too long for AI, the panel
-says so before sending. Chat storage is bounded to 1MiB per ticket. Long or
+says so before sending. Chat storage is bounded to 1 MiB per ticket. Long or
 truncated AI responses fail safely; ask for a concise change or edit manually.
 
 Markdown display supports headings, lists, paragraphs, `**bold text**`,

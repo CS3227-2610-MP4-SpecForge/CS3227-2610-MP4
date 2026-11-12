@@ -39,6 +39,8 @@ jobs:
             printf -- '---\n---\n\n' >"website/$name"
             cat "$guide" >>"website/$name"
           done
+          # The guides link images as images/<name>.png, relative to docs/.
+          cp -R docs/images website/images
 
       - uses: actions/configure-pages@v5
         id: pages
