@@ -1,9 +1,10 @@
 name: Deploy
 
 # Reusable deployment for one environment. The repository owns the trigger, the
-# order and the gates; Vercel's own Git integration is deliberately unused so the
-# automation stays team-managed. Callers choose the environment and the Vercel
-# target, and nothing else differs between development and production.
+# order and the gates: each Render service has auto-deploy turned off, and this
+# workflow asks Render to build the exact commit only after the migrations have
+# applied. Callers choose the environment, and nothing else differs between
+# development and production.
 
 on:
   workflow_call:
@@ -12,25 +13,14 @@ on:
         description: GitHub Environment holding this target's secrets.
         required: true
         type: string
-      vercel-environment:
-        description: Vercel environment scope to pull configuration from.
-        required: true
-        type: string
-      production:
-        description: Deploy to the production target rather than a preview.
-        required: false
-        default: false
-        type: boolean
       site-url:
         description: Public origin of this environment, checked after the deploy.
         required: true
         type: string
     secrets:
-      VERCEL_TOKEN:
+      RENDER_API_KEY:
         required: true
-      VERCEL_ORG_ID:
-        required: true
-      VERCEL_PROJECT_ID:
+      RENDER_SERVICE_ID:
         required: true
       SUPABASE_ACCESS_TOKEN:
         required: true
@@ -46,22 +36,16 @@ jobs:
   deploy:
     name: ${{ inputs.environment }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     environment:
       name: ${{ inputs.environment }}
-      url: ${{ steps.deploy.outputs.url }}
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      url: ${{ inputs.site-url }}
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
-
-      - run: npm ci
 
       - uses: supabase/setup-cli@v1
         with:
@@ -99,60 +83,18 @@ jobs:
           rm -f link.log push.log
           echo "Migrations applied to the ${{ inputs.environment }} project."
 
-      # Installed globally, not into the project. Inside node_modules the CLI's
-      # own builder packages get deduped against the application's dependencies
-      # and @vercel/next loses files it needs at build time.
-      - name: Install Vercel CLI
-        run: npm install --global vercel@48.2.0
-
-      - name: Pull ${{ inputs.vercel-environment }} configuration
-        run: vercel pull --yes --environment=${{ inputs.vercel-environment }} --token=${{ secrets.VERCEL_TOKEN }}
-
-      # The deploy moves .git aside, so the build cannot read the commit from Git.
-      # next.config.ts fixes this value into the build for /api/health.
-      - name: Build
-        env:
-          SPECFORGE_REVISION: ${{ github.sha }}
-        run: vercel build ${{ inputs.production && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
-
-      # The repository's git metadata is moved aside for the duration of the
-      # deploy. The Vercel CLI otherwise reads the commit author out of it, and
-      # the platform refuses to deploy a commit whose author is not the account
-      # owner, which is every commit from a teammate. Vercel is deliberately not
-      # connected to this repository, so it is not the authority on who may
-      # change it; the repository's own required checks and environment
-      # reviewers are. The commit and run are still recorded as deployment
-      # metadata so a deployment stays traceable.
-      #
-      # The deploy runs in the checkout rather than a copy, because the CLI
-      # checks the project's installed dependencies even for a prebuilt
-      # deployment. The metadata is restored on the way out, including on
-      # failure, so the checkout action's own cleanup still finds it.
-      #
-      # A blocked deployment never leaves the "Building" state, and the CLI waits
-      # on it indefinitely, so the deploy carries its own deadline. Without one
-      # the job runs until the 25 minute limit and reports only a cancellation.
+      # Render clones the repository and builds this exact commit itself, so the
+      # build reads RENDER_GIT_COMMIT for /api/health. Render does not check who
+      # authored the commit; the repository's own required checks and
+      # environment reviewers decide what may deploy. A free-plan build can take
+      # several minutes, so the script waits up to 15 minutes for "live".
       - name: Deploy
-        id: deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: |
-          stash="$RUNNER_TEMP/git-metadata"
-          mv .git "$stash"
-          trap 'mv "$stash" .git' EXIT
-          status=0
-          url="$(timeout 600 vercel deploy --prebuilt ${{ inputs.production && '--prod' || '' }} \
-            --meta commit="$GITHUB_SHA" \
-            --meta run="$GITHUB_RUN_ID" \
-            --token=${{ secrets.VERCEL_TOKEN }})" || status=$?
-          if [ "$status" -ne 0 ]; then
-            if [ "$status" -eq 124 ]; then
-              echo "::error::The ${{ inputs.environment }} deployment did not become ready within 10 minutes. A deployment that stays in Building is usually blocked by Vercel; check the deployment in the Vercel dashboard."
-            else
-              echo "::error::The ${{ inputs.environment }} deployment failed (exit $status)."
-            fi
-            exit 1
-          fi
-          echo "url=$url" >>"$GITHUB_OUTPUT"
-          echo "Deployed ${{ inputs.environment }} to $url" >>"$GITHUB_STEP_SUMMARY"
+          node src/tooling/render-deploy.mjs "$GITHUB_SHA" 900
+          echo "Deployed ${{ inputs.environment }} to ${{ inputs.site-url }}" >>"$GITHUB_STEP_SUMMARY"
 
       # The public URL must answer with this commit, a reachable database and
       # configured AI. This also catches an older deployment still answering.

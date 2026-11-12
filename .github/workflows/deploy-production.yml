@@ -26,7 +26,5 @@ jobs:
     uses: ./.github/workflows/deploy.yml
     with:
       environment: production
-      vercel-environment: production
-      production: true
-      site-url: https://specforge-prod.vercel.app
+      site-url: https://specforge-prod.onrender.com
     secrets: inherit

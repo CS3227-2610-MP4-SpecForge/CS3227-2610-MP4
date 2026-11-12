@@ -1,7 +1,7 @@
 // Post-deploy release check: polls <site>/api/health until it reports the
 // expected commit with a reachable database and configured AI, or fails after
 // the deadline. Used by .github/workflows/deploy.yml and runnable locally:
-//   node src/tooling/check-health.mjs https://specforge-dev.vercel.app <sha> [seconds]
+//   node src/tooling/check-health.mjs https://specforge-dev.onrender.com <sha> [seconds]
 const [site, expected, seconds = "180"] = process.argv.slice(2);
 if (
   !site ||

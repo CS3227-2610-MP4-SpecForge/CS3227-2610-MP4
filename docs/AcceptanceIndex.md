@@ -7,10 +7,11 @@ every feature below; see the [Developer Guide](DeveloperGuide.md#testing).
 
 **Hosted verification.** The development app was deployed on 2026-11-10 and its
 sign-up page rendered ([log](../logs/2026-11-10-first-live-deployment.md)).
-Nothing beyond that page has been exercised on a hosted environment, and since
-2026-11-11 both hosted URLs answer HTTP 402 because Vercel blocked the team
-([log](../logs/2026-11-12-doc-drift.md)). So every feature's hosted check is
-**pending**: it is accepted locally, not on a hosted environment. Live SoC calls
+Nothing beyond that page has been exercised on a hosted environment. From
+2026-11-11 Vercel blocked the team and both URLs answered HTTP 402
+([log](../logs/2026-11-12-doc-drift.md)), so hosting moved to Render
+([log](../logs/2026-11-12-render-hosting.md)), which has not deployed yet. Every
+feature's hosted check is therefore **pending**: it is accepted locally, not on a hosted environment. Live SoC calls
 have been made from a developer machine, not from a hosted app
 ([log](../logs/2026-11-10-soc-llm-live.md)).
 
@@ -42,10 +43,10 @@ have been made from a developer machine, not from a hosted app
 | AI response handling and failure diagnostics | [diagnostics](../workflow/specs/2026-11-07-ai-failure-diagnostics.md), [tolerant response](../workflow/specs/2026-11-08-tolerant-ai-response.md), [invalid output](../workflow/specs/2026-11-08-invalid-ai-output.md) | [SoC adapter](../src/tests/soc.test.ts), [chat database](../src/tests/chat.database.test.ts), [requests](../src/tests/browser/requests.spec.ts) | [diagnostics](../logs/2026-11-07-ai-failure-diagnostics.md), [invalid output](../logs/2026-11-08-invalid-ai-output.md), [limits](../logs/2026-11-08-ai-debug-limits.md), [tolerant contract](../logs/2026-11-08-soc-live-verification.md) | Pending |
 | Developer test plans | [test plans](../workflow/specs/2026-11-09-developer-test-plans.md) | [provider](../src/tests/test-plans.test.ts), [database](../src/tests/test-plans.database.test.ts), [notifications](../src/tests/browser/notifications.spec.ts) | [log](../logs/2026-11-09-developer-test-plans.md), [live runs](../logs/2026-11-10-soc-llm-live.md) | Pending |
 | Notification banners | [banners](../workflow/specs/2026-11-10-app-notification-banners.md) | [notifications](../src/tests/browser/notifications.spec.ts), [modal](../src/components/modal.test.tsx) | [log](../logs/2026-11-10-organisation-direct-navigation.md) | Pending |
-| Deployment pipeline and product website | [deployment](../workflow/specs/2026-11-09-deployment-and-product-website.md) | The deploy workflows themselves | [setup](../logs/2026-11-09-deployment-and-product-website.md), [first deploy](../logs/2026-11-10-first-live-deployment.md), [doc drift](../logs/2026-11-12-doc-drift.md) | Development deployed once; now blocked (402) |
+| Deployment pipeline and product website | [deployment](../workflow/specs/2026-11-09-deployment-and-product-website.md) | The deploy workflows themselves | [setup](../logs/2026-11-09-deployment-and-product-website.md), [first deploy](../logs/2026-11-10-first-live-deployment.md), [doc drift](../logs/2026-11-12-doc-drift.md), [Render](../logs/2026-11-12-render-hosting.md) | Pending first Render deploy |
 | Server failure logging | [MP3 feedback, A](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [failure logging](../src/tests/failure-logging.test.ts), [runtime logging](../src/tests/runtime-failure-logging.test.ts) | [log](../logs/2026-11-12-server-failure-logging.md) | Pending |
 | Session expiry banner | [MP3 feedback, B](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [session](../src/components/session.test.tsx), [session journeys](../src/tests/browser/session.spec.ts) | [log](../logs/2026-11-12-session-expiry.md) | Pending |
-| Health endpoint and release check | [MP3 feedback, C](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [health](../src/tests/health.test.ts), [database](../src/tests/database.test.ts) | [log](../logs/2026-11-12-release-check.md) | Pending: runs on the first deploy after Vercel unblocks |
+| Health endpoint and release check | [MP3 feedback, C](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [health](../src/tests/health.test.ts), [database](../src/tests/database.test.ts) | [log](../logs/2026-11-12-release-check.md) | Pending: runs on the first Render deploy |
 | Sign-in rate limit (documented) | [MP3 feedback, D](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [HTTP](../src/tests/application.test.ts) | [log](../logs/2026-11-12-signin-rate-limit-docs.md) | Hosted Auth limits not yet checked |
 | Formatter and route split | [MP3 feedback, E](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [HTTP](../src/tests/application.test.ts) and the full suites | [log](../logs/2026-11-12-formatter-and-routes.md) | Not applicable |
 | Usable guides | [MP3 feedback, F](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [screenshot run](../src/tooling/screenshots.spec.ts) | [log](../logs/2026-11-12-usable-guides.md) | Site not yet rebuilt |

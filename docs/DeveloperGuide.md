@@ -30,7 +30,7 @@ for developers. This guide is for people changing or deploying it; the
 
 Requirements: Node.js 22, npm, Docker Desktop running. Node 22 is the version
 the deployment target supports, so local, CI and both environments run the same
-major; Vercel rejects a project whose `engines` ask for Node 24. Dependencies are
+major; `engines` pins 22.x, which Render also reads to pick the build's Node. Dependencies are
 locked in `package-lock.json`. Supabase CLI is pinned to the compatible 2.121.0
 line; CLI 3 rejected the legacy inbox configuration during setup.
 
@@ -503,8 +503,8 @@ transaction, so no user activity was invented.
 - The app adds a coarse cap of 30 authentication attempts (sign-up, sign-in,
   verify and resend; logout excluded) per clock minute, shared by all callers.
   `createAuthAdmission` keeps the count in memory, so the cap applies separately
-  on each server instance. On Vercel the effective limit grows with the number of
-  running instances, and an instance's count resets when it restarts. Supabase
+  on each server instance. With more than one running instance the effective limit
+  grows with the number of instances, and an instance's count resets when it restarts. Supabase
   Auth's own rate limits are the real control; check the hosted values before
   release (see [First-time setup](#first-time-setup) step 7).
 - Supabase HTTP requests have a 10-second timeout; the separate SoC adapter has
@@ -517,7 +517,7 @@ transaction, so no user activity was invented.
   handlers, plus the invalid-`APP_ORIGIN` 503 in `runtime.ts`) and every AI
   provider failure inside a chat or test plan turn writes one JSON line through
   `console.error` via `logFailure`/`serviceUnavailable` in `src/server/http.ts`.
-  Vercel collects these as function logs. A line holds only
+  Render collects these in each service's Logs tab. A line holds only
   `event: "server_failure"`, the method (`OTHER` if unusual), the route pattern
   (static route words kept, every other segment `:id`, unknown prefixes
   `/:unknown`, no query), our response `status`, the error class name, a
@@ -891,21 +891,25 @@ patched compatible release. Re-evaluate the override when upstream updates.
 | Branch | `dev` | `main` |
 | Workflow | `deploy-development.yml` | `deploy-production.yml` |
 | GitHub Environment | `development` | `production` |
-| URL | <https://specforge-dev.vercel.app> | <https://specforge-prod.vercel.app> |
-| Vercel target | production target of that project | production target |
+| URL | <https://specforge-dev.onrender.com> | <https://specforge-prod.onrender.com> |
+| Render service | `specforge-dev` | `specforge-prod` |
 | Supabase project | development project | production project |
 
 Both callers delegate to the reusable `deploy.yml`, so the steps and their order
-exist once: apply migrations, pull that scope's configuration, build, deploy,
-record the URL, then check the release (below). The production caller first runs
+exist once: apply migrations, ask Render to build and deploy this exact commit,
+wait until it is live, then check the release (below). The production caller first runs
 the whole of `ci.yml` on the merge commit, so production is never reached without
 a passing suite. Merging into `main` is the human decision. The `production`
 environment does not yet have a required reviewer; adding one (first-time setup
 step 4) would make deployment a second, separate approval.
 
-Vercel's own Git integration is deliberately not connected. The repository owns
-the trigger and the gates, and the Vercel CLI is invoked as a step, which keeps
-the automation team-managed as the course requires.
+Both Render services have auto-deploy turned off. The repository owns the
+trigger and the gates: `src/tooling/render-deploy.mjs` calls the Render API to
+deploy `github.sha` and polls until the deploy is `live` (up to 15 minutes), or
+fails the run on `build_failed`, `update_failed` or a cancelled deploy. This
+keeps the automation team-managed as the course requires. Render does not check
+who authored a commit, so any reviewed merge deploys, whoever wrote it. The
+services' own configuration is in `render.yaml` at the repository root.
 
 Migrations run before the deployment, so the schema cannot trail the code that
 expects it. A failed `supabase db push` stops the run before anything is
@@ -918,8 +922,8 @@ outcome is reported.
 `{ status, revision, database, ai }`:
 
 - `revision` is the commit SHA built into the app, or `unknown` for a local
-  build. The deploy moves `.git` aside, so the Build step passes `github.sha`
-  as `SPECFORGE_REVISION`, and `next.config.ts` fixes it into the build.
+  build. Render sets `RENDER_GIT_COMMIT` while it builds, and `next.config.ts`
+  fixes it into the build (`SPECFORGE_REVISION`, when set, takes precedence).
 - `database` is `ok` when the anon-callable `public.health_check()` answers
   `true` within 3 seconds using the publishable key. The function reads no
   table. Otherwise it is `unavailable` and the response is 503.
@@ -934,7 +938,7 @@ this run's commit with `database: ok` and `ai: configured`. This also catches an
 older deployment that is still answering. To check a site by hand:
 
 ```sh
-node src/tooling/check-health.mjs https://specforge-dev.vercel.app <commit-sha>
+node src/tooling/check-health.mjs https://specforge-dev.onrender.com <commit-sha>
 ```
 
 ### Configuration boundary
@@ -942,13 +946,13 @@ node src/tooling/check-health.mjs https://specforge-dev.vercel.app <commit-sha>
 GitHub holds only what the pipeline itself needs, per environment, as GitHub
 Environment secrets rather than repository-wide secrets:
 
-`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SUPABASE_ACCESS_TOKEN`,
+`RENDER_API_KEY`, `RENDER_SERVICE_ID`, `SUPABASE_ACCESS_TOKEN`,
 `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`.
 
 Application runtime configuration — `APP_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SOCLAAS_BASE_URL`,
-`SOCLAAS_API_KEY`, `SOCLAAS_CHAT_MODEL` — is set in each Vercel project's
-Production scope, pointing each environment at its own Supabase project.
+`SOCLAAS_API_KEY`, `SOCLAAS_CHAT_MODEL` — is set in each Render service's
+Environment tab, pointing each environment at its own Supabase project.
 `APP_ORIGIN` must be the exact HTTPS origin of that environment: the server fails
 closed on a missing or non-HTTPS origin in production rather than inferring one
 from request headers.
@@ -969,24 +973,31 @@ from request headers.
    says `localhost`; `supabase db push` never touches hosted auth settings, but
    `supabase config push` would overwrite them, so do not run it against a
    deployed project.
-3. Create two empty Vercel projects, `specforge-dev` and `specforge`, without
-   connecting a Git repository: Vercel's own Git deployments would take the
-   automation out of the team's hands and race with `deploy.yml`. Set the
-   runtime variables above in each project's Production scope.
+3. Sign in to Render with GitHub and install the Render GitHub app on this
+   repository (needs repository admin). Create the services from `render.yaml`
+   (New, Blueprint): it declares `specforge-dev` on `dev` and `specforge-prod`
+   on `main`, both Node web services in Singapore with auto-deploy off, built by
+   `npm ci && npm run build` and started by `npm start`. They deliberately set no
+   Render health check path: `/api/health` answers 503 while Supabase is
+   unreachable, and Render would then fail the deploy or restart a running app
+   over a database outage. Render's default port check is used instead, and the
+   workflow's release check covers the database. Render prompts for each `sync: false` variable; enter the
+   runtime variables above for each service. If Render gives a service a
+   different `onrender.com` name, use that origin for `APP_ORIGIN`, the Supabase
+   Site URL and the callers' `site-url`.
 
-   `vercel.json` at the repository root declares `framework: nextjs`. An empty
-   Vercel project defaults to no framework and then looks for a static `public`
-   directory, so the build fails after Next.js has already built successfully.
-   Declaring it in the repository keeps the setting in version control rather
-   than in a dashboard checkbox.
+   The free plan suspends a service after about 15 minutes without traffic, and
+   the next request waits roughly a minute while it starts. Use a paid instance
+   for production when that delay matters, such as a demonstration.
 
-   Each environment deploys to its own project's production target rather than
-   to a preview. A Vercel preview URL is unique per deployment, while
-   `APP_ORIGIN` has to be one fixed origin, so a preview target would give the
-   development app an origin that changes on every push. `VERCEL_PROJECT_ID` is
-   an environment secret, so the two environments name different projects.
-4. Create the `development` and `production` GitHub Environments, add the six
+   After creating the services, turn off the Blueprint's auto-sync (Blueprint,
+   Settings). With it on, a push that changes `render.yaml` would make Render
+   apply the change and redeploy outside the workflow's gates, possibly before
+   migrations. Apply later `render.yaml` changes with a manual sync.
+4. Create the `development` and `production` GitHub Environments, add the five
    secrets to each, and add a required reviewer to `production`.
+   `RENDER_API_KEY` comes from Render's Account Settings, API Keys;
+   `RENDER_SERVICE_ID` is the `srv-…` ID in that environment's service URL.
 5. In repository settings, set Pages to build from GitHub Actions.
 6. Push to `dev` and confirm the development deployment, then open a pull request
    to `main`.

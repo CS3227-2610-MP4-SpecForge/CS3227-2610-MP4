@@ -28,8 +28,8 @@ Demo kits remain future work.
 
 ## Where to run it
 
-- **Production:** <https://specforge-prod.vercel.app>
-- **Development:** <https://specforge-dev.vercel.app>
+- **Production:** <https://specforge-prod.onrender.com>
+- **Development:** <https://specforge-dev.onrender.com>
 
 Both are deployed by the team's GitHub Actions workflows (see
 [Deployment](DeveloperGuide.md#deployment-and-environments)). Signing up on a

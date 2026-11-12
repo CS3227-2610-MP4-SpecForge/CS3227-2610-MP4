@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
   poweredByHeader: false,
-  // The deploy workflow passes the commit SHA; /api/health reports it so a check
-  // can tell which build is answering. Fixed at build time, empty locally.
-  env: { SPECFORGE_REVISION: process.env.SPECFORGE_REVISION ?? "" },
+  // /api/health reports the built commit so a check can tell which build is
+  // answering. Render sets RENDER_GIT_COMMIT during its build; SPECFORGE_REVISION
+  // overrides it for a build elsewhere. Fixed at build time, empty locally.
+  env: { SPECFORGE_REVISION: process.env.SPECFORGE_REVISION || process.env.RENDER_GIT_COMMIT || "" },
   distDir: process.env.SPECFORGE_BROWSER_ORIGIN ? ".next-browser" : ".next",
   async headers() {
     return [
