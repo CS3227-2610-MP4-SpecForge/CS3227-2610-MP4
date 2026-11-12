@@ -5,7 +5,8 @@ import { expect, type Page, type Response } from "@playwright/test";
 export function recordTicketWrites(page: Page, requestId: string) {
   const writes: string[] = [];
   page.on("request", request => {
-    if (request.method() !== "GET" && request.url().includes(`/requests/${requestId}`)) writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    if (request.method() !== "GET" && request.url().includes(`/requests/${requestId}`))
+      writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
   });
   return writes;
 }
@@ -16,7 +17,9 @@ export function recordTicketWrites(page: Page, requestId: string) {
  */
 export async function settleAfter(page: Page, response: Promise<Response>) {
   await (await response).finished();
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await page.evaluate(
+    () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
 }
 
 /** Fail on serious or critical axe violations on the page, or inside one CSS scope. */
@@ -24,19 +27,29 @@ export async function expectAccessible(page: Page, scope?: string) {
   const builder = new AxeBuilder({ page });
   if (scope) builder.include(scope);
   const { violations } = await builder.analyze();
-  expect(violations
-    .filter(violation => violation.impact === "serious" || violation.impact === "critical")
-    .map(violation => `${violation.id}: ${violation.help} (${violation.nodes.map(node => node.target.join(" ")).join(", ")})`)).toEqual([]);
+  expect(
+    violations
+      .filter(violation => violation.impact === "serious" || violation.impact === "critical")
+      .map(
+        violation =>
+          `${violation.id}: ${violation.help} (${violation.nodes.map(node => node.target.join(" ")).join(", ")})`,
+      ),
+  ).toEqual([]);
 }
 
 export function savedTicketStatus(page: Page) {
-  return page.getByRole("region", { name: "About this ticket", exact: true }).getByRole("status")
+  return page
+    .getByRole("region", { name: "About this ticket", exact: true })
+    .getByRole("status")
     .filter({ hasText: /^Last (?:auto)?saved: / });
 }
 
 export async function selectPill(page: Page, label: string, option: string) {
   await page.getByRole("combobox", { name: label, exact: true }).click();
-  await page.getByRole("listbox", { name: `${label} options`, exact: true }).getByRole("option", { name: option, exact: true }).click();
+  await page
+    .getByRole("listbox", { name: `${label} options`, exact: true })
+    .getByRole("option", { name: option, exact: true })
+    .click();
 }
 
 export async function setDueDate(page: Page, value: string) {

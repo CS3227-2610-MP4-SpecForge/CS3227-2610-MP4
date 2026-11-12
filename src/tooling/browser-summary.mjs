@@ -11,13 +11,20 @@ const report = JSON.parse(readFileSync(file, "utf8"));
 const tests = [];
 const walk = suite => {
   for (const child of suite.suites ?? []) walk(child);
-  for (const spec of suite.specs ?? []) for (const test of spec.tests) tests.push({ name: `${spec.file}:${spec.line} › ${spec.title}`, status: test.status });
+  for (const spec of suite.specs ?? [])
+    for (const test of spec.tests)
+      tests.push({ name: `${spec.file}:${spec.line} › ${spec.title}`, status: test.status });
 };
 for (const suite of report.suites ?? []) walk(suite);
 const { expected = 0, unexpected = 0, flaky = 0, skipped = 0, duration = 0 } = report.stats ?? {};
 console.log("## Browser tests\n");
-console.log(`${expected} passed, ${unexpected} failed, ${flaky} flaky, ${skipped} skipped in ${(duration / 60000).toFixed(1)} min.\n`);
-for (const [status, label] of [["unexpected", "Failed"], ["flaky", "Flaky (passed on retry; investigate)"]]) {
+console.log(
+  `${expected} passed, ${unexpected} failed, ${flaky} flaky, ${skipped} skipped in ${(duration / 60000).toFixed(1)} min.\n`,
+);
+for (const [status, label] of [
+  ["unexpected", "Failed"],
+  ["flaky", "Flaky (passed on retry; investigate)"],
+]) {
   const matching = tests.filter(test => test.status === status);
   if (!matching.length) continue;
   console.log(`### ${label}\n`);

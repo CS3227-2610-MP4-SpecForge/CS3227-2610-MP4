@@ -6,17 +6,30 @@ import { Dropdown, type DropdownOption } from "./dropdown";
 
 type Status = "draft" | "ready" | "doing" | "done";
 const options: DropdownOption<Status>[] = [
-  { value: "draft", label: "Draft" }, { value: "ready", label: "Ready" },
-  { value: "doing", label: "Doing" }, { value: "done", label: "Done", tone: "green" },
+  { value: "draft", label: "Draft" },
+  { value: "ready", label: "Ready" },
+  { value: "doing", label: "Doing" },
+  { value: "done", label: "Done", tone: "green" },
 ];
 
 function Harness({ onChange, disabled = false }: { onChange(value: Status): void; disabled?: boolean }) {
   const [value, setValue] = useState<Status>("ready");
-  return <>
-    <Dropdown id="status" label="Status" value={value} options={options} disabled={disabled}
-      onChange={next => { setValue(next); onChange(next); }} />
-    <p style={{ marginTop: 400 }}>Outside</p>
-  </>;
+  return (
+    <>
+      <Dropdown
+        id="status"
+        label="Status"
+        value={value}
+        options={options}
+        disabled={disabled}
+        onChange={next => {
+          setValue(next);
+          onChange(next);
+        }}
+      />
+      <p style={{ marginTop: 400 }}>Outside</p>
+    </>
+  );
 }
 
 const trigger = () => page.getByRole("combobox", { name: "Status" });

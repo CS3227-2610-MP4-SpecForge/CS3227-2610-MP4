@@ -23,12 +23,14 @@ your `.env` unchanged. Never put real project credentials in guides or test data
 
 - [User Guide](docs/UserGuide.md): current features and testing access.
 - [Developer Guide](docs/DeveloperGuide.md): design, setup, checks and deployment gates.
+- [Acceptance index](docs/AcceptanceIndex.md): each feature's spec, tests, session logs
+  and hosted-verification state.
 - [Product specification](workflow/specs/2026-11-07-product-mvp.md).
 - [Workflow](workflow/README.md).
 
 Deployment automation and the GitHub Pages product website live in
 `.github/workflows/` and `website/`. The pipeline is team-managed: GitHub Actions
-applies migrations and drives the Vercel CLI, with separate development and
-production environments, each against its own Supabase project. Both are live:
-<https://specforge-prod.vercel.app> and <https://specforge-dev.vercel.app>. See
+applies migrations and triggers Render deploys, with separate development and
+production environments, each against its own Supabase project. They deploy to:
+<https://specforge-prod.onrender.com> and <https://specforge-dev.onrender.com>. See
 [Deployment](docs/DeveloperGuide.md#deployment-and-environments).

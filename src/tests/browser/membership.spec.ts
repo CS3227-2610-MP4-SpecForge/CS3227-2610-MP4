@@ -7,89 +7,99 @@ async function reopenManagement(page: import("@playwright/test").Page, name: str
 }
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
 
-test("PM and Developer manage invitations, admin handover and leaving", { tag: "@smoke" }, async ({ page, browser }) => {
-  const fixture = localFixture();
-  const a = await fixture.actor("PM");
-  const b = await fixture.actor("Developer");
-  const context = await browser.newContext();
-  const recipient = await context.newPage();
-  const login = async (target: typeof page, actor: typeof a) => {
-    await target.goto(origin + "/sign-in");
-    await target.getByLabel("Email address").fill(actor.email);
-    await target.getByLabel("Password", { exact: true }).fill(actor.password);
-    await target.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(target).toHaveURL(/\/workspace$/);
-  };
-  page.on("dialog", dialog => dialog.accept());
-  recipient.on("dialog", dialog => dialog.accept());
-  try {
-    await login(page, a);
-    await page.getByLabel("Organisation name").fill("Membership journey");
-    await page.getByRole("button", { name: "Create organisation", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Manage Membership journey", exact: true })).toBeVisible();
-    await expectAccessible(page);
-    const inviteInput = page.getByLabel("Invite by email", { exact: true });
-    await expect(inviteInput).toBeVisible();
-    const modalContent = page.getByRole("region", { name: "Management content", exact: true });
-    const beforeFailure = (await inviteInput.boundingBox())!.y + await modalContent.evaluate(element => element.scrollTop);
-    await page.getByRole("button", { name: "Leave organisation", exact: true }).click();
-    const failure = page.getByRole("alert").filter({ hasText: "at least one admin" });
-    await expect(failure).toHaveClass(/notification-banner/);
-    await expect(failure).toHaveCSS("background-color", "rgb(255, 241, 243)");
-    await page.screenshot({ path: "test-results/notification-error-desktop.png", fullPage: true });
-    expect((await failure.boundingBox())!.y).toBeLessThan((await page.getByRole("dialog").boundingBox())!.y);
-    expect((await inviteInput.boundingBox())!.y + await modalContent.evaluate(element => element.scrollTop)).toBe(beforeFailure);
-    await expect(failure).toHaveCount(0, { timeout: 4500 });
-    await expect(page.getByRole("button", { name: "Leave organisation", exact: true })).toBeEnabled();
-    await page.getByLabel("Invite by email").fill(b.email);
-    await page.getByRole("button", { name: "Send invitation", exact: true }).click();
-    await expect(page.getByText(b.email, { exact: true })).toBeVisible();
-    await login(recipient, b);
-    await expect(recipient.getByRole("heading", { name: "Your invitations" })).toBeVisible();
-    await recipient.getByRole("button", { name: "Decline", exact: true }).click();
-    await expect(recipient.getByText("No pending invitations.")).toBeVisible();
-    await reopenManagement(page, "Membership journey");
-    await expect(page.getByText("Declined", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Cancel invitation", exact: true }).click();
-    await expect(page.getByText("No pending outgoing invitations.")).toBeVisible();
-    await page.getByLabel("Invite by email").fill(b.email);
-    await page.getByRole("button", { name: "Send invitation", exact: true }).click();
-    await expect(page.getByText(b.email, { exact: true })).toBeVisible();
-    await recipient.getByRole("button", { name: "Refresh membership", exact: true }).click();
-    await recipient.getByRole("button", { name: "Accept", exact: true }).click();
-    await expect(recipient.getByRole("button", { name: "Manage Membership journey", exact: true })).toBeVisible();
-    await reopenManagement(page, "Membership journey");
-    const member = page.getByRole("listitem").filter({ has: page.getByText(b.username, { exact: true }) });
-    await member.getByRole("button", { name: "Promote admin", exact: true }).click();
-    await expect(member.getByRole("button", { name: "Demote admin", exact: true })).toBeVisible();
-    await member.getByRole("button", { name: "Demote admin", exact: true }).click();
-    await expect(member.getByRole("button", { name: "Promote admin", exact: true })).toBeVisible();
-    await member.getByRole("button", { name: "Promote admin", exact: true }).click();
-    await expect(member.getByRole("button", { name: "Demote admin", exact: true })).toBeVisible();
-    await page.route("**/api/organisations", async route => {
-      if (route.request().method() === "GET") await new Promise(resolve => setTimeout(resolve, 1500));
-      await route.continue();
-    });
-    const self = page.getByRole("listitem").filter({ has: page.getByText(a.username, { exact: true }) });
-    await self.getByRole("button", { name: "Demote admin", exact: true }).click();
-    await expect(page.getByRole("link", { name: /Membership journey Member/ })).toBeVisible();
-    await expect(page.getByLabel("Invite by email")).toHaveCount(0);
-    await expect(page.getByRole("dialog", { name: "Manage Membership journey", exact: true })).toBeVisible();
-    const membership = page.getByRole("region", { name: "Organisation membership" });
-    await expect(membership.getByRole("button", { name: "Refresh membership", exact: true })).toHaveCount(0);
-    await expect(membership.getByRole("alert")).toHaveCount(0);
-    await page.getByRole("button", { name: "Leave organisation", exact: true }).click();
-    await expect(page.getByText("Your team starts here")).toBeVisible();
-    await recipient.getByRole("button", { name: "Refresh membership", exact: true }).click();
-    await recipient.getByRole("button", { name: "Manage Membership journey", exact: true }).click();
-    await expect(recipient.getByRole("dialog", { name: "Manage Membership journey", exact: true })).toBeVisible();
-    await expect(recipient.getByLabel("Invite by email")).toBeVisible();
-    await recipient.setViewportSize({ width: 390, height: 844 });
-    expect(await recipient.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await recipient.screenshot({ path: "test-results/membership-mobile.png", fullPage: true, caret: "initial" });
-    await page.screenshot({ path: "test-results/membership-pm.png", fullPage: true, caret: "initial" });
-  } finally { await context.close(); await fixture.cleanup(); }
-});
+test(
+  "PM and Developer manage invitations, admin handover and leaving",
+  { tag: "@smoke" },
+  async ({ page, browser }) => {
+    const fixture = localFixture();
+    const a = await fixture.actor("PM");
+    const b = await fixture.actor("Developer");
+    const context = await browser.newContext();
+    const recipient = await context.newPage();
+    const login = async (target: typeof page, actor: typeof a) => {
+      await target.goto(origin + "/sign-in");
+      await target.getByLabel("Email address").fill(actor.email);
+      await target.getByLabel("Password", { exact: true }).fill(actor.password);
+      await target.getByRole("button", { name: "Sign in", exact: true }).click();
+      await expect(target).toHaveURL(/\/workspace$/);
+    };
+    page.on("dialog", dialog => dialog.accept());
+    recipient.on("dialog", dialog => dialog.accept());
+    try {
+      await login(page, a);
+      await page.getByLabel("Organisation name").fill("Membership journey");
+      await page.getByRole("button", { name: "Create organisation", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Manage Membership journey", exact: true })).toBeVisible();
+      await expectAccessible(page);
+      const inviteInput = page.getByLabel("Invite by email", { exact: true });
+      await expect(inviteInput).toBeVisible();
+      const modalContent = page.getByRole("region", { name: "Management content", exact: true });
+      const beforeFailure =
+        (await inviteInput.boundingBox())!.y + (await modalContent.evaluate(element => element.scrollTop));
+      await page.getByRole("button", { name: "Leave organisation", exact: true }).click();
+      const failure = page.getByRole("alert").filter({ hasText: "at least one admin" });
+      await expect(failure).toHaveClass(/notification-banner/);
+      await expect(failure).toHaveCSS("background-color", "rgb(255, 241, 243)");
+      await page.screenshot({ path: "test-results/notification-error-desktop.png", fullPage: true });
+      expect((await failure.boundingBox())!.y).toBeLessThan((await page.getByRole("dialog").boundingBox())!.y);
+      expect((await inviteInput.boundingBox())!.y + (await modalContent.evaluate(element => element.scrollTop))).toBe(
+        beforeFailure,
+      );
+      await expect(failure).toHaveCount(0, { timeout: 4500 });
+      await expect(page.getByRole("button", { name: "Leave organisation", exact: true })).toBeEnabled();
+      await page.getByLabel("Invite by email").fill(b.email);
+      await page.getByRole("button", { name: "Send invitation", exact: true }).click();
+      await expect(page.getByText(b.email, { exact: true })).toBeVisible();
+      await login(recipient, b);
+      await expect(recipient.getByRole("heading", { name: "Your invitations" })).toBeVisible();
+      await recipient.getByRole("button", { name: "Decline", exact: true }).click();
+      await expect(recipient.getByText("No pending invitations.")).toBeVisible();
+      await reopenManagement(page, "Membership journey");
+      await expect(page.getByText("Declined", { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Cancel invitation", exact: true }).click();
+      await expect(page.getByText("No pending outgoing invitations.")).toBeVisible();
+      await page.getByLabel("Invite by email").fill(b.email);
+      await page.getByRole("button", { name: "Send invitation", exact: true }).click();
+      await expect(page.getByText(b.email, { exact: true })).toBeVisible();
+      await recipient.getByRole("button", { name: "Refresh membership", exact: true }).click();
+      await recipient.getByRole("button", { name: "Accept", exact: true }).click();
+      await expect(recipient.getByRole("button", { name: "Manage Membership journey", exact: true })).toBeVisible();
+      await reopenManagement(page, "Membership journey");
+      const member = page.getByRole("listitem").filter({ has: page.getByText(b.username, { exact: true }) });
+      await member.getByRole("button", { name: "Promote admin", exact: true }).click();
+      await expect(member.getByRole("button", { name: "Demote admin", exact: true })).toBeVisible();
+      await member.getByRole("button", { name: "Demote admin", exact: true }).click();
+      await expect(member.getByRole("button", { name: "Promote admin", exact: true })).toBeVisible();
+      await member.getByRole("button", { name: "Promote admin", exact: true }).click();
+      await expect(member.getByRole("button", { name: "Demote admin", exact: true })).toBeVisible();
+      await page.route("**/api/organisations", async route => {
+        if (route.request().method() === "GET") await new Promise(resolve => setTimeout(resolve, 1500));
+        await route.continue();
+      });
+      const self = page.getByRole("listitem").filter({ has: page.getByText(a.username, { exact: true }) });
+      await self.getByRole("button", { name: "Demote admin", exact: true }).click();
+      await expect(page.getByRole("link", { name: /Membership journey Member/ })).toBeVisible();
+      await expect(page.getByLabel("Invite by email")).toHaveCount(0);
+      await expect(page.getByRole("dialog", { name: "Manage Membership journey", exact: true })).toBeVisible();
+      const membership = page.getByRole("region", { name: "Organisation membership" });
+      await expect(membership.getByRole("button", { name: "Refresh membership", exact: true })).toHaveCount(0);
+      await expect(membership.getByRole("alert")).toHaveCount(0);
+      await page.getByRole("button", { name: "Leave organisation", exact: true }).click();
+      await expect(page.getByText("Your team starts here")).toBeVisible();
+      await recipient.getByRole("button", { name: "Refresh membership", exact: true }).click();
+      await recipient.getByRole("button", { name: "Manage Membership journey", exact: true }).click();
+      await expect(recipient.getByRole("dialog", { name: "Manage Membership journey", exact: true })).toBeVisible();
+      await expect(recipient.getByLabel("Invite by email")).toBeVisible();
+      await recipient.setViewportSize({ width: 390, height: 844 });
+      expect(await recipient.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await recipient.screenshot({ path: "test-results/membership-mobile.png", fullPage: true, caret: "initial" });
+      await page.screenshot({ path: "test-results/membership-pm.png", fullPage: true, caret: "initial" });
+    } finally {
+      await context.close();
+      await fixture.cleanup();
+    }
+  },
+);
 
 test("Developer admin resends expired invitations, cancels and removes a PM member", async ({ page }) => {
   const fixture = localFixture();
@@ -108,7 +118,10 @@ test("Developer admin resends expired invitations, cancels and removes a PM memb
     await page.getByRole("button", { name: "Send invitation", exact: true }).click();
     await expect(page.getByText(pm.email, { exact: true })).toBeVisible();
     const invitation = (await pm.client.rpc("list_invitations")).data[0].id;
-    await fixture.admin.from("organisation_invitations").update({ expires_at: "2020-01-01T00:00:00Z" }).eq("id", invitation);
+    await fixture.admin
+      .from("organisation_invitations")
+      .update({ expires_at: "2020-01-01T00:00:00Z" })
+      .eq("id", invitation);
     await reopenManagement(page, "Outgoing controls");
     await page.getByRole("button", { name: "Resend", exact: true }).click();
     await expect(page.getByRole("button", { name: "Resend", exact: true })).toHaveCount(0);
@@ -129,10 +142,14 @@ test("Developer admin resends expired invitations, cancels and removes a PM memb
     await member.getByRole("button", { name: "Remove member", exact: true }).click();
     await expect(page.getByText(pm.username, { exact: true })).toHaveCount(0);
     expect((await pm.client.from("organisations").select("id").eq("id", org)).data).toEqual([]);
-  } finally { await fixture.cleanup(); }
+  } finally {
+    await fixture.cleanup();
+  }
 });
 
-test("unknown email invites persist and creation/withdrawal banners float without shifting the modal", async ({ page }) => {
+test("unknown email invites persist and creation/withdrawal banners float without shifting the modal", async ({
+  page,
+}) => {
   const fixture = localFixture();
   const owner = await fixture.actor("PM");
   const org = (await owner.client.rpc("create_organisation", { organisation_name: "Banner team" })).data;
@@ -188,5 +205,7 @@ test("unknown email invites persist and creation/withdrawal banners float withou
     await page.clock.runFor(3000);
     await expect(withdrawn).toHaveCount(0, { timeout: 1000 });
     expect((await owner.client.rpc("list_invitations", { target_org: org })).data).toEqual([]);
-  } finally { await fixture.cleanup(); }
+  } finally {
+    await fixture.cleanup();
+  }
 });

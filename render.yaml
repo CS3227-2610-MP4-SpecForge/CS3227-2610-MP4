@@ -1,0 +1,66 @@
+# Render Blueprint for the two hosted environments. Each environment is a
+# separate web service with its own Supabase project and its own secrets.
+#
+# Render never deploys on its own: autoDeployTrigger is off, and
+# .github/workflows/deploy.yml triggers each deploy through the Render API after
+# the CI gates and the migrations have passed, naming the exact commit to build.
+# Values marked sync: false are entered once per service in the Render dashboard
+# and never live in the repository.
+#
+# No healthCheckPath: /api/health answers 503 when Supabase is unreachable, and
+# Render would then refuse a deploy or restart a running app over a database
+# outage. Render's default port check keeps the app serving; the workflow's
+# release check is what verifies the revision, database and AI.
+services:
+  - type: web
+    name: specforge-dev
+    runtime: node
+    plan: free
+    region: singapore
+    branch: dev
+    autoDeployTrigger: "off"
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      # Exact public origin of this service, no trailing slash.
+      - key: APP_ORIGIN
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SOCLAAS_BASE_URL
+        value: https://soclaas-api.comp.nus.edu.sg/v1
+      - key: SOCLAAS_API_KEY
+        sync: false
+      - key: SOCLAAS_CHAT_MODEL
+        sync: false
+
+  - type: web
+    name: specforge-prod
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: "off"
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      # Exact public origin of this service, no trailing slash.
+      - key: APP_ORIGIN
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SOCLAAS_BASE_URL
+        value: https://soclaas-api.comp.nus.edu.sg/v1
+      - key: SOCLAAS_API_KEY
+        sync: false
+      - key: SOCLAAS_CHAT_MODEL
+        sync: false
+

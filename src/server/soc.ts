@@ -6,23 +6,55 @@ import type { AiAnswer, AiQuestion, AssistantIntent as AiIntent } from "../assis
 export type { AiIntent };
 export type AiReply = { reply: string; proposal: RequestFields | null; questions?: AiQuestion[] | null };
 export type RecentTurn = { message: string; reply: string };
-export type AiInput = { intent: AiIntent; fields: RequestFields; message: string; recent: RecentTurn[]; answers?: AiAnswer[] | null };
+export type AiInput = {
+  intent: AiIntent;
+  fields: RequestFields;
+  message: string;
+  recent: RecentTurn[];
+  answers?: AiAnswer[] | null;
+};
 export type AiProvider = (input: AiInput) => Promise<AiReply>;
-export type AiFailureCode = "unavailable" | "invalid_output" | "context_limit" | "configuration" | "local_timeout" | "upstream_http" | "network_error";
-export class AiFailure extends Error { constructor(readonly code: AiFailureCode, readonly diagnostic?: AiDiagnostic) { super("AI request could not be completed."); } }
-export function invalidOutput(reason: InvalidOutputReason) { return new AiFailure("invalid_output", { source: "invalid_output", reason }); }
+export type AiFailureCode =
+  | "unavailable"
+  | "invalid_output"
+  | "context_limit"
+  | "configuration"
+  | "local_timeout"
+  | "upstream_http"
+  | "network_error";
+export class AiFailure extends Error {
+  constructor(
+    readonly code: AiFailureCode,
+    readonly diagnostic?: AiDiagnostic,
+  ) {
+    super("AI request could not be completed.");
+  }
+}
+export function invalidOutput(reason: InvalidOutputReason) {
+  return new AiFailure("invalid_output", { source: "invalid_output", reason });
+}
 // Only this much conversation reaches SoC: the ticket itself records decisions.
 export const recentTurnLimit = 3;
 export const recentReplyLimit = 1000;
 const outputTokens: Record<AiIntent, number> = { draft: 2000, gaps: 600, edit: 1200 };
 // Normalize provider-only extras; client requests and storage keep strict schemas.
-const output = z.object({ reply: z.string().trim().nullish(), proposal: taskFields.strip().refine(value => value.title.trim() !== "" && value.description.trim() !== "").nullable().optional() });
+const output = z.object({
+  reply: z.string().trim().nullish(),
+  proposal: taskFields
+    .strip()
+    .refine(value => value.title.trim() !== "" && value.description.trim() !== "")
+    .nullable()
+    .optional(),
+});
 // A key that belongs to another intent means the model misread the request.
 // Small models sometimes double-escape line breaks inside their JSON, which
 // leaves a literal backslash-n in the text. Outside code fences that is never
 // what a ticket means, so it becomes a real line break; code is left alone.
 export function unescapeLineBreaks(text: string) {
-  return text.split(/(^```[^\n]*\n[\s\S]*?^```)/m).map((part, index) => index % 2 === 1 ? part : part.replace(/\\r\\n|\\n/g, "\n")).join("");
+  return text
+    .split(/(^```[^\n]*\n[\s\S]*?^```)/m)
+    .map((part, index) => (index % 2 === 1 ? part : part.replace(/\\r\\n|\\n/g, "\n")))
+    .join("");
 }
 // "## Title" (optionally "## Title: ...") or a plain "Title: ..." / "**Title:** ..." line.
 const titleLabel = /^(?:#{1,6}\s*title\b\s*:?|(?:\*\*|__)?title\b(?:\*\*|__)?\s*:\s*(?:\*\*|__)?)\s*(.*)$/i;
@@ -34,7 +66,12 @@ export function stripRepeatedTitle(description: string, title: string) {
   while (start < lines.length && lines[start].trim() === "") start++;
   const first = lines[start]?.trim() ?? "";
   const labelled = first.match(titleLabel);
-  const same = (value: string) => value.replace(/^#{1,6}\s*/, "").replace(/[*_]/g, "").trim().toLowerCase() === title.trim().toLowerCase();
+  const same = (value: string) =>
+    value
+      .replace(/^#{1,6}\s*/, "")
+      .replace(/[*_]/g, "")
+      .trim()
+      .toLowerCase() === title.trim().toLowerCase();
   let end: number;
   if (labelled && labelled[1].trim() === "") {
     end = start + 1;
@@ -45,25 +82,41 @@ export function stripRepeatedTitle(description: string, title: string) {
   return lines.slice(end).join("\n");
 }
 // A null placeholder for another intent's key is harmless and is ignored.
-const foreign = (value: unknown, keys: string[]) => typeof value === "object" && value !== null && keys.some(key => (value as Record<string, unknown>)[key] != null);
+const foreign = (value: unknown, keys: string[]) =>
+  typeof value === "object" && value !== null && keys.some(key => (value as Record<string, unknown>)[key] != null);
 export function validateAiReply(value: unknown): AiReply {
   if (foreign(value, ["edits", "questions"])) throw invalidOutput("invalid_schema");
   if (typeof value === "object" && value !== null && "proposal" in value) {
     const proposal = (value as { proposal: unknown }).proposal;
-    if (typeof proposal === "object" && proposal !== null && typeof (proposal as { description?: unknown }).description === "string" && typeof (proposal as { title?: unknown }).title === "string") {
+    if (
+      typeof proposal === "object" &&
+      proposal !== null &&
+      typeof (proposal as { description?: unknown }).description === "string" &&
+      typeof (proposal as { title?: unknown }).title === "string"
+    ) {
       const draft = proposal as { title: string; description: string };
-      value = { ...value, proposal: { ...draft, description: stripRepeatedTitle(unescapeLineBreaks(draft.description), draft.title) } };
+      value = {
+        ...value,
+        proposal: { ...draft, description: stripRepeatedTitle(unescapeLineBreaks(draft.description), draft.title) },
+      };
     }
   }
   const parsed = output.safeParse(value);
   if (!parsed.success || (!parsed.data.reply && !parsed.data.proposal)) throw invalidOutput("invalid_schema");
-  return { reply: parsed.data.reply || "Review these suggested ticket changes.", proposal: parsed.data.proposal ?? null, questions: null };
+  return {
+    reply: parsed.data.reply || "Review these suggested ticket changes.",
+    proposal: parsed.data.proposal ?? null,
+    questions: null,
+  };
 }
 const limited = (max: number) => z.string().refine(value => [...value].length <= max);
 export const editLimit = 10;
 const editOutput = z.object({
   reply: z.string().trim().nullish(),
-  edits: z.array(z.object({ field: z.enum(["title", "description"]), find: limited(24000), replace: limited(24000) })).max(editLimit).nullish(),
+  edits: z
+    .array(z.object({ field: z.enum(["title", "description"]), find: limited(24000), replace: limited(24000) }))
+    .max(editLimit)
+    .nullish(),
 });
 function occurrences(text: string, find: string) {
   if (find === "") return text === "" ? 1 : 0;
@@ -84,19 +137,37 @@ export function applyEdits(fields: RequestFields, value: unknown): AiReply {
     next[edit.field] = edit.find === "" ? replacement : next[edit.field].replace(edit.find, () => replacement);
   }
   const changed = !sameFields(next, fields);
-  if (changed && !taskFields.refine(item => item.title.trim() !== "" && item.description.trim() !== "").safeParse(next).success) throw invalidOutput("invalid_schema");
+  if (
+    changed &&
+    !taskFields.refine(item => item.title.trim() !== "" && item.description.trim() !== "").safeParse(next).success
+  )
+    throw invalidOutput("invalid_schema");
   if (!changed && !parsed.data.reply) throw invalidOutput("invalid_schema");
-  return { reply: parsed.data.reply || "Review these suggested ticket changes.", proposal: changed ? next : null, questions: null };
+  return {
+    reply: parsed.data.reply || "Review these suggested ticket changes.",
+    proposal: changed ? next : null,
+    questions: null,
+  };
 }
 const text = (max: number) => limited(max).refine(value => value.trim() !== "");
 export const questionLimits = { questions: 5, prompt: 300, options: 4, option: 120 } as const;
-export const aiQuestion = z.strictObject({ prompt: text(questionLimits.prompt), options: z.array(text(questionLimits.option)).min(2).max(questionLimits.options) });
-const gapsOutput = z.object({ reply: z.string().trim().nullish(), questions: z.array(aiQuestion).min(1).max(questionLimits.questions).nullish() });
+export const aiQuestion = z.strictObject({
+  prompt: text(questionLimits.prompt),
+  options: z.array(text(questionLimits.option)).min(2).max(questionLimits.options),
+});
+const gapsOutput = z.object({
+  reply: z.string().trim().nullish(),
+  questions: z.array(aiQuestion).min(1).max(questionLimits.questions).nullish(),
+});
 export function validateGaps(value: unknown): AiReply {
   if (foreign(value, ["proposal", "edits"])) throw invalidOutput("invalid_schema");
   const parsed = gapsOutput.safeParse(value);
   if (!parsed.success || (!parsed.data.reply && !parsed.data.questions)) throw invalidOutput("invalid_schema");
-  return { reply: parsed.data.reply || "Review these questions.", proposal: null, questions: parsed.data.questions ?? null };
+  return {
+    reply: parsed.data.reply || "Review these questions.",
+    proposal: null,
+    questions: parsed.data.questions ?? null,
+  };
 }
 // One short rule block shared by every intent, plus only the rules for the
 // requested intent. Instructions are constant; all variable text is data.
@@ -108,15 +179,28 @@ const intentRules: Record<AiIntent, string> = {
 };
 
 export type SocConfiguration = { baseUrl: string; model: string; key: string };
+/** True when the settings name the SoC service, a key and an enabled model. Makes no request. */
+export function socConfigured(configuration: SocConfiguration) {
+  return (
+    configuration.baseUrl === "https://soclaas-api.comp.nus.edu.sg/v1" &&
+    Boolean(configuration.key) &&
+    ["qwen3.5:9b", "gemma4:26b"].includes(configuration.model)
+  );
+}
 export type SocMessage = { role: string; content: string };
 
 // One bounded SoC request: configuration check, context bound, single deadline,
 // no transport retry, response-size cap and envelope checks. Features supply
 // their own instructions and their own output validator; nothing about the
 // transport or the failure mapping is duplicated per feature.
-export function requestSocJson(configuration: SocConfiguration, messages: SocMessage[], transport: typeof fetch = fetch, maxTokens = 2000): Promise<unknown> {
+export function requestSocJson(
+  configuration: SocConfiguration,
+  messages: SocMessage[],
+  transport: typeof fetch = fetch,
+  maxTokens = 2000,
+): Promise<unknown> {
   return (async () => {
-    if (configuration.baseUrl !== "https://soclaas-api.comp.nus.edu.sg/v1" || !configuration.key || !["qwen3.5:9b", "gemma4:26b"].includes(configuration.model)) throw new AiFailure("configuration");
+    if (!socConfigured(configuration)) throw new AiFailure("configuration");
     // Serialized-byte bound includes complete history and system instructions.
     // No context trimming; below the smallest discovered enabled context (65,536
     // tokens), even at one token per UTF-8 byte plus reserved output/overhead.
@@ -126,22 +210,70 @@ export function requestSocJson(configuration: SocConfiguration, messages: SocMes
     const deadline = AbortSignal.timeout(aiResponseTimeoutMs);
     let parsing: "invalid_envelope" | "invalid_json" | null = null;
     try {
-      const response = await transport(configuration.baseUrl + "/chat/completions", { method: "POST", headers: { Authorization: `Bearer ${configuration.key}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: configuration.model, messages, max_tokens: maxTokens, reasoning_effort: "none", response_format: { type: "json_object" } }), signal: deadline, redirect: "error", cache: "no-store" });
-      if (!response.ok) throw new AiFailure("upstream_http", { source: "upstream_http", http_status: response.status, elapsed_ms: elapsed() });
+      const response = await transport(configuration.baseUrl + "/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${configuration.key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: configuration.model,
+          messages,
+          max_tokens: maxTokens,
+          reasoning_effort: "none",
+          response_format: { type: "json_object" },
+        }),
+        signal: deadline,
+        redirect: "error",
+        cache: "no-store",
+      });
+      if (!response.ok)
+        throw new AiFailure("upstream_http", {
+          source: "upstream_http",
+          http_status: response.status,
+          elapsed_ms: elapsed(),
+        });
       if (!response.body) throw invalidOutput("missing_content");
-      const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let size = 0;
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
       try {
-        for (;;) { const { done, value } = await reader.read(); if (done) break; size += value.byteLength; if (size > 65536) { await reader.cancel(); throw invalidOutput("body_limit"); } chunks.push(value); }
-      } finally { reader.releaseLock(); }
-      const bytes = new Uint8Array(size); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          size += value.byteLength;
+          if (size > 65536) {
+            await reader.cancel();
+            throw invalidOutput("body_limit");
+          }
+          chunks.push(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.length;
+      }
       parsing = "invalid_envelope";
       const body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
       const choice = body?.choices?.[0];
-      if (!Array.isArray(body?.choices) || !choice || typeof choice !== "object" || !choice.message || typeof choice.message !== "object") throw invalidOutput("invalid_envelope");
+      if (
+        !Array.isArray(body?.choices) ||
+        !choice ||
+        typeof choice !== "object" ||
+        !choice.message ||
+        typeof choice.message !== "object"
+      )
+        throw invalidOutput("invalid_envelope");
       if (choice.finish_reason === "length") throw invalidOutput("truncated");
-      if (choice.message.tool_calls != null && (!Array.isArray(choice.message.tool_calls) || choice.message.tool_calls.length > 0)) throw invalidOutput("tool_calls");
+      if (
+        choice.message.tool_calls != null &&
+        (!Array.isArray(choice.message.tool_calls) || choice.message.tool_calls.length > 0)
+      )
+        throw invalidOutput("tool_calls");
       if (choice.finish_reason !== "stop") throw invalidOutput("unexpected_finish");
-      if (typeof choice.message.content !== "string" || !choice.message.content.trim()) throw invalidOutput("missing_content");
+      if (typeof choice.message.content !== "string" || !choice.message.content.trim())
+        throw invalidOutput("missing_content");
       parsing = "invalid_json";
       return JSON.parse(choice.message.content);
     } catch (failure) {
@@ -155,12 +287,22 @@ export function requestSocJson(configuration: SocConfiguration, messages: SocMes
 
 export function createSocProvider(configuration: SocConfiguration, transport: typeof fetch = fetch): AiProvider {
   return async input => {
-    const recent = input.recent.slice(-recentTurnLimit).map(turn => ({ message: turn.message, reply: [...turn.reply].slice(0, recentReplyLimit).join("") }));
+    const recent = input.recent
+      .slice(-recentTurnLimit)
+      .map(turn => ({ message: turn.message, reply: [...turn.reply].slice(0, recentReplyLimit).join("") }));
     const messages: SocMessage[] = [
       { role: "system", content: `${sharedRules} ${intentRules[input.intent]}` },
       // Untrusted ticket and conversation text travel as one JSON payload,
       // never interpolated into the instruction text.
-      { role: "user", content: JSON.stringify({ ticket: input.fields, instruction: input.message, recent, ...(input.answers ? { answers: input.answers } : {}) }) },
+      {
+        role: "user",
+        content: JSON.stringify({
+          ticket: input.fields,
+          instruction: input.message,
+          recent,
+          ...(input.answers ? { answers: input.answers } : {}),
+        }),
+      },
     ];
     const value = await requestSocJson(configuration, messages, transport, outputTokens[input.intent]);
     if (input.intent === "edit") return applyEdits(input.fields, value);

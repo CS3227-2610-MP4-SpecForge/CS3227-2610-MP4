@@ -76,6 +76,14 @@ independent of banner expiry. Clearing that value does not clear unrelated globa
 notifications. It can override the default danger tone per event. Use ordinary
 state for user input and field validation, rather than this notification adapter.
 
+An ended session is not a transient notification. `SessionBanner`, mounted once
+by RootLayout, shows the persistent "session has ended" alert for any 401 from
+`api` and never redirects. Do not add per-component 401 handling beyond stopping
+retries; a 403 stays an in-place "no permission" message. Such a 401 carries
+`sessionEndedMessage`, which the notification provider never shows as a toast,
+so a toast cannot cover the banner; other toasts still appear. Session notes of
+your own belong inline, not in `notify`.
+
 ## Modals
 
 Use `Modal` from the shared UI library for overlay windows. It takes `label`,

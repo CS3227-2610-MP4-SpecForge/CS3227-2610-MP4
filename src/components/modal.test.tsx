@@ -4,9 +4,11 @@ import { expectAccessible, renderComponent } from "@/tests/render";
 import { Modal } from "./modal";
 
 function renderModal(onClose = vi.fn()) {
-  return renderComponent(<Modal label="Edit ticket" closeLabel="Close editor" onClose={onClose} footer={<button>Save</button>}>
-    <p>Ticket body</p>
-  </Modal>);
+  return renderComponent(
+    <Modal label="Edit ticket" closeLabel="Close editor" onClose={onClose} footer={<button>Save</button>}>
+      <p>Ticket body</p>
+    </Modal>,
+  );
 }
 
 describe("Modal", () => {

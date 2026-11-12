@@ -6,26 +6,69 @@ import type { RequestFields } from "@/requests";
 import { expectAccessible, renderComponent } from "@/tests/render";
 import { ChangeReview } from "./change-review";
 
-const before: RequestFields = { title: "Tutorial text", description: "## Summary\n\nOld intro.\n\n## Notes\n\nKeep this." };
-const after: RequestFields = { title: "Remove multi-enchantment from tutorials", description: "## Summary\n\nNew intro.\n\n## Notes\n\nKeep this.\n\n- Level 7" };
+const before: RequestFields = {
+  title: "Tutorial text",
+  description: "## Summary\n\nOld intro.\n\n## Notes\n\nKeep this.",
+};
+const after: RequestFields = {
+  title: "Remove multi-enchantment from tutorials",
+  description: "## Summary\n\nNew intro.\n\n## Notes\n\nKeep this.\n\n- Level 7",
+};
 
 function turn(input: RequestFields, proposal: RequestFields): ChatTurn {
   return {
-    id: "turn-1", turn_key: "key-1", base_revision: 1, input_fields: input, message: "Tighten it", status: "completed",
-    generation: 1, lease_until: "2026-11-12T00:00:00Z", reply: "Done", proposal, error_code: null,
-    created_at: "2026-11-12T00:00:00Z", intent: "edit" as ChatTurn["intent"], questions: null, answers: null,
+    id: "turn-1",
+    turn_key: "key-1",
+    base_revision: 1,
+    input_fields: input,
+    message: "Tighten it",
+    status: "completed",
+    generation: 1,
+    lease_until: "2026-11-12T00:00:00Z",
+    reply: "Done",
+    proposal,
+    error_code: null,
+    created_at: "2026-11-12T00:00:00Z",
+    intent: "edit" as ChatTurn["intent"],
+    questions: null,
+    answers: null,
   };
 }
 
-function Harness({ input = before, proposal = after, fields: initial = input, blockedReason = null, onChange, onReject }: {
-  input?: RequestFields; proposal?: RequestFields; fields?: RequestFields; blockedReason?: string | null;
-  onChange(next: RequestFields): void; onReject(ids: string[]): void;
+function Harness({
+  input = before,
+  proposal = after,
+  fields: initial = input,
+  blockedReason = null,
+  onChange,
+  onReject,
+}: {
+  input?: RequestFields;
+  proposal?: RequestFields;
+  fields?: RequestFields;
+  blockedReason?: string | null;
+  onChange(next: RequestFields): void;
+  onReject(ids: string[]): void;
 }) {
   const [fields, setFields] = useState(initial);
   const [rejected, setRejected] = useState<ReadonlySet<string>>(new Set());
-  return <ChangeReview turn={turn(input, proposal)} fields={fields} rejected={rejected} blockedReason={blockedReason} onClose={() => {}}
-    onChange={next => { setFields(next); onChange(next); }}
-    onReject={ids => { setRejected(current => new Set([...current, ...ids])); onReject(ids); }} />;
+  return (
+    <ChangeReview
+      turn={turn(input, proposal)}
+      fields={fields}
+      rejected={rejected}
+      blockedReason={blockedReason}
+      onClose={() => {}}
+      onChange={next => {
+        setFields(next);
+        onChange(next);
+      }}
+      onReject={ids => {
+        setRejected(current => new Set([...current, ...ids]));
+        onReject(ids);
+      }}
+    />
+  );
 }
 
 const change = (n: number, field: string) => page.getByRole("region", { name: `Change ${n} of 3: ${field}` });
@@ -83,7 +126,11 @@ describe("ChangeReview", () => {
     await expect.element(status()).toHaveTextContent("2 applied, 0 rejected");
     await expect.element(page.getByText(/could not be applied/)).not.toBeInTheDocument();
     for (const at of [1, 2]) {
-      await expect.element(page.getByRole("region", { name: `Change ${at} of 2: Description` }).getByRole("button", { name: "Undo" })).toBeVisible();
+      await expect
+        .element(
+          page.getByRole("region", { name: `Change ${at} of 2: Description` }).getByRole("button", { name: "Undo" }),
+        )
+        .toBeVisible();
     }
   });
 
@@ -93,9 +140,19 @@ describe("ChangeReview", () => {
     const input = { title: "T", description: "a\nb\nc\nb\nc\nd" };
     const proposal = { title: "T", description: "a\nB1\nc\nb\nC1\nd" };
     const onChange = vi.fn();
-    await renderComponent(<Harness input={input} proposal={proposal} fields={{ title: "T", description: "a\nb\nc\nd" }} onChange={onChange} onReject={vi.fn()} />);
+    await renderComponent(
+      <Harness
+        input={input}
+        proposal={proposal}
+        fields={{ title: "T", description: "a\nb\nc\nd" }}
+        onChange={onChange}
+        onReject={vi.fn()}
+      />,
+    );
     await page.getByRole("button", { name: "Accept all" }).click();
-    await expect.element(page.getByText("1 change could not be applied because an earlier change overlapped it.")).toBeVisible();
+    await expect
+      .element(page.getByText("1 change could not be applied because an earlier change overlapped it."))
+      .toBeVisible();
     expect(onChange).toHaveBeenCalledExactlyOnceWith({ title: "T", description: "a\nB1\nc\nd" });
   });
 
@@ -116,7 +173,9 @@ describe("ChangeReview", () => {
   });
 
   it("disables accepting while blocked and explains why", async () => {
-    await renderComponent(<Harness blockedReason="Wait for the AI request to finish." onChange={vi.fn()} onReject={vi.fn()} />);
+    await renderComponent(
+      <Harness blockedReason="Wait for the AI request to finish." onChange={vi.fn()} onReject={vi.fn()} />,
+    );
     await expect.element(page.getByText("Wait for the AI request to finish.")).toBeVisible();
     await expect.element(page.getByRole("button", { name: "Accept all" })).toBeDisabled();
     await expect.element(change(1, "Title").getByRole("button", { name: "Accept" })).toBeDisabled();

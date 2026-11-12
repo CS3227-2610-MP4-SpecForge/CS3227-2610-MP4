@@ -25,7 +25,11 @@ for (const role of ["PM", "Developer"] as const) {
       await expect(page.getByText("Verified", { exact: true })).toBeVisible();
       const createdAt = (await actor.client.auth.getUser()).data.user!.created_at;
       await expect(page.locator("time")).toHaveAttribute("datetime", createdAt);
-      await expect(page.locator("time")).toHaveText(new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(createdAt)));
+      await expect(page.locator("time")).toHaveText(
+        new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(
+          new Date(createdAt),
+        ),
+      );
       await expect(page.getByRole("heading", { name: "Profile team", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
       const newName = `Renamed_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
@@ -39,7 +43,9 @@ for (const role of ["PM", "Developer"] as const) {
       await page.screenshot({ path: `test-results/profile-${role}.png`, fullPage: true });
       await page.reload();
       await expect(page.getByLabel("Username", { exact: true })).toHaveValue(newName.toLowerCase());
-    } finally { await fixture.cleanup(); }
+    } finally {
+      await fixture.cleanup();
+    }
   });
 }
 
@@ -53,15 +59,25 @@ test("profile handles loading failures, validation, save failures and cancelled 
     await page.getByLabel("Password", { exact: true }).fill(actor.password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL(/\/workspace$/);
-    await page.route("**/api/account", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Profile temporarily unavailable." }) }));
+    await page.route("**/api/account", route =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Profile temporarily unavailable." }),
+      }),
+    );
     await page.goto("/profile");
-    await expect(page.getByRole("alert").filter({ hasText: "Profile temporarily unavailable." })).toHaveText("Profile temporarily unavailable.");
+    await expect(page.getByRole("alert").filter({ hasText: "Profile temporarily unavailable." })).toHaveText(
+      "Profile temporarily unavailable.",
+    );
     await page.unroute("**/api/account");
     await page.getByRole("button", { name: "Retry loading profile" }).click();
     const username = page.getByLabel("Username", { exact: true });
     await expect(username).toHaveValue(actor.username);
     await expect(page.getByRole("button", { name: /Account options$/ })).toBeVisible();
-    await expect(page.getByText("No organisations yet. Create a team or accept an invitation to get started.")).toBeVisible();
+    await expect(
+      page.getByText("No organisations yet. Create a team or accept an invitation to get started."),
+    ).toBeVisible();
     await username.fill("Legacy_reserved");
     const save = page.getByRole("button", { name: "Save changes", exact: true });
     await save.click();
@@ -75,11 +91,18 @@ test("profile handles loading failures, validation, save failures and cancelled 
     await expect(save).toBeDisabled();
     await username.fill("local_unsaved_name");
     await page.route("**/api/account", async route => {
-      if (route.request().method() === "POST") await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Unable to save. Please retry." }) });
+      if (route.request().method() === "POST")
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Unable to save. Please retry." }),
+        });
       else await route.continue();
     });
     await save.click();
-    await expect(page.getByRole("alert").filter({ hasText: "Unable to save. Please retry." })).toHaveText("Unable to save. Please retry.");
+    await expect(page.getByRole("alert").filter({ hasText: "Unable to save. Please retry." })).toHaveText(
+      "Unable to save. Please retry.",
+    );
     await expect(username).toHaveValue("local_unsaved_name");
     page.once("dialog", dialog => dialog.dismiss());
     await page.getByRole("link", { name: "SpecForge home" }).click();
@@ -97,7 +120,9 @@ test("profile handles loading failures, validation, save failures and cancelled 
     page.once("dialog", dialog => dialog.accept());
     await page.getByRole("link", { name: "SpecForge home" }).click();
     await expect(page).toHaveURL(/\/workspace$/);
-  } finally { await fixture.cleanup(); }
+  } finally {
+    await fixture.cleanup();
+  }
 });
 
 test("signed-out profile visitors are sent to sign in", async ({ page }) => {

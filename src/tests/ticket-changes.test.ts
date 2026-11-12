@@ -1,8 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { applyChange, applyChanges, changeStatus, reviewStatus, summarizeChanges, ticketChanges, undoChange, wordDiff } from "../ticket-changes";
+import {
+  applyChange,
+  applyChanges,
+  changeStatus,
+  reviewStatus,
+  summarizeChanges,
+  ticketChanges,
+  undoChange,
+  wordDiff,
+} from "../ticket-changes";
 
-const before = { title: "Tutorial text", description: "## Summary\n\nOld intro.\n\n## Acceptance criteria\n\n- Level 3\n- Level 5" };
-const after = { title: "Remove multi-enchantment from tutorials", description: "## Summary\n\nNew intro.\n\n## Acceptance criteria\n\n- Level 3\n- Level 5\n- Level 7" };
+const before = {
+  title: "Tutorial text",
+  description: "## Summary\n\nOld intro.\n\n## Acceptance criteria\n\n- Level 3\n- Level 5",
+};
+const after = {
+  title: "Remove multi-enchantment from tutorials",
+  description: "## Summary\n\nNew intro.\n\n## Acceptance criteria\n\n- Level 3\n- Level 5\n- Level 7",
+};
 
 describe("ticket changes", () => {
   it("splits a proposal into the title and each changed description block", () => {
@@ -45,7 +60,9 @@ describe("ticket changes", () => {
     const [, intro] = ticketChanges(before, after);
     const edited = { ...before, description: before.description.replace("- Level 5", "- Level 5 and 6") };
     expect(changeStatus(intro, edited)).toBe("open");
-    expect(applyChange(intro, edited)!.description).toContain("New intro.\n\n## Acceptance criteria\n\n- Level 3\n- Level 5 and 6");
+    expect(applyChange(intro, edited)!.description).toContain(
+      "New intro.\n\n## Acceptance criteria\n\n- Level 3\n- Level 5 and 6",
+    );
   });
 
   it("marks a change outdated when its original text was edited", () => {
@@ -66,15 +83,27 @@ describe("ticket changes", () => {
   it("anchors insertions and deletions at the start and end of a field", () => {
     const start = ticketChanges({ title: "T", description: "Body" }, { title: "T", description: "Intro\nBody" });
     expect(start.map(change => [change.before, change.after])).toEqual([["", "Intro"]]);
-    expect(applyChange(start[0], { title: "T", description: "Body" })).toEqual({ title: "T", description: "Intro\nBody" });
+    expect(applyChange(start[0], { title: "T", description: "Body" })).toEqual({
+      title: "T",
+      description: "Intro\nBody",
+    });
     const end = ticketChanges({ title: "T", description: "Body\nOutro" }, { title: "T", description: "Body" });
-    expect(applyChange(end[0], { title: "T", description: "Body\nOutro" })).toEqual({ title: "T", description: "Body" });
+    expect(applyChange(end[0], { title: "T", description: "Body\nOutro" })).toEqual({
+      title: "T",
+      description: "Body",
+    });
     expect(changeStatus(end[0], { title: "T", description: "Body" })).toBe("applied");
   });
 
   it("fills an empty description and inserts replacement text literally", () => {
-    const [change] = ticketChanges({ title: "T", description: "" }, { title: "T", description: "Use $& and $1 literally" });
-    expect(applyChange(change, { title: "T", description: "" })).toEqual({ title: "T", description: "Use $& and $1 literally" });
+    const [change] = ticketChanges(
+      { title: "T", description: "" },
+      { title: "T", description: "Use $& and $1 literally" },
+    );
+    expect(applyChange(change, { title: "T", description: "" })).toEqual({
+      title: "T",
+      description: "Use $& and $1 literally",
+    });
   });
 
   it("reports the change card status from the ticket and this page's rejections", () => {
@@ -92,7 +121,10 @@ describe("ticket changes", () => {
     const original = { title: "Keep", description: "Keep\nOld\nKeep" };
     const proposal = { title: "Keep", description: "Keep\nKeep\nKeep" };
     const changes = ticketChanges(original, proposal);
-    expect(changes.map(change => [change.before, change.after])).toEqual([["Old", ""], ["", "Keep"]]);
+    expect(changes.map(change => [change.before, change.after])).toEqual([
+      ["Old", ""],
+      ["", "Keep"],
+    ]);
     expect(applyChanges(changes, original)).toEqual({ fields: proposal, skipped: 0 });
     for (const change of changes) expect(changeStatus(change, proposal)).toBe("applied");
     expect(reviewStatus(changes, proposal, new Set())).toBe("All applied");
@@ -109,7 +141,10 @@ describe("ticket changes", () => {
   });
 
   it("skips a batched change that overlaps an earlier one in an edited ticket", () => {
-    const changes = ticketChanges({ title: "T", description: "a\nb\nc\nb\nc\nd" }, { title: "T", description: "a\nB1\nc\nb\nC1\nd" });
+    const changes = ticketChanges(
+      { title: "T", description: "a\nb\nc\nb\nc\nd" },
+      { title: "T", description: "a\nB1\nc\nb\nC1\nd" },
+    );
     const edited = { title: "T", description: "a\nb\nc\nd" };
     for (const change of changes) expect(changeStatus(change, edited)).toBe("open");
     expect(applyChanges(changes, edited)).toEqual({ fields: { title: "T", description: "a\nB1\nc\nd" }, skipped: 1 });
@@ -119,19 +154,34 @@ describe("ticket changes", () => {
     const changes = ticketChanges(before, after);
     const [title, intro] = changes;
     const edited = { ...applyChange(title, before)!, description: before.description.replace("Old intro.", "Mine.") };
-    expect(applyChanges(changes, edited)).toEqual({ fields: { ...edited, description: edited.description + "\n- Level 7" }, skipped: 2 });
+    expect(applyChanges(changes, edited)).toEqual({
+      fields: { ...edited, description: edited.description + "\n- Level 7" },
+      skipped: 2,
+    });
     expect(changeStatus(intro, edited)).toBe("outdated");
   });
 
   it("highlights only the changed words on each side", () => {
     expect(wordDiff("Change the start of level tutorial", "Change the end of level tutorial")).toEqual({
-      before: [{ text: "Change the ", changed: false }, { text: "start ", changed: true }, { text: "of level tutorial", changed: false }],
-      after: [{ text: "Change the ", changed: false }, { text: "end ", changed: true }, { text: "of level tutorial", changed: false }],
+      before: [
+        { text: "Change the ", changed: false },
+        { text: "start ", changed: true },
+        { text: "of level tutorial", changed: false },
+      ],
+      after: [
+        { text: "Change the ", changed: false },
+        { text: "end ", changed: true },
+        { text: "of level tutorial", changed: false },
+      ],
     });
   });
 
   it.each([
-    ["a new paragraph between blank lines", "# H\n\nPara one.\n\nPara two.", "# H\n\nPara one.\n\nNew para.\n\nPara two."],
+    [
+      "a new paragraph between blank lines",
+      "# H\n\nPara one.\n\nPara two.",
+      "# H\n\nPara one.\n\nNew para.\n\nPara two.",
+    ],
     ["a repeated line", "A\nB", "A\nB\nB"],
     ["an extra blank line", "A\n\nB", "A\n\n\nB"],
     ["a removed duplicate line", "A\nA\nB", "A\nB"],

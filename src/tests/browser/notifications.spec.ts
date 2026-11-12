@@ -8,9 +8,19 @@ test("test-plan notifications expire without losing saved content or retry contr
   const developer = await fixture.actor("Developer");
   const org = (await pm.client.rpc("create_organisation", { organisation_name: "Notification plans" })).data;
   await pm.client.rpc("invite_member", { target_org: org, target_email: developer.email });
-  await developer.client.rpc("respond_invitation", { invitation_id: (await developer.client.rpc("list_invitations")).data[0].id, decision: "accept" });
+  await developer.client.rpc("respond_invitation", {
+    invitation_id: (await developer.client.rpc("list_invitations")).data[0].id,
+    decision: "accept",
+  });
   const ticket = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
-  const published = await pm.client.rpc("publish_request", { target_org: org, request_id: ticket.id, expected_revision: 1, content: { title: "Shared feedback", description: "Show action outcomes above the current page." }, acknowledged: true, first_submission: true });
+  const published = await pm.client.rpc("publish_request", {
+    target_org: org,
+    request_id: ticket.id,
+    expected_revision: 1,
+    content: { title: "Shared feedback", description: "Show action outcomes above the current page." },
+    acknowledged: true,
+    first_submission: true,
+  });
   expect(published.error).toBeNull();
   try {
     await page.goto("/sign-in");
@@ -27,9 +37,15 @@ test("test-plan notifications expire without losing saved content or retry contr
     await expect(success).toHaveCount(0, { timeout: 4500 });
     await expect(page.getByRole("region", { name: "Saved test plan", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Generate again", exact: true }).click();
-    await page.route(`**/api/organisations/${org}/requests/${ticket.id}/test-plan`, route => route.request().method() === "PUT"
-      ? route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Plan saving temporarily unavailable." }) })
-      : route.continue());
+    await page.route(`**/api/organisations/${org}/requests/${ticket.id}/test-plan`, route =>
+      route.request().method() === "PUT"
+        ? route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({ error: "Plan saving temporarily unavailable." }),
+          })
+        : route.continue(),
+    );
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("button", { name: "Replace saved plan", exact: true }).click();
     const failure = page.getByRole("alert").filter({ hasText: "Plan saving temporarily unavailable." });
@@ -38,5 +54,7 @@ test("test-plan notifications expire without losing saved content or retry contr
     await expect(failure).toHaveCount(0, { timeout: 4500 });
     await expect(page.getByRole("region", { name: "Saved test plan", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Replace saved plan", exact: true })).toBeEnabled();
-  } finally { await fixture.cleanup(); }
+  } finally {
+    await fixture.cleanup();
+  }
 });

@@ -12,9 +12,9 @@ a clear, reviewable feature ticket with help from an LLM, publishes it to the
 organisation, and tracks it through delivery alongside the developers who build
 it.
 
-- **Live application:** [specforge-prod.vercel.app](https://specforge-prod.vercel.app)
+- **Live application:** [specforge-prod.onrender.com](https://specforge-prod.onrender.com)
   (production). The development environment runs separately at
-  [specforge-dev.vercel.app](https://specforge-dev.vercel.app). Both are
+  [specforge-dev.onrender.com](https://specforge-dev.onrender.com). Both are
   deployed by the team's own GitHub Actions workflows in `.github/workflows/`,
   each against its own Supabase project.
 - **Source:** [github.com/CS3227-2610-MP4-SpecForge/CS3227-2610-MP4](https://github.com/CS3227-2610-MP4-SpecForge/CS3227-2610-MP4)
@@ -57,6 +57,8 @@ cookies, and every mutation is checked against one exactly configured origin.
 - [User Guide](UserGuide.md) — every feature and how to try it.
 - [Developer Guide](DeveloperGuide.md) — design, module boundaries, setup, checks
   and the security and deployment gates.
+- [Acceptance index](AcceptanceIndex.md) — each feature's spec, tests, session logs
+  and whether it has been checked on a hosted environment.
 - [Reflections](Reflections.md) — what multi-agent development and context
   engineering actually cost and returned on this project.
 

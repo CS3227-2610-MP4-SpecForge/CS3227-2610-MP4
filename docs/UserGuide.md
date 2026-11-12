@@ -1,5 +1,18 @@
 # SpecForge User Guide
 
+## Contents
+
+- [Current features](#current-features) and [where to run it](#where-to-run-it)
+- [Five-minute walkthrough](#five-minute-walkthrough)
+- [Try the local app](#try-the-local-app): accounts, verification and organisations
+- [Your profile](#your-profile)
+- [Notifications](#notifications) and [when your session ends](#when-your-session-ends)
+- [Invitations and membership](#invitations-and-membership)
+- [Ticket delivery and team discussion](#ticket-delivery-and-team-discussion)
+- [Tasks and AI chat](#tasks-and-ai-chat) (Product Managers)
+- [Test plans](#test-plans-developer-ai) (Developers)
+- [Failures](#failures)
+
 ## Current features
 
 This version supports email/password signup, email-code verification, login,
@@ -13,16 +26,73 @@ plans on published tickets ([below](#test-plans-developer-ai)).
 
 Demo kits remain future work.
 
-There is no public application URL yet, so testing is local for now. The
-deployment pipeline exists (see
-[Deployment](DeveloperGuide.md#deployment-and-environments)) but awaits hosting
-setup, and this guide and the product website will carry the URL once a
-deployment has actually run.
+## Where to run it
+
+- **Production:** <https://specforge-prod.onrender.com>
+- **Development:** <https://specforge-dev.onrender.com>
+
+Both are deployed by the team's GitHub Actions workflows (see
+[Deployment](DeveloperGuide.md#deployment-and-environments)). Signing up on a
+hosted environment needs the verification email to reach you; if no code
+arrives, use the local app below, where every email is captured locally.
+
+## Five-minute walkthrough
+
+This tour uses both roles. Use two browsers, or one normal and one private
+window, so each account stays signed in. The sections after this one explain
+every step in more detail.
+
+1. **Create two accounts.** In the first window choose **Create an account**,
+   pick **Product Manager**, and verify the email with its code (see
+   [Try the local app](#try-the-local-app) for where local codes arrive). In the
+   second window create and verify a **Developer** account.
+2. **Create an organisation.** As the PM, enter a name under **Create an
+   organisation** and choose **Create organisation**. You become its admin.
+
+   ![An empty workspace with the Create an organisation panel](images/workspace-empty.png)
+
+3. **Invite the Developer.** Choose **Manage** on the organisation card, enter
+   the Developer's email under **Invite by email**, and choose **Send invitation**. In the
+   Developer's window, choose **Refresh membership**, then **Accept** under
+   **Your invitations**.
+4. **Draft a ticket with AI.** As the PM, open the organisation and choose
+   **New task**. Type a rough idea into **Description**, for example "Remember
+   filters when I return to the request list", then choose **Draft with AI**.
+   The draft fills the editor; **Undo AI draft** puts your idea back.
+5. **Review a change.** Ask the **AI assistant** for an improvement, such as
+   "Suggest clearer wording". When its reply shows a change card, choose
+   **Review changes**.
+
+   ![The ticket editor with the AI assistant open and a change card](images/ticket-editor-ai.png)
+
+   The window shows your text beside the proposed text. **Accept** or **Reject**
+   each change, or use **Accept all**, then **Done**.
+
+   ![Reviewing one proposed title change](images/change-review.png)
+
+   If a request fails, the reply says your ticket is unchanged and the request
+   was not counted. Open **Details** to see what happened, then **Try again**.
+   (This example failure was simulated locally.)
+
+   ![A failed AI request with its Details open](images/ai-failure-details.png)
+
+6. **Publish.** Choose **Publish**. The banner above the title changes from
+   private to visible to the organisation's members.
+7. **Assign.** In **Assignees**, type part of the Developer's email, pick them
+   from the list, and choose **Update** to save the assignment.
+8. **Plan the tests.** As the Developer, open the ticket from the organisation's
+   Requests table, choose **Show test plan**, then **Generate test cases**.
+   Check the cases and choose **Save to ticket**; every member can now see the
+   saved plan.
+
+   ![Three suggested test cases ready to review and save](images/test-plan-panel.png)
 
 ## Try the local app
 
 Follow the [developer setup](DeveloperGuide.md#local-setup), then open
 <http://localhost:3000>. Use disposable test information, not production data.
+On a hosted environment the steps are the same, except that the code arrives in
+your own inbox instead of the local one.
 
 1. Choose **Create an account**. Enter a username, an email address, and a
    password of 12–128 characters. Select **Product Manager** or **Developer**
@@ -44,7 +114,7 @@ Follow the [developer setup](DeveloperGuide.md#local-setup), then open
 4. Enter a name of 1–80 characters and choose **Create organisation**. You become
    its first admin. Either application role can create multiple organisations.
 5. Select an organisation card to open its requests page. Only organisations you belong
-   to appear. This version's selection lasts until the page reloads.
+   to appear. The page has its own address, so you can reload or bookmark it.
 6. Hover over your username and email in the navbar (or select them by click or
    keyboard), then choose **Sign out**. If a ticket has unsaved work, cancel the
    departure warning to keep editing or confirm to leave. Use the ordinary
@@ -82,6 +152,21 @@ Loading indicators, field guidance, save/conflict state and saved AI failure
 history stay beside their related controls. Retry/reconciliation controls and
 unsaved input remain available after an error banner disappears. Signup's
 verification link also remains available after its notification expires.
+
+## When your session ends
+
+If you sign out in another tab, or your sign-in expires, the next action that
+reaches the server shows a red banner below the navbar: "Your session has ended.
+Sign in again to continue." It stays until an action succeeds again. SpecForge
+does not move you away from the page, so text you were typing stays on screen.
+Autosave stops; a ticket draft shows **Retry draft save** so you can save after
+signing in again.
+
+Choose **Sign in again** to go to the sign-in page. If the ticket has unsaved
+work, the usual departure warning asks first. To keep the text, cancel, copy it,
+or sign in from a new tab and then retry the save. The workspace and profile
+pages hold no unsaved work and still go straight to sign-in. A "no permission"
+message is different: your session is fine, but your access to that item changed.
 
 ## Invitations and membership
 
@@ -165,9 +250,24 @@ Other members can read and comment. Draft/publication state remains separate fro
 delivery status. Overdue and due-today indicators use your browser's local date;
 Done and Cancelled tickets are excluded from overdue work.
 
+Priority appears as a colored pill: **Low** is yellow, **Medium** orange, and
+**High** red. Existing Urgent tickets become High. Click the priority or delivery
+status pill to choose a value; use arrow keys and Enter, or Escape to dismiss.
+Status colors are gray (To do/Cancelled), blue (In progress), purple (In review),
+and green (Done). Read-only tickets and request-list badges use the same pills.
+
+Click **Due date** to open the purple calendar. Choose a day, navigate with the
+month/year controls, or enter **Exact date** as YYYY-MM-DD and select **Apply
+date**. **Today** selects your local calendar day; **Clear date** leaves the
+ticket Unscheduled. Escape or clicking outside dismisses the calendar without
+applying pending text. Use arrow keys to move between days and Enter to select.
+Draft changes autosave; published changes still require **Update**.
+
 The Requests table shows **Title**, **Owner**, **Assignees**, **Status** and
 **Priority**. Select a title to open the ticket. On narrow screens, scroll the
-table sideways to see all columns.
+table sideways to see all columns. Before any ticket exists, a PM sees how to
+start one with **New task**, and a Developer sees that tickets appear once a
+Product Manager publishes them.
 
 Select a status or priority dropdown in the table to save that change immediately.
 The owner can change priority, including on private drafts. The owner and
@@ -269,7 +369,7 @@ suggestion stay usable. Accepted changes are ordinary edits, so if a save proble
 appears, accepting is paused until you resolve it. Recovered or historical AI
 drafts never automatically replace the editor.
 
-All draft fields autosave750ms after a pause. Accepting AI changes in a draft
+All draft fields autosave 750 ms after a pause. Accepting AI changes in a draft
 follows that same autosave. **Publish** requires a nonempty title/description and publishes all ticket
 fields together. Due date and assignees are optional. Published
 edits, including delivery details and accepted AI changes, remain local until
@@ -301,8 +401,8 @@ ticket snapshot still matches. **Details** explains what happened:
 
 - **Local deadline.** The notice reads “AI response timed out after 90 seconds.”
   Earlier timeouts show their recorded duration in whole seconds.
-- **Upstream HTTP error:** SoC returned an actual status such as502,504 or429;
-  the notice includes that status and app-observed elapsed time. A502 alone
+- **Upstream HTTP error:** SoC returned an actual status such as 502, 504 or 429;
+  the notice includes that status and app-observed elapsed time. A 502 alone
   does not prove the upstream cause was a timeout.
 - **Network failure:** the connection or response stream failed without an
   upstream HTTP error response.
@@ -329,13 +429,13 @@ App limits (not SoC quotas): one active AI request per ticket/account, the
 hourly limits above, 4,000-character instructions and a 90-second provider
 deadline. AI sees the current ticket, your instruction and at most your three
 latest completed requests. If the ticket alone is too long for AI, the panel
-says so before sending. Chat storage is bounded to 1MiB per ticket. Long or
+says so before sending. Chat storage is bounded to 1 MiB per ticket. Long or
 truncated AI responses fail safely; ask for a concise change or edit manually.
 
 Markdown display supports headings, lists, paragraphs, `**bold text**`,
 `*italic text*` or `_italic text_`, and fenced code. Raw HTML, images and links
 are displayed as text.
-Ticket lists use 50-item pages with **Load more tickets**. No hosted application URL is available yet.
+Ticket lists use 50-item pages with **Load more tickets**.
 
 ## Test plans (Developer AI)
 
@@ -388,23 +488,14 @@ requirements: check them against the ticket before relying on them.
   may block the action. Do not repeatedly submit a timed-out change; refresh first.
 - Workspace loading failure: use **Retry loading workspace**. Signed-out users
   are redirected to sign-in.
+- Session ended on any other page: see [When your session ends](#when-your-session-ends).
 - Test plan AI failure: the panel names what happened (timeout, upstream error,
   invalid output, usage limit). Nothing is saved to the ticket. **Retry
   generation** repeats the same request explicitly; it is disabled once the
   ticket has changed, in which case generate a new plan instead.
+- Test plan could not load: the panel shows why and **Retry loading test
+  plan**. It says "No test plan yet." only after it has checked successfully.
 
-Online ordinary signup will require configured SMTP delivery. Planned generated
-demo accounts will bypass email delivery, but are not provisioned in this slice.
-
-Priority appears as a colored pill: **Low** is yellow, **Medium** orange, and
-**High** red. Existing Urgent tickets become High. Click the priority or delivery
-status pill to choose a value; use arrow keys and Enter, or Escape to dismiss.
-Status colors are gray (To do/Cancelled), blue (In progress), purple (In review),
-and green (Done). Read-only tickets and request-list badges use the same pills.
-
-Click **Due date** to open the purple calendar. Choose a day, navigate with the
-month/year controls, or enter **Exact date** as YYYY-MM-DD and select **Apply
-date**. **Today** selects your local calendar day; **Clear date** leaves the
-ticket Unscheduled. Escape or clicking outside dismisses the calendar without
-applying pending text. Use arrow keys to move between days and Enter to select.
-Draft changes autosave; published changes still require **Update**.
+- No verification email on a hosted environment: hosted signup depends on the
+  environment's email delivery. Use the local app instead. Generated demo
+  accounts that skip email are planned but not provided yet.

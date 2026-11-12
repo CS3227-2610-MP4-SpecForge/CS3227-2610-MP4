@@ -15,7 +15,9 @@ export function localFixture() {
     ids.delete(id);
   }
   return {
-    admin, client, deleteActor,
+    admin,
+    client,
+    deleteActor,
     unverifiedSession(id: string) {
       const encoded = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
       const now = Math.floor(Date.now() / 1000);
@@ -26,7 +28,12 @@ export function localFixture() {
     async actor(role: "PM" | "Developer", confirmed = true, email = `test-${randomUUID()}@example.com`) {
       const username = `member_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
       const password = "Disposable-test-password-2026";
-      const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: confirmed, user_metadata: { role, username } });
+      const { data, error } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: confirmed,
+        user_metadata: { role, username },
+      });
       if (error || !data.user) throw new Error("Local fixture identity creation failed.");
       ids.add(data.user.id);
       const session = client();

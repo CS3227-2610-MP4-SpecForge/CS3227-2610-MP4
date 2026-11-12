@@ -8,9 +8,12 @@ function renderEmphasis(text: string): ReactNode {
     if (delimiter !== "*" && delimiter !== "_" && delimiter !== "**") continue;
     const before = text[index - 1] ?? "";
     const after = text[index + delimiter.length] ?? "";
-    if (delimiter === "_" &&
-        /[\p{L}\p{M}\p{N}]$/u.test(text.substring(index - 2, index)) &&
-        /^[\p{L}\p{M}\p{N}]/u.test(text.slice(index + 1, index + 3))) continue;
+    if (
+      delimiter === "_" &&
+      /[\p{L}\p{M}\p{N}]$/u.test(text.substring(index - 2, index)) &&
+      /^[\p{L}\p{M}\p{N}]/u.test(text.slice(index + 1, index + 3))
+    )
+      continue;
 
     const match = openings.findLastIndex(opening => opening.delimiter === delimiter);
     if (match !== -1 && /\S/.test(before)) {
@@ -35,28 +38,50 @@ function renderEmphasis(text: string): ReactNode {
 // Deliberately small Markdown surface. User content stays in React text
 // children, so HTML, links and images cannot execute or fetch resources.
 export function Markdown({ text }: { text: string }) {
-  const blocks: ReactNode[] = []; const lines = text.split(/\r?\n/); let i = 0;
+  const blocks: ReactNode[] = [];
+  const lines = text.split(/\r?\n/);
+  let i = 0;
   while (i < lines.length) {
-    if (!lines[i].trim()) { i++; continue; }
+    if (!lines[i].trim()) {
+      i++;
+      continue;
+    }
     const key = i;
     if (/^\s*```/.test(lines[i])) {
-      i++; const code: string[] = []; while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
+      i++;
+      const code: string[] = [];
+      while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
       if (i < lines.length) i++;
-      blocks.push(<pre key={key}><code>{code.join("\n")}</code></pre>); continue;
+      blocks.push(
+        <pre key={key}>
+          <code>{code.join("\n")}</code>
+        </pre>,
+      );
+      continue;
     }
     const heading = lines[i].match(/^\s{0,3}(#{1,6})\s+(.+)$/);
     if (heading) {
-      i++; const content = renderEmphasis(heading[2]);
-      blocks.push(heading[1].length <= 2 ? <h2 key={key}>{content}</h2> : <h3 key={key}>{content}</h3>); continue;
+      i++;
+      const content = renderEmphasis(heading[2]);
+      blocks.push(heading[1].length <= 2 ? <h2 key={key}>{content}</h2> : <h3 key={key}>{content}</h3>);
+      continue;
     }
     const list = lines[i].match(/^\s*(?:([-*+])|\d+\.)\s+(.+)$/);
     if (list) {
-      const items: ReactNode[] = []; const ordered = !list[1]; const pattern = ordered ? /^\s*\d+\.\s+(.+)$/ : /^\s*[-*+]\s+(.+)$/;
-      while (i < lines.length) { const item = lines[i].match(pattern); if (!item) break; items.push(<li key={i++}>{renderEmphasis(item[1])}</li>); }
-      blocks.push(ordered ? <ol key={key}>{items}</ol> : <ul key={key}>{items}</ul>); continue;
+      const items: ReactNode[] = [];
+      const ordered = !list[1];
+      const pattern = ordered ? /^\s*\d+\.\s+(.+)$/ : /^\s*[-*+]\s+(.+)$/;
+      while (i < lines.length) {
+        const item = lines[i].match(pattern);
+        if (!item) break;
+        items.push(<li key={i++}>{renderEmphasis(item[1])}</li>);
+      }
+      blocks.push(ordered ? <ol key={key}>{items}</ol> : <ul key={key}>{items}</ul>);
+      continue;
     }
     const paragraph: string[] = [lines[i++]];
-    while (i < lines.length && lines[i].trim() && !/^\s*(?:#{1,6}\s|```|[-*+]\s|\d+\.\s)/.test(lines[i])) paragraph.push(lines[i++]);
+    while (i < lines.length && lines[i].trim() && !/^\s*(?:#{1,6}\s|```|[-*+]\s|\d+\.\s)/.test(lines[i]))
+      paragraph.push(lines[i++]);
     blocks.push(<p key={key}>{renderEmphasis(paragraph.join("\n"))}</p>);
   }
   return <div className="markdown">{blocks}</div>;

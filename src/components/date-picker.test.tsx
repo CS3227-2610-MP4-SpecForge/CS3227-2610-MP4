@@ -6,7 +6,17 @@ import { DatePicker } from "./date-picker";
 
 function Harness({ initial, onChange }: { initial: string | null; onChange(value: string | null): void }) {
   const [value, setValue] = useState(initial);
-  return <DatePicker id="due" label="Due date" value={value} onChange={next => { setValue(next); onChange(next); }} />;
+  return (
+    <DatePicker
+      id="due"
+      label="Due date"
+      value={value}
+      onChange={next => {
+        setValue(next);
+        onChange(next);
+      }}
+    />
+  );
 }
 
 const trigger = () => page.getByRole("button", { name: /^Due date/ });
