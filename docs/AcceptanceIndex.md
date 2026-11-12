@@ -49,6 +49,8 @@ have been made from a developer machine, not from a hosted app
 | Sign-in rate limit (documented) | [MP3 feedback, D](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [HTTP](../src/tests/application.test.ts) | [log](../logs/2026-11-12-signin-rate-limit-docs.md) | Hosted Auth limits not yet checked |
 | Formatter and route split | [MP3 feedback, E](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [HTTP](../src/tests/application.test.ts) and the full suites | [log](../logs/2026-11-12-formatter-and-routes.md) | Not applicable |
 | Usable guides | [MP3 feedback, F](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [screenshot run](../src/tooling/screenshots.spec.ts) | [log](../logs/2026-11-12-usable-guides.md) | Site not yet rebuilt |
+| Acceptance index and Reflections draft | [MP3 feedback, G](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | Link checks | [log](../logs/2026-11-12-acceptance-and-reflections.md) | Not applicable; Reflections await the author's rewrite |
+| Helpful empty states | [MP3 feedback, H](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | [request list](../src/components/request-list.test.tsx), [test plan panel](../src/components/test-plan-panel.test.tsx), [requests](../src/tests/browser/requests.spec.ts) | [log](../logs/2026-11-12-empty-states.md) | Pending |
 
 ## Engineering process
 
@@ -81,4 +83,4 @@ did not change the production prompt or model unless the log says so.
 | --- | --- |
 | [Manual request lifecycle](../workflow/specs/2026-11-07-request-lifecycle.md) | Superseded in shape by the two-field workspace; its lifecycle, revisions and recovery still apply ([log](../logs/2026-11-07-request-lifecycle.md)). |
 | [Development workflow design](../workflow/specs/2026-11-07-agentic-workflow-design.md) | Historical; superseded by the user-selected lightweight workflow in `workflow/README.md`. |
-| [MP3 feedback improvements](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | Umbrella spec; its workstreams appear as rows above. Workstreams G and H are in progress. |
+| [MP3 feedback improvements](../workflow/specs/2026-11-12-mp3-feedback-improvements.md) | Umbrella spec; its workstreams A to H appear as rows above. All are implemented locally; the Reflections rewrite and hosted checks remain. |

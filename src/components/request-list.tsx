@@ -250,7 +250,17 @@ export function RequestList({ organisationId }: { organisationId: string }) {
         <>
           {!error && items.length === 0 && (
             <div className="card">
-              <p className="muted">{query ? "No tickets match these filters." : "No requests yet."}</p>
+              <p className="muted">
+                {query ? (
+                  "No tickets match these filters."
+                ) : account?.role === "PM" ? (
+                  <>
+                    No tickets yet. Select <strong>New task</strong> to draft one; it stays private until you publish.
+                  </>
+                ) : (
+                  "No published tickets yet. Tickets appear here when a Product Manager publishes them."
+                )}
+              </p>
             </div>
           )}
           {items.length > 0 && (

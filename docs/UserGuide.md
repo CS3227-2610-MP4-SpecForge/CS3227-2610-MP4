@@ -265,7 +265,9 @@ Draft changes autosave; published changes still require **Update**.
 
 The Requests table shows **Title**, **Owner**, **Assignees**, **Status** and
 **Priority**. Select a title to open the ticket. On narrow screens, scroll the
-table sideways to see all columns.
+table sideways to see all columns. Before any ticket exists, a PM sees how to
+start one with **New task**, and a Developer sees that tickets appear once a
+Product Manager publishes them.
 
 Select a status or priority dropdown in the table to save that change immediately.
 The owner can change priority, including on private drafts. The owner and
@@ -491,6 +493,8 @@ requirements: check them against the ticket before relying on them.
   invalid output, usage limit). Nothing is saved to the ticket. **Retry
   generation** repeats the same request explicitly; it is disabled once the
   ticket has changed, in which case generate a new plan instead.
+- Test plan could not load: the panel shows why and **Retry loading test
+  plan**. It says "No test plan yet." only after it has checked successfully.
 
 - No verification email on a hosted environment: hosted signup depends on the
   environment's email delivery. Use the local app instead. Generated demo

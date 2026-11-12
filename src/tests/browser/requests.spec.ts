@@ -74,7 +74,7 @@ test(
       await expect(page.getByLabel("Title", { exact: true })).toHaveValue(content.Title);
       await login(reader, developer);
       await reader.goto(`/organisations/${org}/requests`);
-      await expect(reader.getByText("No requests yet.")).toBeVisible();
+      await expect(reader.getByText("No published tickets yet.", { exact: false })).toBeVisible();
       await expect(reader.getByRole("button", { name: "New task", exact: true })).toHaveCount(0);
       await setDueDate(page, "2026-12-20");
       await expect(saved(page)).toBeVisible();
@@ -250,7 +250,7 @@ test("failed saves require reconciliation; in-flight edits and stale editor text
     page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "Delete draft", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/organisations/${org}/requests$`));
-    await expect(page.getByText("No requests yet.")).toBeVisible();
+    await expect(page.getByText("No tickets yet.", { exact: false })).toBeVisible();
   } finally {
     await fixture.cleanup();
   }

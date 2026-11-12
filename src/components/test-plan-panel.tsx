@@ -69,6 +69,9 @@ export function TestPlanPanel({
   const [, setError] = useNotificationState(true);
   const [, setMessage] = useNotificationState(false);
   const [discarded, setDiscarded] = useState<string[]>([]);
+  // A failed read stays on screen with its retry, so the panel never claims
+  // "no test plan" when it could not find out.
+  const [loadError, setLoadError] = useState("");
   const operation = useRef(false);
 
   const read = useCallback(async () => {
@@ -79,14 +82,14 @@ export function TestPlanPanel({
       const result: { saved: SavedTestPlan | null; turns: TestPlanTurn[] } = await api(path);
       setSaved(result.saved);
       setTurns(result.turns);
-      setError("");
+      setLoadError("");
     } catch (failure) {
-      setError(failureMessage(failure) + " Reopen the test plan to check again.");
+      setLoadError(failureMessage(failure));
     } finally {
       operation.current = false;
       setLoading(false);
     }
-  }, [path, setError]);
+  }, [path]);
   // Defer the first read out of the effect body, as the chat panel does, so the
   // initial load does not set state synchronously during the effect.
   useEffect(() => {
@@ -203,6 +206,14 @@ export function TestPlanPanel({
       </div>
       <div id="test-plan-body" className="stack" hidden={!open}>
         {loading && !saved && turns.length === 0 && <Notice>Loading test plan…</Notice>}
+        {loadError && !loading && (
+          <div className="stack">
+            <Notice danger>{loadError}</Notice>
+            <Button type="button" className="secondary" onClick={() => void read()}>
+              Retry loading test plan
+            </Button>
+          </div>
+        )}
 
         {(busy || running) && <span role="status">AI is drafting test cases… You can keep reading the ticket.</span>}
 
@@ -305,7 +316,7 @@ export function TestPlanPanel({
             </div>
           ))}
 
-        {!saved && !latest && !loading && <p className="muted">No test plan yet.</p>}
+        {!saved && !latest && !loading && !loadError && <p className="muted">No test plan yet.</p>}
 
         {canGenerate && (
           <div className="stack">
