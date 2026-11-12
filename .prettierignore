@@ -1,0 +1,17 @@
+# Prettier formats application code and config. Prose, workflow YAML and
+# process material keep their hand-written layout.
+*.md
+*.yml
+*.yaml
+.agents/
+.claude/
+logs/
+workflow/
+website/
+src/supabase/
+package-lock.json
+next-env.d.ts
+.next/
+.next-browser/
+playwright-report/
+test-results/

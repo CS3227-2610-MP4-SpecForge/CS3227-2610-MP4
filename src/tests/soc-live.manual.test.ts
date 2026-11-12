@@ -16,13 +16,19 @@ const enabled = process.env.SPECFORGE_LIVE_AI === "1" && configuration.key !== "
 
 const fields = {
   title: "Persist the ticket list filters across reloads",
-  description: "Members filter the ticket list by priority and assignee. Today the filters reset on reload. Acceptance criteria: the selected priority and assignee filters survive a page reload; clearing a filter removes it; filters are per member, not shared.",
+  description:
+    "Members filter the ticket list by priority and assignee. Today the filters reset on reload. Acceptance criteria: the selected priority and assignee filters survive a page reload; clearing a filter removes it; filters are per member, not shared.",
 };
 
 describe.skipIf(!enabled)("live SoC LLM", () => {
   it("answers a PM chat turn with a usable proposal", async () => {
     const provider = createSocProvider(configuration);
-    const result = await provider({ fields, message: "Tighten the description and state the default view explicitly.", history: [] });
+    const result = await provider({
+      intent: "edit",
+      fields,
+      message: "Tighten the description and state the default view explicitly.",
+      recent: [],
+    });
     expect(result.reply).not.toBe("");
     expect(result.proposal?.title.trim()).not.toBe("");
     expect(result.proposal?.description.trim()).not.toBe("");
@@ -41,7 +47,9 @@ describe.skipIf(!enabled)("live SoC LLM", () => {
       // Plain text only: the panel renders these verbatim, never as Markdown.
       expect(item.title).not.toMatch(/[#*`]|\]\(/);
     }
-    console.log(`[plan] model=${configuration.model} cases=${result.plan.cases.length} kinds=${result.plan.cases.map(item => item.kind).join(",")}`);
+    console.log(
+      `[plan] model=${configuration.model} cases=${result.plan.cases.length} kinds=${result.plan.cases.map(item => item.kind).join(",")}`,
+    );
     console.log(`[plan] reply=${JSON.stringify(result.reply)}`);
   }, 120000);
 });

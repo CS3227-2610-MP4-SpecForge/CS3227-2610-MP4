@@ -2,8 +2,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { api, ApiError, failureMessage } from "./http";
-import { BackLink, Button, Dropdown, Notice, Pill } from "./ui";
-import { ticketPriorities, ticketStatuses, type TicketMember, type TicketPriority, type TicketStatus } from "@/delivery";
+import { BackLink, Button, Dropdown, Notice, Pill, useNotificationState } from "./ui";
+import {
+  ticketPriorities,
+  ticketStatuses,
+  type TicketMember,
+  type TicketPriority,
+  type TicketStatus,
+} from "@/delivery";
 import { PriorityPill, StatusPill, priorityOptions, statusOptions } from "./ticket-pills";
 import { TicketMembers } from "./ticket-members";
 import type { TicketRead } from "@/requests";
@@ -26,8 +32,9 @@ const sortOptions = [
 type RequestPage = { requests: TicketRead[]; nextOffset: number | null };
 const emptyPage: RequestPage = { requests: [], nextOffset: null };
 
+// The shared session banner reports a 401, so it does not hide the PM controls.
 function accessDenied(failure: unknown) {
-  return failure instanceof ApiError && (failure.status === 401 || failure.status === 403);
+  return failure instanceof ApiError && failure.status === 403;
 }
 
 export function RequestList({ organisationId }: { organisationId: string }) {
@@ -37,8 +44,8 @@ export function RequestList({ organisationId }: { organisationId: string }) {
   const [loaded, setLoaded] = useState(false);
   const [pending, setPending] = useState(false);
   const [savingDelivery, setSavingDelivery] = useState(false);
-  const [deliveryError, setDeliveryError] = useState("");
-  const [error, setError] = useState("");
+  const [, setDeliveryError] = useNotificationState(true);
+  const [error, setError] = useNotificationState(true);
   const [reload, setReload] = useState(0);
   const [members, setMembers] = useState<TicketMember[]>([]);
   const [filters, setFilters] = useState({ search: "", status: "", priority: "", assignee: "", sort: "updated" });
@@ -55,37 +62,61 @@ export function RequestList({ organisationId }: { organisationId: string }) {
   ];
   useEffect(() => {
     let active = true;
-    Promise.all([api(path + query), api("/api/account"), api(`/api/organisations/${organisationId}`)]).then(([list, identity, org]) => {
-      if (active) { setPage(list); setAccount(identity.account); setOrganisation(org.organisation.name); setError(""); }
-    }).catch(failure => {
-      if (!active) return;
-      setPage(emptyPage);
-      if (accessDenied(failure)) setAccount(null);
-      setError(failureMessage(failure));
-    }).finally(() => { if (active) setLoaded(true); });
-    return () => { active = false; };
-  }, [path, organisationId, reload, query]);
+    Promise.all([api(path + query), api("/api/account"), api(`/api/organisations/${organisationId}`)])
+      .then(([list, identity, org]) => {
+        if (active) {
+          setPage(list);
+          setAccount(identity.account);
+          setOrganisation(org.organisation.name);
+          setError("");
+        }
+      })
+      .catch(failure => {
+        if (!active) return;
+        setPage(emptyPage);
+        if (accessDenied(failure)) setAccount(null);
+        setError(failureMessage(failure));
+      })
+      .finally(() => {
+        if (active) setLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [path, organisationId, reload, query, setError]);
   function applyFilters() {
     if (busy || deliveryOperation.current) return;
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
     setDeliveryError("");
-    setLoaded(false); setQuery("?" + params.toString()); setReload(n => n + 1);
+    setLoaded(false);
+    setQuery("?" + params.toString());
+    setReload(n => n + 1);
   }
   async function more() {
-    if (busy || deliveryOperation.current || nextOffset === null) return; setPending(true);
+    if (busy || deliveryOperation.current || nextOffset === null) return;
+    setPending(true);
     try {
-      const params = new URLSearchParams(query); params.set("offset", String(nextOffset));
+      const params = new URLSearchParams(query);
+      params.set("offset", String(nextOffset));
       const result: RequestPage = await api(path + "?" + params.toString());
       setPage(current => ({
-        requests: [...current.requests, ...result.requests.filter(item => !current.requests.some(old => old.id === item.id))],
+        requests: [
+          ...current.requests,
+          ...result.requests.filter(item => !current.requests.some(old => old.id === item.id)),
+        ],
         nextOffset: result.nextOffset,
       }));
       setError("");
     } catch (failure) {
-      if (accessDenied(failure)) { setPage(emptyPage); setAccount(null); }
+      if (accessDenied(failure)) {
+        setPage(emptyPage);
+        setAccount(null);
+      }
       setError(failureMessage(failure));
-    } finally { setPending(false); }
+    } finally {
+      setPending(false);
+    }
   }
   async function saveDelivery(item: TicketRead, changes: { status: TicketStatus } | { priority: TicketPriority }) {
     if (busy || deliveryOperation.current) return;
@@ -97,9 +128,11 @@ export function RequestList({ organisationId }: { organisationId: string }) {
       await api(`${path}/${item.id}/delivery`, { revision: item.delivery_revision, changes });
     } catch (failure) {
       const conflict = failure instanceof ApiError && failure.status === 409;
-      saveError = conflict ? "This task changed before your edit could be saved."
-        : accessDenied(failure) ? "You no longer have permission to make this update."
-        : "Could not confirm the update. Check the current value before trying again.";
+      saveError = conflict
+        ? "This task changed before your edit could be saved."
+        : accessDenied(failure)
+          ? "You no longer have permission to make this update."
+          : "Could not confirm the update. Check the current value before trying again.";
     }
     // The update can move the row or exclude it from the active filters. Re-read
     // even on failure so a stale revision or a lost response is never replayed.
@@ -120,7 +153,8 @@ export function RequestList({ organisationId }: { organisationId: string }) {
   }
   async function create() {
     if (busy || deliveryOperation.current) return;
-    setPending(true); setError("");
+    setPending(true);
+    setError("");
     creationKey.current ??= crypto.randomUUID();
     try {
       const result = await api(path, { creationKey: creationKey.current });
@@ -128,59 +162,178 @@ export function RequestList({ organisationId }: { organisationId: string }) {
       // protects Back/Forward. Keep this consistent with the plain request links.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign(`/organisations/${organisationId}/requests/${result.request.id}`);
-    } catch (failure) { setError(`${failureMessage(failure)} If draft creation failed, retrying uses the same creation key.`); setPending(false); }
+    } catch (failure) {
+      setError(`${failureMessage(failure)} If draft creation failed, retrying uses the same creation key.`);
+      setPending(false);
+    }
   }
-  return <section className="stack">
-    <BackLink href="/workspace" fullPage>Back to workspace</BackLink>
-    <div>
-      <p className="eyebrow">{organisation || "Organisation"}</p>
-      <div className="page-heading requests-heading">
-        <h1>Requests</h1>
-        {account?.role === "PM" && <Button disabled={busy} onClick={create}>{pending ? "Creating…" : "New task"}</Button>}
+  return (
+    <section className="stack">
+      <BackLink href="/workspace" fullPage>
+        Back to workspace
+      </BackLink>
+      <div>
+        <p className="eyebrow">{organisation || "Organisation"}</p>
+        <div className="page-heading requests-heading">
+          <h1>Requests</h1>
+          {account?.role === "PM" && (
+            <Button disabled={busy} onClick={create}>
+              {pending ? "Creating…" : "New task"}
+            </Button>
+          )}
+        </div>
       </div>
-    </div>
-    {error && <Notice danger>{error}</Notice>}
-    {deliveryError && <Notice danger>{deliveryError}</Notice>}
-    <form className="card stack request-filters" aria-label="Ticket filters" onSubmit={event => { event.preventDefault(); applyFilters(); }}>
-      <div className="field request-search">
-        <input type="search" aria-label="Search by title" maxLength={160} value={filters.search} onChange={event => setFilters({ ...filters, search: event.target.value })} placeholder="Search by title" />
-        <Button type="submit" className="secondary" aria-label="Apply search" disabled={busy}><Search className="ui-icon" aria-hidden="true" /></Button>
-      </div>
-      <div className="ticket-filters">
-        <Dropdown id="filter-status" label="Status filter" value={filters.status} options={statusFilterOptions} onChange={status => setFilters({ ...filters, status })} fitOptions />
-        <Dropdown id="filter-priority" label="Priority filter" value={filters.priority} options={priorityFilterOptions} onChange={priority => setFilters({ ...filters, priority })} fitOptions />
-        <Dropdown id="filter-assignee" label="Assignee filter" value={filters.assignee} options={assigneeOptions} onChange={assignee => setFilters({ ...filters, assignee })} fitOptions />
-        <Dropdown id="filter-sort" label="Sort tickets" value={filters.sort} options={sortOptions} onChange={sort => setFilters({ ...filters, sort })} fitOptions />
-        <Button type="submit" disabled={busy}>Apply filters</Button>
-      </div>
-      <TicketMembers organisationId={organisationId} onMembers={setMembers} />
-    </form>
-    {!loaded ? <Notice>Loading requests…</Notice> : <>
-      {!error && items.length === 0 && <div className="card"><p className="muted">{query ? "No tickets match these filters." : "No requests yet."}</p></div>}
-      {items.length > 0 && <div className="card requests-table-scroll" role="region" aria-label="Request list" tabIndex={0}>
-        <table className="requests-table" aria-label="Requests" aria-busy={savingDelivery}>
-          <thead><tr>
-            <th scope="col">Title</th><th scope="col">Owner</th><th scope="col">Assignees</th><th scope="col">Status</th><th scope="col">Priority</th>
-          </tr></thead>
-          <tbody>{items.map(item => {
-            const title = item.fields.title || "Untitled draft";
-            const owner = item.author_id === account?.id;
-            const canChangeStatus = item.submitted_at && account && (owner || item.assignee_ids.includes(account.id));
-            return <tr key={item.id}>
-              <td><a href={`/organisations/${organisationId}/requests/${item.id}`}>{title}</a></td>
-              <td>{item.author_username}</td>
-              <td>{assigneeUsernameLabel(item.assignee_usernames)}</td>
-              <td>{canChangeStatus
-                ? <Dropdown id={`status-${item.id}`} label={`Status for ${title}`} value={item.status} options={statusOptions} disabled={busy} onChange={status => saveDelivery(item, { status })} compact />
-                : item.submitted_at ? <StatusPill value={item.status} /> : <Pill>Private draft</Pill>}</td>
-              <td>{owner
-                ? <Dropdown id={`priority-${item.id}`} label={`Priority for ${title}`} value={item.priority} options={priorityOptions} disabled={busy} onChange={priority => saveDelivery(item, { priority })} compact />
-                : <PriorityPill value={item.priority} />}</td>
-            </tr>;
-          })}</tbody>
-        </table>
-      </div>}
-      {nextOffset !== null && <Button className="secondary" disabled={busy} onClick={more}>Load more tickets</Button>}
-    </>}
-  </section>;
+
+      <form
+        className="card stack request-filters"
+        aria-label="Ticket filters"
+        onSubmit={event => {
+          event.preventDefault();
+          applyFilters();
+        }}
+      >
+        <div className="field request-search">
+          <input
+            type="search"
+            aria-label="Search by title"
+            maxLength={160}
+            value={filters.search}
+            onChange={event => setFilters({ ...filters, search: event.target.value })}
+            placeholder="Search by title"
+          />
+          <Button type="submit" className="secondary" aria-label="Apply search" disabled={busy}>
+            <Search className="ui-icon" aria-hidden="true" />
+          </Button>
+        </div>
+        <div className="ticket-filters">
+          <Dropdown
+            id="filter-status"
+            label="Status filter"
+            value={filters.status}
+            options={statusFilterOptions}
+            onChange={status => setFilters({ ...filters, status })}
+            fitOptions
+          />
+          <Dropdown
+            id="filter-priority"
+            label="Priority filter"
+            value={filters.priority}
+            options={priorityFilterOptions}
+            onChange={priority => setFilters({ ...filters, priority })}
+            fitOptions
+          />
+          <Dropdown
+            id="filter-assignee"
+            label="Assignee filter"
+            value={filters.assignee}
+            options={assigneeOptions}
+            onChange={assignee => setFilters({ ...filters, assignee })}
+            fitOptions
+          />
+          <Dropdown
+            id="filter-sort"
+            label="Sort tickets"
+            value={filters.sort}
+            options={sortOptions}
+            onChange={sort => setFilters({ ...filters, sort })}
+            fitOptions
+          />
+          <Button type="submit" disabled={busy}>
+            Apply filters
+          </Button>
+        </div>
+        <TicketMembers organisationId={organisationId} onMembers={setMembers} />
+      </form>
+      {!loaded ? (
+        <Notice>Loading requests…</Notice>
+      ) : (
+        <>
+          {!error && items.length === 0 && (
+            <div className="card">
+              <p className="muted">
+                {query ? (
+                  "No tickets match these filters."
+                ) : account?.role === "PM" ? (
+                  <>
+                    No tickets yet. Select <strong>New task</strong> to draft one; it stays private until you publish.
+                  </>
+                ) : (
+                  "No published tickets yet. Tickets appear here when a Product Manager publishes them."
+                )}
+              </p>
+            </div>
+          )}
+          {items.length > 0 && (
+            <div className="card requests-table-scroll" role="region" aria-label="Request list" tabIndex={0}>
+              <table className="requests-table" aria-label="Requests" aria-busy={savingDelivery}>
+                <thead>
+                  <tr>
+                    <th scope="col">Title</th>
+                    <th scope="col">Owner</th>
+                    <th scope="col">Assignees</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Priority</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(item => {
+                    const title = item.fields.title || "Untitled draft";
+                    const owner = item.author_id === account?.id;
+                    const canChangeStatus =
+                      item.submitted_at && account && (owner || item.assignee_ids.includes(account.id));
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <a href={`/organisations/${organisationId}/requests/${item.id}`}>{title}</a>
+                        </td>
+                        <td>{item.author_username}</td>
+                        <td>{assigneeUsernameLabel(item.assignee_usernames)}</td>
+                        <td>
+                          {canChangeStatus ? (
+                            <Dropdown
+                              id={`status-${item.id}`}
+                              label={`Status for ${title}`}
+                              value={item.status}
+                              options={statusOptions}
+                              disabled={busy}
+                              onChange={status => saveDelivery(item, { status })}
+                              compact
+                            />
+                          ) : item.submitted_at ? (
+                            <StatusPill value={item.status} />
+                          ) : (
+                            <Pill>Private draft</Pill>
+                          )}
+                        </td>
+                        <td>
+                          {owner ? (
+                            <Dropdown
+                              id={`priority-${item.id}`}
+                              label={`Priority for ${title}`}
+                              value={item.priority}
+                              options={priorityOptions}
+                              disabled={busy}
+                              onChange={priority => saveDelivery(item, { priority })}
+                              compact
+                            />
+                          ) : (
+                            <PriorityPill value={item.priority} />
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {nextOffset !== null && (
+            <Button className="secondary" disabled={busy} onClick={more}>
+              Load more tickets
+            </Button>
+          )}
+        </>
+      )}
+    </section>
+  );
 }

@@ -60,3 +60,45 @@ Calendar colors use existing purple brand tokens. Read-only date presentation
 stays in the ticket display. Do not use UTC serialization or year-remapping
 Date constructors for calendar-only values. The exact-entry range is years
 0001–9999; calendar navigation is bounded to the same range.
+
+
+## Temporary notifications
+
+Use the shared notification mechanism for transient action success/error feedback
+throughout the app. RootLayout mounts NotificationProvider, which owns one event,
+replacement and the three-second timer. `useNotifications().notify(message,
+danger?)` emits an event, including repeated identical messages. `danger` selects
+red alert styling; other outcomes use the purple polite status presentation.
+
+`useNotificationState(danger?)` adapts existing string state when it also controls
+recovery/retry UI: its setter emits nonempty messages, and the local value remains
+independent of banner expiry. Clearing that value does not clear unrelated global
+notifications. It can override the default danger tone per event. Use ordinary
+state for user input and field validation, rather than this notification adapter.
+
+An ended session is not a transient notification. `SessionBanner`, mounted once
+by RootLayout, shows the persistent "session has ended" alert for any 401 from
+`api` and never redirects. Do not add per-component 401 handling beyond stopping
+retries; a 403 stays an in-place "no permission" message. Such a 401 carries
+`sessionEndedMessage`, which the notification provider never shows as a toast,
+so a toast cannot cover the banner; other toasts still appear. Session notes of
+your own belong inline, not in `notify`.
+
+## Modals
+
+Use `Modal` from the shared UI library for overlay windows. It takes `label`,
+`closeLabel`, `onClose`, optional `title`, `footer`, `contentLabel` and
+`className`, and owns `showModal`, the body scroll lock, initial focus, Esc and
+the notification host; callers return focus in `onClose`. Organisation
+management and AI change review both use it.
+
+`Modal` registers its native dialog with the notification provider after showModal
+and unregisters on cleanup. The provider portals the same notification into the
+active modal's top layer, or renders at the page level when there is no modal.
+Host changes do not restart the event timer. Banners float at viewport top centre,
+occupy no layout space, and do not move focus or block pointer interaction.
+
+Keep loading/progress, empty states, field validation, save/conflict state and
+saved AI failure history contextual. Their state and retry/reconciliation controls
+must remain available after a related transient banner expires. `Notice` remains
+available for those contextual states; action feedback uses the provider.

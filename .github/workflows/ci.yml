@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint, types, unit tests, build
+    name: Lint, types, unit and component tests, build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -32,6 +32,10 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # Component tests run in real Chromium through Vitest browser mode.
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
 
       - name: Verify
         run: npm run verify
@@ -61,6 +65,29 @@ jobs:
 
       - name: Browser tests
         run: npm run test:e2e
+
+      - name: Summarise browser results
+        if: always()
+        run: node src/tooling/browser-summary.mjs playwright-report/results.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # Traces are recorded only when a test is retried.
+      - name: Upload Playwright traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Stop local Supabase
         if: always()

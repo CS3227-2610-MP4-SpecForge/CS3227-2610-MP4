@@ -4,6 +4,12 @@ Status: implemented on `feat/deploy-and-pages`; hosting provider accounts and
 secrets are still pending human setup. Nothing below claims a verified live
 deployment.
 
+Amended 2026-11-12: the host is now Render, not Vercel, because Vercel blocked
+deploys of teammates' commits. The gates, order and environment split below are
+unchanged; the Vercel CLI steps are replaced by a Render API deploy of the exact
+commit. The Developer Guide's Deployment section is current; Vercel details
+below are historical.
+
 ## Problem and users
 
 The application runs only on a developer machine. Peer testers and graders have
