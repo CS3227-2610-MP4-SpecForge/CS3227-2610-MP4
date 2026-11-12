@@ -24,7 +24,8 @@
     code cut a fixed 19 characters off any `GET /api/invitations/...` path, so
     `/api/invitations/a/<organisation id>` returned the caller's own
     organisation. It now answers 404 "Organisation not found." The lookup was
-    always limited to the caller's memberships, so nothing leaked.
+    always limited to the caller's memberships, so nothing leaked. A test in
+    `application.test.ts` now covers it; it fails on the pre-split code.
   - On the reformat and again on the split: `npm run verify` (225 passed, 84
     skipped), integration 79/79 and the browser suite 54/54. After the final
     move of one helper and comment edits, the format check, type check, lint

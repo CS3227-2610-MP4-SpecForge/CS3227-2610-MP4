@@ -72,6 +72,45 @@ describe("account and organisation HTTP interface", () => {
       error: "Request service unavailable. Your text is preserved; check the saved version before retrying.",
     });
   });
+  it("looks up an organisation only by its own path, not through invitation paths", async () => {
+    const payload = Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64url");
+    const user = {
+      id: "11111111-1111-4111-8111-111111111111",
+      email: "pm@example.com",
+      email_confirmed_at: "2026-11-07T00:00:00Z",
+      app_metadata: {},
+      user_metadata: {},
+      created_at: "2026-11-07T00:00:00Z",
+    };
+    const organisation = { id: "22222222-2222-4222-8222-222222222222", name: "Acme" };
+    const { app, requests } = fixture(async input =>
+      String(input).includes("/token")
+        ? Response.json({
+            access_token: `e30.${payload}.fixture`,
+            refresh_token: "local-fixture-refresh",
+            expires_in: 3600,
+            token_type: "bearer",
+            user,
+          })
+        : String(input).includes("/auth/v1/user")
+          ? Response.json(user)
+          : Response.json({ is_admin: true, organisation }),
+    );
+    await app(post("/api/auth/signin", { email: user.email, password: "a-long-test-password" }));
+    const lookups = () => requests.filter(url => url.includes("/organisation_members")).length;
+    // The organisation's own path finds it.
+    const own = await app(new Request(`${origin}/api/organisations/${organisation.id}`));
+    expect(own.status).toBe(200);
+    expect(await own.json()).toEqual({ organisation: { ...organisation, isAdmin: true } });
+    expect(lookups()).toBe(1);
+    // An invitation path that ends in the same id must not reach that lookup.
+    for (const path of [`/api/invitations/a/${organisation.id}`, `/api/invitations//x${organisation.id}`]) {
+      const response = await app(new Request(origin + path));
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "Organisation not found." });
+    }
+    expect(lookups()).toBe(1);
+  });
   it("rejects cross-origin signup before contacting Supabase", async () => {
     const { app, requests } = fixture();
     const response = await app(
