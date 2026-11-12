@@ -56,6 +56,9 @@ nav a { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--
 .text-button { background: transparent; color: var(--brand); min-height: 36px; padding: 4px 0; justify-content: start; }
 .text-button:hover { background: transparent; text-decoration: underline; }
 .notice { border: 1px solid #c8c1f5; background: var(--brand-soft); border-radius: 9px; padding: 14px 16px; margin-bottom: 24px; color: #393079; font-size: .9rem; overflow-wrap: anywhere; }
+.session-banner { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px 20px; padding: 10px 20px; border-bottom: 1px solid #efc2ca; background: var(--danger-bg); color: var(--danger); font-size: .9rem; font-weight: 600; }
+.session-banner p { margin: 0; }
+.session-banner .button { min-height: 36px; padding: 6px 14px; }
 .notice.danger { color: var(--danger); background: var(--danger-bg); border-color: #efc2ca; }
 .page-heading { display: flex; justify-content: space-between; align-items: start; gap: 32px; margin-bottom: 40px; }
 .header-inner > nav { min-width: 0; }

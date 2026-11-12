@@ -3,10 +3,11 @@ import type { ReactNode } from "react";
 import { expect } from "vitest";
 import { render } from "vitest-browser-react";
 import { NotificationProvider } from "@/components/notifications";
+import { SessionBanner } from "@/components/session";
 
 /** Render one component inside the providers every app page supplies. */
 export function renderComponent(ui: ReactNode) {
-  return render(<NotificationProvider>{ui}</NotificationProvider>);
+  return render(<NotificationProvider><SessionBanner />{ui}</NotificationProvider>);
 }
 
 /** Fail on serious or critical accessibility violations in the rendered page. */

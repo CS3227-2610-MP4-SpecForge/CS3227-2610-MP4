@@ -93,6 +93,22 @@ Keep persistent save/conflict state, field guidance and saved AI history context
 Browser coverage checks last-admin error expiry, signup verification navigation,
 invitation repeat timing, and developer test-plan content/retry preservation.
 
+## Session expiry
+
+`api` in `src/components/http.ts` is the one place that recognises an ended
+session: a 401 from any call outside `/api/auth/` (sign-in answers rejected
+credentials with 401). `onSessionChange(listener)` reports `false` on such a 401
+and `true` once a non-auth call or sign-in succeeds again. RootLayout mounts
+`SessionBanner` from `src/components/session.tsx` once below the header; it shows
+the persistent alert with a plain **Sign in again** link (a document navigation, so
+editor departure guards apply) and never redirects. On the public pages (`/`,
+`/sign-in`, `/sign-up`, `/verify-email`) the account menu's check is expected to
+fail, so a 401 there hides the banner instead, including one carried over by the
+workspace or profile client redirect. Components do not special-case 401 except to stop
+retrying: the editor turns it into a retryable problem that halts autosave, and
+the workspace and profile pages keep their redirect. A 403 remains an in-place
+"no permission" outcome.
+
 ## Membership interfaces
 
 The approved [membership slice](../workflow/specs/2026-11-07-organisation-membership.md)

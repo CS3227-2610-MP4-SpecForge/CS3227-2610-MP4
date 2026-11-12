@@ -38,7 +38,7 @@ export function TicketDelivery({ item, accountId, path, onSaved }: { item: Featu
     }
     if (canStatus && status !== saved.status) changes.status = status;
     try { const result = await api(path + "/delivery", { revision: saved.delivery_revision, changes }); adopt(result.request); setMessage("Delivery details saved."); }
-    catch (failure) { setError(failureMessage(failure)); setBlocked(!(failure instanceof ApiError) || [401,403,409,503].includes(failure.status)); }
+    catch (failure) { setError(failureMessage(failure)); setBlocked(!(failure instanceof ApiError) || [403,409,503].includes(failure.status)); }
     finally { operation.current = false; setBusy(false); }
   }
   async function reload() {

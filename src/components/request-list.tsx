@@ -26,8 +26,9 @@ const sortOptions = [
 type RequestPage = { requests: TicketRead[]; nextOffset: number | null };
 const emptyPage: RequestPage = { requests: [], nextOffset: null };
 
+// The shared session banner reports a 401, so it does not hide the PM controls.
 function accessDenied(failure: unknown) {
-  return failure instanceof ApiError && (failure.status === 401 || failure.status === 403);
+  return failure instanceof ApiError && failure.status === 403;
 }
 
 export function RequestList({ organisationId }: { organisationId: string }) {

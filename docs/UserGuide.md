@@ -89,6 +89,21 @@ history stay beside their related controls. Retry/reconciliation controls and
 unsaved input remain available after an error banner disappears. Signup's
 verification link also remains available after its notification expires.
 
+## When your session ends
+
+If you sign out in another tab, or your sign-in expires, the next action that
+reaches the server shows a red banner below the navbar: "Your session has ended.
+Sign in again to continue." It stays until an action succeeds again. SpecForge
+does not move you away from the page, so text you were typing stays on screen.
+Autosave stops; a ticket draft shows **Retry draft save** so you can save after
+signing in again.
+
+Choose **Sign in again** to go to the sign-in page. If the ticket has unsaved
+work, the usual departure warning asks first. To keep the text, cancel, copy it,
+or sign in from a new tab and then retry the save. The workspace and profile
+pages hold no unsaved work and still go straight to sign-in. A "no permission"
+message is different: your session is fine, but your access to that item changed.
+
 ## Invitations and membership
 
 The management overlay groups invitation controls in a light-purple **Invite Member** panel. **Existing members** lists usernames with an Admin pill where applicable and their application role underneath. Admins appear first; each group is sorted alphabetically by username. Promote/demote controls appear beside each member.
@@ -407,6 +422,7 @@ requirements: check them against the ticket before relying on them.
   may block the action. Do not repeatedly submit a timed-out change; refresh first.
 - Workspace loading failure: use **Retry loading workspace**. Signed-out users
   are redirected to sign-in.
+- Session ended on any other page: see [When your session ends](#when-your-session-ends).
 - Test plan AI failure: the panel names what happened (timeout, upstream error,
   invalid output, usage limit). Nothing is saved to the ticket. **Retry
   generation** repeats the same request explicitly; it is disabled once the

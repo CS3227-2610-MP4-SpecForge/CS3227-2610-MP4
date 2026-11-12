@@ -123,7 +123,10 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
       adopt(result.request); reportProblem(null); attempted.current = null;
     } catch (failure) {
       const status = failure instanceof ApiError ? failure.status : 0;
-      reportProblem({ kind: status === 409 ? "conflict" : [401, 403].includes(status) ? "denied" : "ambiguous", message: failureMessage(failure) });
+      // A 401 is rejected before any write, so the session banner explains it and
+      // an explicit retry is safe once the user has signed in again.
+      if (status === 401) reportProblem({ kind: "retry", message: "Your local edits are preserved. Sign in again, then save again." });
+      else reportProblem({ kind: status === 409 ? "conflict" : status === 403 ? "denied" : "ambiguous", message: failureMessage(failure) });
     } finally { operation.current = false; setBusy(null); }
   }
   useEffect(() => {
