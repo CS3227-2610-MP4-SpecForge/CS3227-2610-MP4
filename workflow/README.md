@@ -45,6 +45,23 @@ one component with a component test (`src/components/<name>.test.tsx`); add a
 browser journey when it crosses the server or several components. See the
 Developer Guide's test layers.
 
+## Commits
+
+- **One purpose per commit.** A test tier and an unrelated bug fix are two
+  commits. A bulk reformat is its own commit, listed in `.git-blame-ignore-revs`.
+- **Conventional prefix**, then a lowercase imperative summary of at most about
+  72 characters: `feat:` (new behaviour), `fix:` (wrong behaviour corrected),
+  `refactor:` (same behaviour, new structure), `test:`, `docs:`, `style:`
+  (formatting only), `chore:` (tooling and configuration).
+- **A `fix:` says the corrected behaviour**, not the symptom or the change:
+  `fix: stop the session-ended toast covering the session banner`, not
+  `fix: toast bug` or `fix: update notifications.tsx`.
+- The body, when needed, says why and names any deliberate behaviour change,
+  for example `refactor: split API routing into …` recording its one intended
+  404 change.
+- Never commit secrets, personal files or generated output; stage files by name
+  rather than with `git add -A`.
+
 ## Resuming unfinished work
 
 At a meaningful pause or transfer of unfinished work, keep one short handoff at
@@ -128,8 +145,12 @@ See [THIRD_PARTY.md](THIRD_PARTY.md) for pinned skill provenance and local adapt
 - `agents/`: the two explicit reviewer briefs, loaded when dispatched.
 - `architecture.md`, `ui.md`: short shared engineering policies.
 - `specs/`: feature specifications and historical workflow decisions.
+- `drafts/`: agent drafts of personal work (such as Reflections) awaiting the
+  author's rewrite; never final text, and removed once moved.
 - `templates/session-summary.md`: concise session-log format and omission rules.
 - Repository-root `logs/`: session outcomes, validation and unresolved work.
+- `docs/AcceptanceIndex.md`: each feature's spec, tests, logs and hosted check;
+  add a row when a feature spec is approved and update it when evidence changes.
 
 Keep workflow files here except native-discovery `.agents/skills/` and root
 `AGENTS.md`; domain terms may live in root `GLOSSARY.md` and significant decision

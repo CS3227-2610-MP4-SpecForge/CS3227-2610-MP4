@@ -57,6 +57,8 @@ cookies, and every mutation is checked against one exactly configured origin.
 - [User Guide](UserGuide.md) — every feature and how to try it.
 - [Developer Guide](DeveloperGuide.md) — design, module boundaries, setup, checks
   and the security and deployment gates.
+- [Acceptance index](AcceptanceIndex.md) — each feature's spec, tests, session logs
+  and whether it has been checked on a hosted environment.
 - [Reflections](Reflections.md) — what multi-agent development and context
   engineering actually cost and returned on this project.
 

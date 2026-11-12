@@ -32,12 +32,15 @@ jobs:
       # Jekyll renders a Markdown file only when it carries front matter, and the
       # guides must stay plain Markdown in docs/ for GitHub's own file view. The
       # copies get empty front matter here; _config.yml supplies the layout.
+      # Links that leave docs/ (../logs/, ../src/, ../workflow/) point at files
+      # the site does not contain, so the copies link to this commit on GitHub.
       - name: Copy the guides into the site source
         run: |
+          source_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}"
           for guide in docs/*.md; do
             name="$(basename "$guide")"
             printf -- '---\n---\n\n' >"website/$name"
-            cat "$guide" >>"website/$name"
+            sed "s#](\.\./#](${source_url}/#g" "$guide" >>"website/$name"
           done
           # The guides link images as images/<name>.png, relative to docs/.
           cp -R docs/images website/images

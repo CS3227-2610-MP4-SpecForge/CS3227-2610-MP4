@@ -23,6 +23,8 @@ your `.env` unchanged. Never put real project credentials in guides or test data
 
 - [User Guide](docs/UserGuide.md): current features and testing access.
 - [Developer Guide](docs/DeveloperGuide.md): design, setup, checks and deployment gates.
+- [Acceptance index](docs/AcceptanceIndex.md): each feature's spec, tests, session logs
+  and hosted-verification state.
 - [Product specification](workflow/specs/2026-11-07-product-mvp.md).
 - [Workflow](workflow/README.md).
 

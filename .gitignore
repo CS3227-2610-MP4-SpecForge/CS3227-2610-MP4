@@ -16,6 +16,7 @@ src/supabase/.branches/
 # Guides are copied into the website source only while the Pages site builds.
 website/*Guide.md
 website/Reflections.md
+website/AcceptanceIndex.md
 website/images/
 website/_site/
 website/.jekyll-cache/
