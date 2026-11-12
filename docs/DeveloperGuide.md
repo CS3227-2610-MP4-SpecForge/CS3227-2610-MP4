@@ -580,10 +580,14 @@ treat the figures as one sample, not a service level:
 - Public signup uses ordinary Auth signup, not admin preconfirmation. Local Auth
   requires email confirmation. The custom confirmation email displays a code
   rather than placing a credential in an application URL.
-- The app adds a coarse process-wide cap of 30 authentication attempts per minute
-  (logout excluded). This does not coordinate multiple instances. Supabase Auth
-  rate limits are the provider-wide control; hosted limits/abuse settings must
-  be verified before release. Supabase HTTP requests have a10-second timeout; the separate SoC adapter has
+- The app adds a coarse cap of 30 authentication attempts (sign-up, sign-in,
+  verify and resend; logout excluded) per clock minute, shared by all callers.
+  `createAuthAdmission` keeps the count in memory, so the cap applies separately
+  on each server instance. On Vercel the effective limit grows with the number of
+  running instances, and an instance's count resets when it restarts. Supabase
+  Auth's own rate limits are the real control; check the hosted values before
+  release (see [First-time setup](#first-time-setup) step 7).
+- Supabase HTTP requests have a 10-second timeout; the separate SoC adapter has
   a 90-second deadline and browser chat waits up to 110 seconds.
 - Keep all real keys and sensitive request contents out of logs. The SoC adapter is server-only; demo provisioning and privileged browser actions
   remain unimplemented.
@@ -724,7 +728,9 @@ from request headers.
    to `main`.
 7. Configure custom SMTP on both Supabase projects and test the confirmation
    email before telling peer testers that signup works. Supabase's default sender
-   restricts recipients.
+   restricts recipients. Also check each project's Auth rate limits
+   (Authentication, Rate Limits): they are the real limit on sign-up, sign-in,
+   verification and email sending, because the app's own cap is per instance.
 
 ### Product website
 
@@ -829,7 +835,8 @@ Browser runs are designed to be repeatable:
   uploaded as the `playwright-traces` artifact. Treat flaky tests as failures to
   fix. Local runs never retry.
 - The suite runs on one worker. Two or four workers sign in faster than the
-  app's 30-per-minute auth admission limit (`createAuthAdmission`) and fail.
+  app's 30-per-minute auth admission limit (`createAuthAdmission`, one count
+  for the single local server process) and fail.
   `SPECFORGE_BROWSER_WORKERS` is a measurement knob for that experiment, not a
   supported setting. `SPECFORGE_TIMING_FILE=<path>` adds a JSON report for
   timing comparisons.

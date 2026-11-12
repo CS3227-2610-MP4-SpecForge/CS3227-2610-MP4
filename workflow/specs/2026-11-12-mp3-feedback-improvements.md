@@ -81,7 +81,8 @@ them.
    Hosted checks in workstream C cannot pass until it is fixed.
 2. Add a required reviewer to the `production` GitHub Environment, then restore
    the reviewer wording in the Developer Guide and `deploy-production.yml`.
-3. Check each Supabase project's Site URL and custom SMTP, then run one hosted
+3. Check each Supabase project's Site URL, custom SMTP and Auth rate limits
+   (workstream D), then run one hosted
    sign-up, ticket and AI journey per role. The 2026-11-10 deployment log
    records that nothing hosted beyond the sign-up page has been tried.
 4. Confirm the production Vercel project's name. The Developer Guide's
