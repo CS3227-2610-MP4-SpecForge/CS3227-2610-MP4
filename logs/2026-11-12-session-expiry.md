@@ -28,8 +28,8 @@
   It also found a misplaced Developer Guide section, now moved. The 401 signal
   is now read before the body is parsed, so a non-JSON 401 also shows the
   banner.
-- Open: the sticky banner can overlap the top of the sticky AI panel on a
-  scrolled ticket page. This was not checked visually.
+- Visual check: the user checked the banner on a scrolled ticket page and
+  found its placement fine.
 - Follow-up (same day): after a 401 the old three-second toast also showed the
   server's "Sign in to continue." and covered the banner. A non-auth 401 from
   `api` now carries `sessionEndedMessage` (the banner's text), which the
