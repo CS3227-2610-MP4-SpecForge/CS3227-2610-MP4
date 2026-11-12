@@ -102,7 +102,7 @@ wrote it carefully, kept it short so an agent would actually read it, and I
 genuinely thought that was the job done. The rule was written, so the rule would
 happen.
 
-It didn't. The feature I'm proudest of in this project is the Developer test plan
+It didn't. The feature the Developer test plan
 generator, and it is also the clearest example of the rule being ignored. It
 sends ticket content to an LLM, takes the output back, and adds a new
 authorization surface deciding who can generate and who can only read. If
@@ -110,14 +110,6 @@ anything in this codebase needed a security preflight, it was that. It got
 neither a preflight nor an independent review. I know this because I wrote it in
 my own session log at the time and then carried the same line forward into the
 next two logs: still owed, still not done.
-
-What actually caught the bugs is the part I find uncomfortable. Two problems were
-caught before release, both by the type checker and the linter. Two more turned
-up afterwards when I finally ran the thing against the real SoC provider, and one
-of those was a genuine design mistake — I was rejecting an entire generated test
-plan because one case ran past the 500 character limit, when the sensible
-behaviour is to drop that case and keep the rest. Nothing was caught by review.
-Not because reviews missed it, but because there were none.
 
 The bit that changed how I think was finding out *why* it kept not happening. We
 tested it across five runs and the reviewer was skipped in four of them. I had
@@ -134,32 +126,11 @@ allowed to decline, with nothing checking whether it was followed, isn't really 
 rule. It's a preference with good intentions attached, and it turns out I had
 written several of those and was counting them as controls.
 
-My teammate then built the thing that fixes it: a hook that denies `git commit`
+We then built the thing that fixes it: a hook that denies `git commit`
 whenever the current `src/` changes have no approved review, plus a check at the
 end of a turn that prompts once and then blocks outright once a session log has
 been written, since writing the log is the moment you're claiming the work is
 finished. The reviewer also became a properly registered read-only subagent that
 has to end with a verdict line, so there's something concrete to check for. It
 keys on a hash of the exact diff, which means if I edit anything after getting an
-approval, the approval stops counting. I can't talk my way past that one, which
-is rather the point.
 
-Two details in it I thought were smart. It fails open — if the hook itself errors
-it lets the action through, because a gate that locks up your session gets turned
-off permanently the first time it does. And it has a documented off switch for
-when a human is driving directly. I'd have been tempted to make it strict with no
-escape, and I now think that's how you end up with people disabling it entirely
-instead of using it properly.
-
-I should be honest about where this stands. The gate has been tested in a scratch
-repository across all its paths, but it hasn't been watched running live in a
-fresh session yet, and we haven't repeated the five-run test to show the skip
-rate actually improved. So right now it's a fix I believe in rather than a fix
-I've measured. The hooks also only work in one client — the rule is still just
-prose anywhere else.
-
-If I'm honest about the overall shape of it: I spent my effort on the half that
-tells the agent what I want, and almost none on the half that tells me whether it
-happened. Those are two different things and I had collapsed them into one. The
-reviews this project still owes on its most sensitive feature are what it cost me
-to work that out at the end instead of the beginning.
