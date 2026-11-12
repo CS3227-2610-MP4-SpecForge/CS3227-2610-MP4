@@ -82,7 +82,7 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
   const [problem, setProblem] = useState<Problem | null>(null);
   const { notify } = useNotifications();
   const [, setMessage] = useNotificationState(false);
-  function reportProblem(value: Problem | null) { problemLive.current = value; setProblem(value); if (value) notify(value.message, true); }
+  function reportProblem(value: Problem | null, toast = true) { problemLive.current = value; setProblem(value); if (value && toast) notify(value.message, true); }
   const operation = useRef(false);
   const leaving = useRef(false);
   const latest = useRef(fields);
@@ -124,8 +124,9 @@ function RequestEditor({ initial, path, listPath, accountId, organisationName }:
     } catch (failure) {
       const status = failure instanceof ApiError ? failure.status : 0;
       // A 401 is rejected before any write, so the session banner explains it and
-      // an explicit retry is safe once the user has signed in again.
-      if (status === 401) reportProblem({ kind: "retry", message: "Your local edits are preserved. Sign in again, then save again." });
+      // an explicit retry is safe once the user has signed in again. The note
+      // stays inline; a toast would cover the banner.
+      if (status === 401) reportProblem({ kind: "retry", message: "Your local edits are preserved. Sign in again, then save again." }, false);
       else reportProblem({ kind: status === 409 ? "conflict" : status === 403 ? "denied" : "ambiguous", message: failureMessage(failure) });
     } finally { operation.current = false; setBusy(null); }
   }

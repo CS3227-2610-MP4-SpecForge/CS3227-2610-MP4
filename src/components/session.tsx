@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { onSessionChange } from "./http";
+import { onSessionChange, sessionEndedMessage } from "./http";
 
 // Pages for signed-out visitors, where a 401 is the expected state.
 const publicPaths = new Set(["/", "/sign-in", "/sign-up", "/verify-email"]);
@@ -20,7 +20,7 @@ export function SessionBanner() {
   }), []);
   if (!expired) return null;
   return <div className="session-banner" role="alert">
-    <p>Your session has ended. Sign in again to continue.</p>
+    <p>{sessionEndedMessage}</p>
     <a className="button secondary" href="/sign-in">Sign in again</a>
   </div>;
 }

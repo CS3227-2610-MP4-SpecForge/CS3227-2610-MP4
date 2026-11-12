@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import type { TicketRead } from "@/requests";
 import { expectAccessible, renderComponent } from "@/tests/render";
-import { api } from "./http";
+import { api, failureMessage } from "./http";
+import { useNotifications, useNotificationState } from "./notifications";
 import { RequestScreen } from "./request-editor";
 
 const ticketPath = "/api/organisations/org-1/requests/ticket-1";
@@ -64,6 +65,7 @@ describe("session expiry", () => {
     await new Promise(resolve => setTimeout(resolve, 1000));
     expect(saves).toHaveLength(2);
     expect(page.getByText(expired).elements()).toHaveLength(1);
+    expect(document.querySelectorAll(".notification-banner")).toHaveLength(0);
     await expect.element(description).toHaveValue("Unsaved idea");
     await expectAccessible();
   });
@@ -91,7 +93,7 @@ describe("session expiry", () => {
     history.replaceState(null, "", "/sign-in");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(reply({ error: "Sign in to continue." }, 401));
     await renderComponent(<p>Sign in page</p>);
-    await expect(api("/api/account")).rejects.toThrow("Sign in to continue.");
+    await expect(api("/api/account")).rejects.toThrow(expired);
     await new Promise(resolve => setTimeout(resolve, 100));
     expect(page.getByText(expired).elements()).toHaveLength(0);
   });
@@ -99,18 +101,45 @@ describe("session expiry", () => {
   it("hides the banner after a client redirect to sign-in", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => reply({ error: "Sign in to continue." }, 401));
     await renderComponent(<p>Workspace</p>);
-    await expect(api("/api/account")).rejects.toThrow("Sign in to continue.");
+    await expect(api("/api/account")).rejects.toThrow(expired);
     await expect.element(page.getByText(expired)).toBeVisible();
     // The workspace redirects with router.replace; the account menu then checks again.
     history.replaceState(null, "", "/sign-in");
-    await expect(api("/api/account")).rejects.toThrow("Sign in to continue.");
+    await expect(api("/api/account")).rejects.toThrow(expired);
     await expect.element(page.getByText(expired)).not.toBeInTheDocument();
+  });
+
+  it("leaves an ended session to the banner without a covering toast, while other toasts still show", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(reply({ error: "Sign in to continue." }, 401));
+    function Loader() {
+      const [error, setError] = useNotificationState(true);
+      const { notify } = useNotifications();
+      return <>
+        <button onClick={() => api("/api/account").catch(failure => setError(failureMessage(failure)))}>Load</button>
+        <button onClick={() => notify("2 changes could not be applied.", true)}>Apply</button>
+        {error && <p data-testid="inline">{error}</p>}
+      </>;
+    }
+    await renderComponent(<Loader />);
+    const toasts = () => [...document.querySelectorAll(".notification-banner")].map(toast => toast.textContent);
+
+    await page.getByRole("button", { name: "Load" }).click();
+    await expect.element(page.getByText(expired, { exact: true }).first()).toBeVisible();
+    await expect.element(page.getByTestId("inline")).toHaveTextContent(expired);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(toasts()).toEqual([]);
+    expect(page.getByText("Sign in to continue.", { exact: true }).elements()).toHaveLength(0);
+
+    // A warning the banner does not explain still appears while the session has ended.
+    await page.getByRole("button", { name: "Apply" }).click();
+    await vi.waitFor(() => expect(toasts()).toEqual(["2 changes could not be applied."]));
+    await expect.element(page.getByRole("link", { name: "Sign in again" })).toBeVisible();
   });
 
   it("clears the banner once an API call succeeds again", async () => {
     const transport = vi.spyOn(globalThis, "fetch").mockResolvedValue(reply({ error: "Sign in to continue." }, 401));
     await renderComponent(<p>Workspace</p>);
-    await expect(api("/api/account")).rejects.toThrow("Sign in to continue.");
+    await expect(api("/api/account")).rejects.toThrow(expired);
     await expect.element(page.getByText(expired)).toBeVisible();
     transport.mockResolvedValue(reply({ account: { id: "pm-1" } }));
     await api("/api/account");

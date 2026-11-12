@@ -30,3 +30,13 @@
   banner.
 - Open: the sticky banner can overlap the top of the sticky AI panel on a
   scrolled ticket page. This was not checked visually.
+- Follow-up (same day): after a 401 the old three-second toast also showed the
+  server's "Sign in to continue." and covered the banner. A non-auth 401 from
+  `api` now carries `sessionEndedMessage` (the banner's text), which the
+  notification provider never toasts; the editor's 401 note stays inline only.
+  A first attempt that muted every toast while the session had ended was
+  rejected in review because it hid unrelated warnings such as skipped AI
+  changes; the narrower rule keeps them. Validation: component tests 30/30
+  (the new test fails without the filter), lint, types, `npm test` (213 passed,
+  83 skipped), build, and `npm run test:e2e` 54/54 on port 3001. The code
+  reviewer approved the final diff.

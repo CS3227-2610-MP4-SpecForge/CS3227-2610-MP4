@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { NotificationBanner } from "./notification-banner";
+import { sessionEndedMessage } from "./http";
 
 type Notification = { id: number; message: string; danger: boolean };
 type Notifications = {
@@ -15,7 +16,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const sequence = useRef(0);
   const notify = useCallback((message: string, danger = false) => {
-    if (message) setNotification({ id: ++sequence.current, message, danger });
+    // The persistent session banner already says this; a toast would cover it.
+    if (message && message !== sessionEndedMessage) setNotification({ id: ++sequence.current, message, danger });
   }, []);
   const registerHost = useCallback((element: HTMLElement) => {
     setHost(element);
