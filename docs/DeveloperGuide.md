@@ -34,8 +34,16 @@ routine tests make no live model requests.
 
 ## Modules and interfaces
 
-- `src/server/application.ts`: account/organisation HTTP behaviour. Its small
+- `src/server/application.ts`: `createApplication`, the single `/api` entry
+  point. It runs the origin check, the public health check, auth admission and
+  the identity check in that order, then dispatches to route tables. Its small
   request/response interface covers validation, authorisation and safe failures.
+- `src/server/routes.ts`: the route table type `{ method, pattern, handler }` and
+  `matchRoute`. The first matching entry wins, so each table's order is part of
+  its behaviour.
+- `src/server/auth.ts` (sign-up, sign-in, verification, resend, sign-out and auth
+  admission), `src/server/organisations.ts` (organisations, membership and
+  invitations) and `src/server/account.ts` (profile and username) hold the routes.
 - `src/server/requests.ts`: strict request lifecycle HTTP actions and safe results.
   `src/server/http.ts` shares bounded JSON and private response handling.
 - `src/server/runtime.ts`: Next.js/Supabase SSR adapter, request-scoped cookies
