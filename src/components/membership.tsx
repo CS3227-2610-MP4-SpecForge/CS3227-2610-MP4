@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, failureMessage } from "./http";
+import { useConfirm, type ConfirmOptions } from "./confirm";
 import { Button, Field, Notice, Pill, useNotifications } from "./ui";
 
 type Invitation = {
@@ -32,6 +33,7 @@ export function Membership({
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const { notify } = useNotifications();
+  const confirm = useConfirm();
   const orgId = selected?.id;
   const isAdmin = selected?.isAdmin;
   useEffect(() => {
@@ -68,8 +70,8 @@ export function Membership({
       active = false;
     };
   }, [orgId, isAdmin, revision, notify]);
-  async function act(path: string, input: object, confirmation?: string) {
-    if (pending || (confirmation && !window.confirm(confirmation))) return;
+  async function act(path: string, input: object, confirmation?: ConfirmOptions) {
+    if (pending || (confirmation && !(await confirm(confirmation)))) return;
     setPending(true);
     try {
       const result = await api(path, input);
@@ -132,7 +134,13 @@ export function Membership({
                               act(
                                 `/api/invitations/${invitation.id}`,
                                 { action: "decline" },
-                                `Decline the invitation to ${invitation.organisation_name}?`,
+                                {
+                                  title: "Decline invitation?",
+                                  message: `You will not join ${invitation.organisation_name} unless invited again.`,
+                                  confirmLabel: "Decline",
+                                  cancelLabel: "Keep invitation",
+                                  danger: true,
+                                },
                               )
                             }
                           >
@@ -210,7 +218,13 @@ export function Membership({
                                     act(
                                       `/api/organisations/${selected.id}/invitations/${invitation.id}`,
                                       { action: "cancel" },
-                                      `Cancel the invitation for ${invitation.recipient_email}?`,
+                                      {
+                                        title: "Cancel invitation?",
+                                        message: `${invitation.recipient_email} will no longer be able to join ${selected.name} with this invitation.`,
+                                        confirmLabel: "Cancel invitation",
+                                        cancelLabel: "Keep invitation",
+                                        danger: true,
+                                      },
                                     )
                                   }
                                 >
@@ -246,7 +260,18 @@ export function Membership({
                                 act(
                                   `/api/organisations/${selected.id}/members/${member.user_id}`,
                                   { action: member.is_admin ? "demote" : "promote" },
-                                  `${member.is_admin ? "Revoke" : "Grant"} admin access for ${member.username}?`,
+                                  member.is_admin
+                                    ? {
+                                        title: "Revoke admin access?",
+                                        message: `${member.username} will no longer manage members of ${selected.name}.`,
+                                        confirmLabel: "Revoke admin",
+                                        danger: true,
+                                      }
+                                    : {
+                                        title: "Grant admin access?",
+                                        message: `${member.username} will be able to manage members of ${selected.name}.`,
+                                        confirmLabel: "Grant admin",
+                                      },
                                 )
                               }
                             >
@@ -260,7 +285,12 @@ export function Membership({
                                   act(
                                     `/api/organisations/${selected.id}/members/${member.user_id}`,
                                     { action: "remove" },
-                                    `Remove ${member.username} from ${selected.name}?`,
+                                    {
+                                      title: "Remove member?",
+                                      message: `${member.username} will lose access to ${selected.name} until invited again.`,
+                                      confirmLabel: "Remove member",
+                                      danger: true,
+                                    },
                                   )
                                 }
                               >
@@ -285,7 +315,12 @@ export function Membership({
                   act(
                     `/api/organisations/${selected.id}/members/${accountId}`,
                     { action: "leave" },
-                    `Leave ${selected.name}? You will lose access until invited again.`,
+                    {
+                      title: `Leave ${selected.name}?`,
+                      message: "You will lose access until invited again.",
+                      confirmLabel: "Leave organisation",
+                      danger: true,
+                    },
                   )
                 }
               >

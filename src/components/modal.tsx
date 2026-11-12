@@ -4,6 +4,10 @@ import { X } from "lucide-react";
 import { Button } from "./button";
 import { useNotifications } from "./notifications";
 
+// Modals can stack; only the last one to close restores page scrolling.
+let scrollLocks = 0;
+let unlockedOverflow = "";
+
 // Shared native modal: owns showModal, body scroll lock, initial focus, Esc
 // and the notification host. Callers restore focus in onClose.
 export function Modal({
@@ -30,7 +34,7 @@ export function Modal({
   const contentRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const dialog = ref.current!;
-    const previousOverflow = document.body.style.overflow;
+    if (scrollLocks++ === 0) unlockedOverflow = document.body.style.overflow;
     dialog.showModal();
     const unregister = registerHost(dialog);
     contentRef.current?.focus({ preventScroll: true });
@@ -38,7 +42,7 @@ export function Modal({
     return () => {
       unregister();
       dialog.close();
-      document.body.style.overflow = previousOverflow;
+      if (--scrollLocks === 0) document.body.style.overflow = unlockedOverflow;
     };
   }, [registerHost]);
   return (

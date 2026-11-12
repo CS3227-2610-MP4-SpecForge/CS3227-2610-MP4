@@ -13,6 +13,7 @@ import { TicketDelivery, TicketDeliveryFields, CopyTicketLink } from "./ticket-d
 import { TicketVisibility } from "./ticket-visibility";
 import { TicketActivity } from "./ticket-activity";
 import { TestPlanPanel } from "./test-plan-panel";
+import { useConfirm } from "./confirm";
 import { BackLink, Button, Field, Notice, useNotificationState, useNotifications } from "./ui";
 import { useUnsavedChanges } from "./use-unsaved-changes";
 
@@ -159,6 +160,17 @@ function RequestEditor({
   const [busy, setBusy] = useState<"autosave" | "explicit" | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const { notify } = useNotifications();
+  const ask = useConfirm();
+  // Autosave pauses while a confirmation is open, as the native dialog paused it.
+  const [confirming, setConfirming] = useState(false);
+  async function confirm(options: Parameters<typeof ask>[0]) {
+    setConfirming(true);
+    try {
+      return await ask(options);
+    } finally {
+      setConfirming(false);
+    }
+  }
   const [, setMessage] = useNotificationState(false);
   function reportProblem(value: Problem | null, toast = true) {
     problemLive.current = value;
@@ -257,14 +269,14 @@ function RequestEditor({
     }
   }
   useEffect(() => {
-    if (published || !dirty || busy || applying || problem || !withinLimits) return;
+    if (published || !dirty || busy || applying || problem || !withinLimits || confirming) return;
     const timer = window.setTimeout(() => {
       void save("save_draft");
     }, 750);
     return () => window.clearTimeout(timer);
     // save reads the current refs; rescheduling follows observable editor state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, delivery, published, dirty, busy, applying, problem, withinLimits]);
+  }, [fields, delivery, published, dirty, busy, applying, problem, withinLimits, confirming]);
   useUnsavedChanges(dirty || Boolean(busy), leaving);
   async function reconcile() {
     if (operation.current) return;
@@ -309,7 +321,15 @@ function RequestEditor({
     }
   }
   async function reloadSaved() {
-    if (operation.current || !window.confirm("Discard your local edits and load the saved version?")) return;
+    if (operation.current) return;
+    const discard = await confirm({
+      title: "Discard local edits?",
+      message: "Your unsaved changes will be replaced by the saved version.",
+      confirmLabel: "Discard and reload",
+      cancelLabel: "Keep editing",
+      danger: true,
+    });
+    if (!discard || operation.current) return;
     operation.current = true;
     setBusy("explicit");
     try {
@@ -658,8 +678,14 @@ function RequestEditor({
                   type="button"
                   className="secondary"
                   disabled={Boolean(busy) || applying || blocked}
-                  onClick={() => {
-                    if (window.confirm("Delete this private draft? This cannot be undone.")) void save("delete_draft");
+                  onClick={async () => {
+                    const remove = await confirm({
+                      title: "Delete draft?",
+                      message: "This private draft will be permanently deleted. This cannot be undone.",
+                      confirmLabel: "Delete draft",
+                      danger: true,
+                    });
+                    if (remove) void save("delete_draft");
                   }}
                 >
                   Delete draft

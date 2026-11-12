@@ -2,6 +2,7 @@ import axe from "axe-core";
 import type { ReactNode } from "react";
 import { expect } from "vitest";
 import { render } from "vitest-browser-react";
+import { ConfirmProvider } from "@/components/confirm";
 import { NotificationProvider } from "@/components/notifications";
 import { SessionBanner } from "@/components/session";
 
@@ -9,8 +10,10 @@ import { SessionBanner } from "@/components/session";
 export function renderComponent(ui: ReactNode) {
   return render(
     <NotificationProvider>
-      <SessionBanner />
-      {ui}
+      <ConfirmProvider>
+        <SessionBanner />
+        {ui}
+      </ConfirmProvider>
     </NotificationProvider>,
   );
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
 import { localFixture } from "../local.fixture";
-import { expectAccessible, savedTicketStatus } from "./ui.fixture";
+import { expectAccessible, savedTicketStatus, answerConfirmation } from "./ui.fixture";
 
 test("an ended session shows the sign-in banner and keeps unsaved ticket text", async ({ page, context }) => {
   const fixture = localFixture();
@@ -36,16 +36,11 @@ test("an ended session shows the sign-in banner and keeps unsaved ticket text", 
     await expectAccessible(page, ".session-banner");
 
     // Following the link asks before leaving the unsaved text.
-    let warned = false;
-    page.once("dialog", async dialog => {
-      warned = true;
-      await dialog.dismiss();
-    });
     await banner.getByRole("link", { name: "Sign in again", exact: true }).click();
-    expect(warned).toBe(true);
+    await answerConfirmation(page, "Leave with unsaved work?", "Stay");
     await expect(description).toHaveValue("Unsaved idea typed after the session ended");
-    page.once("dialog", dialog => dialog.accept());
     await banner.getByRole("link", { name: "Sign in again", exact: true }).click();
+    await answerConfirmation(page, "Leave with unsaved work?", "Leave");
     await expect(page).toHaveURL(/\/sign-in$/);
     await expect(page.getByRole("alert").filter({ hasText: "Your session has ended." })).toHaveCount(0);
   } finally {

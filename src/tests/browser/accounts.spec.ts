@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
 import { localFixture } from "../local.fixture";
-import { expectAccessible } from "./ui.fixture";
+import { expectAccessible, answerConfirmation } from "./ui.fixture";
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
 
 async function codeFor(email: string) {
@@ -223,18 +223,27 @@ test("signing out respects unsaved ticket edits before ending the session", asyn
     await page.getByLabel("Title", { exact: true }).fill("Unsaved title");
     const accountControl = page.getByRole("button", { name: /Account options$/ });
     await accountControl.click();
-    let warned = false;
-    page.once("dialog", async dialog => {
-      warned = true;
-      await dialog.dismiss();
-    });
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
-    expect(warned).toBe(true);
+    await answerConfirmation(page, "Leave with unsaved work?", "Stay");
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Unsaved title");
     expect((await page.request.get("/api/account")).status()).toBe(200);
-    await accountControl.click();
-    page.once("dialog", dialog => dialog.accept());
-    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    // The menu closes while the dialog has focus, unmounting the Profile link;
+    // Leave must still navigate.
+    await page.getByRole("link", { name: "Profile", exact: true }).click();
+    await expect(page.getByRole("link", { name: "Profile", exact: true })).toHaveCount(0);
+    await answerConfirmation(page, "Leave with unsaved work?", "Leave");
+    await expect(page).toHaveURL(/\/profile$/);
+    await page.goBack();
+    await expect(page.getByRole("button", { name: "Update", exact: true })).toBeVisible();
+    await page.getByLabel("Title", { exact: true }).fill("Unsaved title");
+    const signOut = page.getByRole("button", { name: "Sign out", exact: true });
+    // The menu can close while the reloaded editor settles; reopen if so.
+    await expect(async () => {
+      await accountControl.click();
+      await expect(signOut).toBeVisible({ timeout: 1000 });
+    }).toPass();
+    await signOut.click();
+    await answerConfirmation(page, "Leave with unsaved work?", "Leave");
     await expect(page).toHaveURL(/\/sign-in$/);
     expect((await page.request.get("/api/account")).status()).toBe(401);
   } finally {

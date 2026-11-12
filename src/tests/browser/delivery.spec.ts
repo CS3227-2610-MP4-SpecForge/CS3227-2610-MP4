@@ -1,4 +1,11 @@
-import { recordTicketWrites, savedTicketStatus, selectPill, setDueDate, settleAfter } from "./ui.fixture";
+import {
+  recordTicketWrites,
+  savedTicketStatus,
+  selectPill,
+  setDueDate,
+  settleAfter,
+  answerConfirmation,
+} from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localFixture } from "../local.fixture";
@@ -535,8 +542,8 @@ test("delivery conflicts preserve edits and a lost comment response retries with
     await page.getByRole("button", { name: "Update", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: "saved request changed" })).toBeVisible();
     await expect(page.getByLabel("Due date", { exact: true })).toHaveText("25 Dec 2026");
-    page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "Reload saved version and discard edits", exact: true }).click();
+    await answerConfirmation(page, "Discard local edits?", "Discard and reload");
     await expect(page.getByLabel("Priority", { exact: true })).toHaveText("High");
     await expect(page.getByLabel("Due date", { exact: true })).toHaveText("20 Dec 2026");
     let dropped = false;

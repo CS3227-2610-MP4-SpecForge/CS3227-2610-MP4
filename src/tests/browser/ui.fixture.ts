@@ -61,3 +61,10 @@ export async function setDueDate(page: Page, value: string) {
     await calendar.getByRole("button", { name: "Apply date", exact: true }).click();
   }
 }
+
+/** Answer the shared confirmation dialog and wait for it to close. */
+export async function answerConfirmation(page: Page, title: string, button: string) {
+  const dialog = page.getByRole("dialog", { name: title, exact: true });
+  await dialog.getByRole("button", { name: button, exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+}

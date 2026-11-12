@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { TicketActivity as Entry } from "@/delivery";
 import { assigneeUsernameLabel, formerAccountLabel } from "@/usernames";
 import { api, failureMessage } from "./http";
+import { useConfirm } from "./confirm";
 import { Button, Notice, TextareaField, useNotificationState } from "./ui";
 const eventLabels = {
   published: "Published this ticket",
@@ -28,6 +29,7 @@ export function TicketActivity({ path }: { path: string }) {
   const [posting, setPosting] = useState(false);
   const [, setError] = useNotificationState(true);
   const [, setMessage] = useNotificationState(false);
+  const confirm = useConfirm();
   const generation = useRef(0);
   const [attempt, setAttempt] = useState<{ creationKey: string; body: string } | null>(null);
   const operation = useRef(false);
@@ -148,12 +150,14 @@ export function TicketActivity({ path }: { path: string }) {
               type="button"
               className="secondary"
               disabled={posting}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "The previous attempt may already be posted. Check activity before starting a new comment attempt.",
-                  )
-                ) {
+              onClick={async () => {
+                const restart = await confirm({
+                  title: "Start a new comment attempt?",
+                  message:
+                    "The previous attempt may already be posted. Check activity first to avoid a duplicate comment.",
+                  confirmLabel: "Start new attempt",
+                });
+                if (restart) {
                   setAttempt(null);
                   setError("");
                 }

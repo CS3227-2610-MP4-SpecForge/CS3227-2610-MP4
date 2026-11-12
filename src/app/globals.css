@@ -12,6 +12,7 @@
   --border: #dce0eb;
   --danger: #a8263c;
   --danger-bg: #fff1f3;
+  --danger-hover: #8a1d30;
   --radius: 14px;
   --space: 8px;
   --focus: #6657e8;
@@ -200,6 +201,12 @@ nav a {
 }
 .button.secondary:hover {
   background: var(--brand-soft);
+}
+.button.danger {
+  background: var(--danger);
+}
+.button.danger:hover {
+  background: var(--danger-hover);
 }
 .button:disabled,
 button:disabled {
@@ -2019,6 +2026,31 @@ button:disabled {
   padding: 12px 24px;
   border-top: 1px solid var(--border);
   background: var(--surface);
+}
+.modal.confirm-modal {
+  width: 440px;
+  height: auto;
+}
+.confirm-modal .modal-toolbar {
+  border-bottom: 0;
+  padding-top: 8px;
+}
+.confirm-modal .modal-title {
+  padding-left: 12px;
+}
+.confirm-modal .modal-content {
+  flex: none;
+  padding: 0 24px 20px;
+}
+.confirm-message {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.confirm-modal .modal-footer {
+  border-top: 0;
+  padding-top: 0;
+  padding-bottom: 20px;
 }
 @media (max-width: 640px) {
   .modal {

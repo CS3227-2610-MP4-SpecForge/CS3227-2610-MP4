@@ -43,4 +43,18 @@ describe("Modal", () => {
     await view.unmount();
     expect(document.body.style.overflow).toBe("auto");
   });
+
+  it("keeps page scrolling locked until the last stacked modal closes, in any order", async () => {
+    document.body.style.overflow = "auto";
+    const outer = await renderModal();
+    const inner = await renderComponent(
+      <Modal label="Confirm" closeLabel="Close confirmation" onClose={vi.fn()}>
+        <p>Sure?</p>
+      </Modal>,
+    );
+    await outer.unmount();
+    expect(document.body.style.overflow).toBe("hidden");
+    await inner.unmount();
+    expect(document.body.style.overflow).toBe("auto");
+  });
 });

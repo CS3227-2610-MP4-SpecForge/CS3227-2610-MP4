@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { localFixture } from "../local.fixture";
-import { expectAccessible } from "./ui.fixture";
+import { expectAccessible, answerConfirmation } from "./ui.fixture";
 async function reopenManagement(page: import("@playwright/test").Page, name: string) {
   await page.getByRole("button", { name: "Close management", exact: true }).click();
   await page.getByRole("button", { name: `Manage ${name}`, exact: true }).click();
@@ -23,8 +23,6 @@ test(
       await target.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(target).toHaveURL(/\/workspace$/);
     };
-    page.on("dialog", dialog => dialog.accept());
-    recipient.on("dialog", dialog => dialog.accept());
     try {
       await login(page, a);
       await page.getByLabel("Organisation name").fill("Membership journey");
@@ -37,6 +35,7 @@ test(
       const beforeFailure =
         (await inviteInput.boundingBox())!.y + (await modalContent.evaluate(element => element.scrollTop));
       await page.getByRole("button", { name: "Leave organisation", exact: true }).click();
+      await answerConfirmation(page, "Leave Membership journey?", "Leave organisation");
       const failure = page.getByRole("alert").filter({ hasText: "at least one admin" });
       await expect(failure).toHaveClass(/notification-banner/);
       await expect(failure).toHaveCSS("background-color", "rgb(255, 241, 243)");
@@ -53,10 +52,12 @@ test(
       await login(recipient, b);
       await expect(recipient.getByRole("heading", { name: "Your invitations" })).toBeVisible();
       await recipient.getByRole("button", { name: "Decline", exact: true }).click();
+      await answerConfirmation(recipient, "Decline invitation?", "Decline");
       await expect(recipient.getByText("No pending invitations.")).toBeVisible();
       await reopenManagement(page, "Membership journey");
       await expect(page.getByText("Declined", { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Cancel invitation", exact: true }).click();
+      await answerConfirmation(page, "Cancel invitation?", "Cancel invitation");
       await expect(page.getByText("No pending outgoing invitations.")).toBeVisible();
       await page.getByLabel("Invite by email").fill(b.email);
       await page.getByRole("button", { name: "Send invitation", exact: true }).click();
@@ -67,10 +68,13 @@ test(
       await reopenManagement(page, "Membership journey");
       const member = page.getByRole("listitem").filter({ has: page.getByText(b.username, { exact: true }) });
       await member.getByRole("button", { name: "Promote admin", exact: true }).click();
+      await answerConfirmation(page, "Grant admin access?", "Grant admin");
       await expect(member.getByRole("button", { name: "Demote admin", exact: true })).toBeVisible();
       await member.getByRole("button", { name: "Demote admin", exact: true }).click();
+      await answerConfirmation(page, "Revoke admin access?", "Revoke admin");
       await expect(member.getByRole("button", { name: "Promote admin", exact: true })).toBeVisible();
       await member.getByRole("button", { name: "Promote admin", exact: true }).click();
+      await answerConfirmation(page, "Grant admin access?", "Grant admin");
       await expect(member.getByRole("button", { name: "Demote admin", exact: true })).toBeVisible();
       await page.route("**/api/organisations", async route => {
         if (route.request().method() === "GET") await new Promise(resolve => setTimeout(resolve, 1500));
@@ -78,6 +82,7 @@ test(
       });
       const self = page.getByRole("listitem").filter({ has: page.getByText(a.username, { exact: true }) });
       await self.getByRole("button", { name: "Demote admin", exact: true }).click();
+      await answerConfirmation(page, "Revoke admin access?", "Revoke admin");
       await expect(page.getByRole("link", { name: /Membership journey Member/ })).toBeVisible();
       await expect(page.getByLabel("Invite by email")).toHaveCount(0);
       await expect(page.getByRole("dialog", { name: "Manage Membership journey", exact: true })).toBeVisible();
@@ -85,6 +90,7 @@ test(
       await expect(membership.getByRole("button", { name: "Refresh membership", exact: true })).toHaveCount(0);
       await expect(membership.getByRole("alert")).toHaveCount(0);
       await page.getByRole("button", { name: "Leave organisation", exact: true }).click();
+      await answerConfirmation(page, "Leave Membership journey?", "Leave organisation");
       await expect(page.getByText("Your team starts here")).toBeVisible();
       await recipient.getByRole("button", { name: "Refresh membership", exact: true }).click();
       await recipient.getByRole("button", { name: "Manage Membership journey", exact: true }).click();
@@ -106,7 +112,6 @@ test("Developer admin resends expired invitations, cancels and removes a PM memb
   const admin = await fixture.actor("Developer");
   const pm = await fixture.actor("PM");
   const org = (await admin.client.rpc("create_organisation", { organisation_name: "Outgoing controls" })).data;
-  page.on("dialog", dialog => dialog.accept());
   try {
     await page.goto("/sign-in");
     await page.getByLabel("Email address").fill(admin.email);
@@ -126,6 +131,7 @@ test("Developer admin resends expired invitations, cancels and removes a PM memb
     await page.getByRole("button", { name: "Resend", exact: true }).click();
     await expect(page.getByRole("button", { name: "Resend", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Cancel invitation", exact: true }).click();
+    await answerConfirmation(page, "Cancel invitation?", "Cancel invitation");
     await expect(page.getByText("No pending outgoing invitations.")).toBeVisible();
     await page.getByLabel("Invite by email").focus();
     await page.keyboard.press("Tab");
@@ -140,6 +146,7 @@ test("Developer admin resends expired invitations, cancels and removes a PM memb
     await expect(member.getByRole("button", { name: "Remove member", exact: true })).toBeVisible();
     await page.screenshot({ path: "test-results/membership-desktop.png", fullPage: true, caret: "initial" });
     await member.getByRole("button", { name: "Remove member", exact: true }).click();
+    await answerConfirmation(page, "Remove member?", "Remove member");
     await expect(page.getByText(pm.username, { exact: true })).toHaveCount(0);
     expect((await pm.client.from("organisations").select("id").eq("id", org)).data).toEqual([]);
   } finally {
@@ -154,7 +161,6 @@ test("unknown email invites persist and creation/withdrawal banners float withou
   const owner = await fixture.actor("PM");
   const org = (await owner.client.rpc("create_organisation", { organisation_name: "Banner team" })).data;
   const email = `unknown-${crypto.randomUUID()}@example.com`;
-  page.on("dialog", dialog => dialog.accept());
   // Banner lifetimes are tested by advancing the page clock, not by sleeping. The
   // clock also keeps running in real time, so expiry checks use a short timeout.
   await page.clock.install();
@@ -197,6 +203,7 @@ test("unknown email invites persist and creation/withdrawal banners float withou
 
     await page.setViewportSize({ width: 390, height: 844 });
     await outgoing.getByRole("button", { name: "Cancel invitation", exact: true }).click();
+    await answerConfirmation(page, "Cancel invitation?", "Cancel invitation");
     const withdrawn = page.getByRole("status").filter({ hasText: "The invitation has been withdrawn" });
     await expect(withdrawn).toBeVisible();
     await expect(outgoing).toHaveCount(0);
