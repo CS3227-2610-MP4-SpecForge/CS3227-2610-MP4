@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { aiBrowserTimeoutMs } from "@/ai-diagnostics";
-import type { AiAnswer, AiUsage, AssistantIntent } from "@/assistance";
+import type { AiUsage, AssistantIntent } from "@/assistance";
 import type { ChatTurn } from "@/chat";
 import type { RequestFields } from "@/requests";
 import { aiLimitNotice, api, ApiError, ApiWaitTimeout, failureMessage } from "./http";
@@ -13,7 +13,6 @@ export type AssistantRequest = {
   fields: RequestFields;
   intent: AssistantIntent;
   message?: string;
-  answers?: AiAnswer[];
   retry: boolean;
 };
 // Advisory only: the server's 48,000-byte bound decides. Measure the payload as

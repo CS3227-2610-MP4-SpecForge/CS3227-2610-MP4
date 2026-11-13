@@ -26,7 +26,6 @@ describe("SoC provider interface", () => {
     expect(await provider(input)).toEqual({
       reply: "Here is a draft.",
       proposal: { title: "Search requests", description: "## Desired behaviour\n\n- Search titles" },
-      questions: null,
     });
     expect(wire).toMatchObject({
       max_tokens: 2000,
@@ -38,7 +37,7 @@ describe("SoC provider interface", () => {
       await createSocProvider(configuration, async () => envelope('{"reply":"Who is the user?","proposal":null}'))(
         question,
       ),
-    ).toEqual({ reply: "Who is the user?", proposal: null, questions: null });
+    ).toEqual({ reply: "Who is the user?", proposal: null });
   });
   it.each(["gemma4:unverified", "qwen3.6:35b", ""])(
     "rejects unsupported model %s before contacting the provider",
@@ -92,6 +91,7 @@ describe("SoC provider interface", () => {
     );
     expect(messages[0].content).toContain("Ask about something only when its answer would change what gets built");
     expect(messages[0].content).toContain("The description must not repeat the title");
+    expect(messages[0].content).toContain("Keep the description within 3,000 characters");
     expect(messages[0].content).toContain("never write a literal backslash-n");
     expect(JSON.parse(messages.at(-1)!.content)).toEqual({ ticket: fields, instruction: "Draft ticket", recent: [] });
   });
@@ -114,7 +114,6 @@ describe("SoC provider interface", () => {
     expect(await provider(input)).toEqual({
       reply: "Review this draft.",
       proposal: { title: "Remember filter", description: "Keep the selected filter on reload." },
-      questions: null,
     });
   });
   it.each([undefined, null, "", " \n "])(
@@ -125,7 +124,6 @@ describe("SoC provider interface", () => {
       expect(await provider(input)).toEqual({
         reply: "Review these suggested ticket changes.",
         proposal,
-        questions: null,
       });
     },
   );
@@ -134,7 +132,7 @@ describe("SoC provider interface", () => {
       await createSocProvider(configuration, async () => envelope('{"reply":" Which columns? ","publish":true}'))(
         question,
       ),
-    ).toEqual({ reply: "Which columns?", proposal: null, questions: null });
+    ).toEqual({ reply: "Which columns?", proposal: null });
   });
   it.each([
     null,
@@ -157,7 +155,7 @@ describe("SoC provider interface", () => {
       { title: " ", description: "Text" },
       { title: "Text", description: "\n " },
       { title: "😀".repeat(161), description: "Text" },
-      { title: "Text", description: "x".repeat(24001) },
+      { title: "Text", description: "x".repeat(3001) },
     ].map(proposal => ({ reply: "A valid reply cannot rescue a malformed proposal.", proposal })),
   ])("rejects malformed known fields instead of repairing or downgrading them (case %#)", async value => {
     await expect(
@@ -168,12 +166,12 @@ describe("SoC provider interface", () => {
     });
   });
   it("preserves title and description whitespace and Unicode limits when discarding extras", async () => {
-    const proposal = { title: "😀".repeat(160), description: " \n" + "x".repeat(23997) + " " };
+    const proposal = { title: "😀".repeat(160), description: " \n" + "x".repeat(2997) + " " };
     expect(
       await createSocProvider(configuration, async () =>
         envelope(JSON.stringify({ proposal: { ...proposal, extra: true } })),
       )(input),
-    ).toEqual({ reply: "Review these suggested ticket changes.", proposal, questions: null });
+    ).toEqual({ reply: "Review these suggested ticket changes.", proposal });
   });
   it("accepts valid JSON replies when the provider includes an empty tool-call list", async () => {
     const provider = createSocProvider(configuration, async () =>
@@ -183,13 +181,13 @@ describe("SoC provider interface", () => {
         ],
       }),
     );
-    expect(await provider(question)).toEqual({ reply: "Draft ready.", proposal: null, questions: null });
+    expect(await provider(question)).toEqual({ reply: "Draft ready.", proposal: null });
   });
   it("accepts replies longer than 4,000 characters within the bounded response body", async () => {
     const reply = "x".repeat(8001);
     expect(
       await createSocProvider(configuration, async () => envelope(JSON.stringify({ reply, proposal: null })))(question),
-    ).toEqual({ reply, proposal: null, questions: null });
+    ).toEqual({ reply, proposal: null });
   });
   it.each([
     [() => envelope('{"reply":"Partial","proposal":null}', "length"), "truncated"],
@@ -309,7 +307,7 @@ describe("PM assistant intents and bounded context", () => {
     description: "## Desired behaviour\n\nKeep the selected filter on reload.",
   };
   const wireOf = async (
-    intent: "draft" | "gaps" | "edit",
+    intent: "draft" | "edit",
     content: string,
     recent: { message: string; reply: string }[] = [],
   ) => {
@@ -330,7 +328,6 @@ describe("PM assistant intents and bounded context", () => {
   });
   it.each([
     ["draft", 2000],
-    ["gaps", 600],
     // An edit on a short ticket asks for the whole revised ticket.
     ["edit", 2500],
   ] as const)("uses the %s output budget of %i tokens", async (intent, tokens) => {
@@ -346,111 +343,20 @@ describe("PM assistant intents and bounded context", () => {
   });
 });
 
-describe("PM assistant exact-text edits", () => {
-  const long = "## Desired behaviour\n\n" + "Context line.\n".repeat(1430) + "Keep the filter.\n";
-  const run = (content: unknown, fields = { title: "Remember filters", description: long }) =>
-    createSocProvider(configuration, async () => envelope(JSON.stringify(content)))({
-      intent: "edit",
-      fields,
-      message: "Be precise",
-      recent: [],
-    });
-  it("applies small ordered edits to a long description and returns the whole reviewed ticket", async () => {
-    expect(long.length).toBeGreaterThan(20000);
-    const result = await run({
-      reply: "Clarified the filter.",
-      edits: [
-        { field: "description", find: "Keep the filter.", replace: "Keep the selected filter after reload." },
-        { field: "title", find: "Remember filters", replace: "Remember request filters" },
-      ],
-    });
-    expect(result).toEqual({
-      reply: "Clarified the filter.",
-      questions: null,
-      proposal: {
-        title: "Remember request filters",
-        description: long.replace("Keep the filter.", "Keep the selected filter after reload."),
-      },
-    });
-  });
-  it.each([
-    [{ field: "description", find: "Not in the ticket", replace: "x" }],
-    [{ field: "description", find: "Context line.", replace: "x" }],
-  ])("fails safely as unmatched_edit when find text is missing or ambiguous (%#)", async edit => {
-    await expect(run({ reply: "Changed.", edits: [edit] })).rejects.toMatchObject({
-      code: "invalid_output",
-      diagnostic: { source: "invalid_output", reason: "unmatched_edit" },
-    });
-  });
-  it("returns a reply without a suggestion when the edits change nothing", async () => {
-    expect(
-      await run({
-        reply: "Already clear.",
-        edits: [{ field: "title", find: "Remember filters", replace: "Remember filters" }],
-      }),
-    ).toEqual({ reply: "Already clear.", proposal: null, questions: null });
-    expect(await run({ reply: "Already clear." })).toEqual({
-      reply: "Already clear.",
-      proposal: null,
-      questions: null,
-    });
-  });
-  it("lets an empty find fill only an empty field", async () => {
-    const fields = { title: "", description: long };
-    expect(
-      (
-        await run(
-          { reply: "Added a title.", edits: [{ field: "title", find: "", replace: "Remember filters" }] },
-          fields,
-        )
-      ).proposal,
-    ).toEqual({ title: "Remember filters", description: long });
-    await expect(
-      run({ reply: "x", edits: [{ field: "description", find: "", replace: "Other" }] }, fields),
-    ).rejects.toMatchObject({ diagnostic: { reason: "unmatched_edit" } });
-  });
-  it.each([
-    { reply: "x", edits: [{ field: "status", find: "a", replace: "b" }] },
-    {
-      reply: "x",
-      edits: Array.from({ length: 11 }, () => ({ field: "title", find: "Remember", replace: "Remember" })),
-    },
-    { reply: "x", edits: [{ field: "description", find: "Keep the filter.", replace: "y".repeat(24001) }] },
-  ])("rejects malformed or oversized edits as invalid_schema (case %#)", async content => {
-    await expect(run(content)).rejects.toMatchObject({ diagnostic: { reason: "invalid_schema" } });
-  });
-});
-
 describe("PM assistant intent output rules", () => {
-  // Long enough that an edit turn uses exact-text edits rather than a rewrite.
-  const padding = "\n" + "Context line.\n".repeat(500);
-  const fields = { title: "Remember filters", description: "Keep aa filter. Price is $5." + padding };
-  const run = (intent: "draft" | "gaps" | "edit", content: unknown) =>
+  const fields = { title: "Remember filters", description: "Keep aa filter. Price is $5." };
+  const run = (intent: "draft" | "edit", content: unknown) =>
     createSocProvider(configuration, async () => envelope(JSON.stringify(content)))({
       intent,
       fields,
       message: "Go",
       recent: [],
     });
-  it("inserts replacement text literally and counts overlapping matches as ambiguous", async () => {
-    expect(
-      (await run("edit", { reply: "x", edits: [{ field: "description", find: "$5", replace: "$& and $1 $$" }] }))
-        .proposal?.description,
-    ).toBe("Keep aa filter. Price is $& and $1 $$." + padding);
-    const ambiguous = { title: "T", description: "aaa" + padding };
-    await expect(
-      createSocProvider(configuration, async () =>
-        envelope(JSON.stringify({ reply: "x", edits: [{ field: "description", find: "aa", replace: "b" }] })),
-      )({ intent: "edit", fields: ambiguous, message: "Go", recent: [] }),
-    ).rejects.toMatchObject({ diagnostic: { reason: "unmatched_edit" } });
-  });
   it.each([
-    ["edit", { reply: "x", proposal: { title: "A", description: "B" } }],
+    ["edit", { reply: "x", edits: [{ field: "title", find: "Remember", replace: "Keep" }] }],
     ["edit", { reply: "x", questions: [] }],
     ["draft", { reply: "x", edits: [] }],
     ["draft", { reply: "x", questions: [] }],
-    ["gaps", { reply: "x", proposal: { title: "A", description: "B" } }],
-    ["gaps", { reply: "x", edits: [] }],
     ["edit", { reply: "x", proposal: { title: "A", description: "B" }, edits: [] }],
   ] as const)("rejects output meant for another intent (%s, case %#)", async (intent, content) => {
     await expect(run(intent, content)).rejects.toMatchObject({ diagnostic: { reason: "invalid_schema" } });
@@ -459,35 +365,6 @@ describe("PM assistant intent output rules", () => {
     expect(await run("edit", { reply: "Fine.", proposal: null, questions: null })).toEqual({
       reply: "Fine.",
       proposal: null,
-      questions: null,
-    });
-    expect((await run("gaps", { reply: "No gaps.", proposal: null, edits: null })).questions).toBeNull();
-  });
-  it("returns bounded gap questions and never a ticket change", async () => {
-    const questions = [{ prompt: "Which lists keep filters?", options: ["Requests only", "Every list"] }];
-    expect(await run("gaps", { reply: "One gap.", questions })).toEqual({
-      reply: "One gap.",
-      proposal: null,
-      questions,
-    });
-    expect(await run("gaps", { reply: "No material gaps." })).toEqual({
-      reply: "No material gaps.",
-      proposal: null,
-      questions: null,
-    });
-  });
-  it.each([
-    [Array.from({ length: 6 }, () => ({ prompt: "Q?", options: ["A", "B"] }))],
-    [[{ prompt: "Q?", options: ["Only one"] }]],
-    [[{ prompt: "Q?", options: ["A", "B", "C", "D", "E"] }]],
-    [[{ prompt: "x".repeat(301), options: ["A", "B"] }]],
-    [[{ prompt: "Q?", options: ["A", "y".repeat(121)] }]],
-    [[{ prompt: " ", options: ["A", "B"] }]],
-    [[{ prompt: "Q?", options: ["A", " "] }]],
-    [[{ prompt: "Q?", options: ["A", "B"], publish: true }]],
-  ])("rejects malformed gap questions (case %#)", async questions => {
-    await expect(run("gaps", { reply: "x", questions })).rejects.toMatchObject({
-      diagnostic: { reason: "invalid_schema" },
     });
   });
   it("keeps the system message constant and ticket text out of it", async () => {
@@ -500,20 +377,6 @@ describe("PM assistant intent output rules", () => {
     }
     expect(seen[0]).toBe(seen[1]);
     expect(seen[0]).not.toContain("Ignore all rules");
-  });
-  it("sends Apply answers as structured data in the untrusted payload", async () => {
-    let payload: Record<string, unknown> = {};
-    await createSocProvider(configuration, async (_url, init) => {
-      payload = JSON.parse(JSON.parse(String(init?.body)).messages[1].content);
-      return envelope(JSON.stringify({ reply: "Ok.", edits: [{ field: "title", find: "Remember", replace: "Keep" }] }));
-    })({
-      intent: "edit",
-      fields,
-      message: "Apply my answers to the ticket.",
-      recent: [],
-      answers: [{ question: "Which lists?", answer: null }],
-    });
-    expect(payload.answers).toEqual([{ question: "Which lists?", answer: null }]);
   });
 });
 
@@ -559,27 +422,16 @@ describe("PM assistant draft clean-up", () => {
       diagnostic: { reason: "invalid_schema" },
     });
   });
-  it("turns literal \\n in edit replacements into line breaks", async () => {
+  it("turns literal \\n in an edit proposal into line breaks", async () => {
     const result = await createSocProvider(configuration, async () =>
       envelope(
         JSON.stringify({
           reply: "Added criteria.",
-          edits: [
-            {
-              field: "description",
-              find: "Edit the text.",
-              replace: "Edit the text.\\n\\n## Acceptance criteria\\n- Done.",
-            },
-          ],
+          proposal: { title: "T", description: "Edit the text.\\n\\n## Acceptance criteria\\n- Done." },
         }),
       ),
-    )({
-      intent: "edit",
-      fields: { title: "T", description: "Edit the text." + "\nContext line.".repeat(500) },
-      message: "Add criteria",
-      recent: [],
-    });
-    expect(result.proposal?.description).toMatch(/^Edit the text\.\n\n## Acceptance criteria\n- Done\.\nContext/);
+    )({ intent: "edit", fields: { title: "T", description: "Edit the text." }, message: "Add criteria", recent: [] });
+    expect(result.proposal?.description).toBe("Edit the text.\n\n## Acceptance criteria\n- Done.");
   });
 });
 
@@ -588,84 +440,51 @@ describe("PM assistant edit reliability", () => {
     title: "Add stamina refill",
     description: "## Acceptance criteria\n- The stamina bar shows stamina.",
   };
-  const long = {
-    title: "Add stamina refill",
-    description:
-      "## Notes\n\n" + "Context line.\n".repeat(500) + "## Acceptance criteria\n- The stamina bar shows stamina.\n",
-  };
   const call = async (
     content: unknown,
     fields: { title: string; description: string },
-    extra: { intent?: "draft" | "edit"; answers?: { question: string; answer: string | null }[] } = {},
+    extra: { intent?: "draft" | "edit" } = {},
   ) => {
     let wire: { max_tokens: number; messages: { content: string }[] } = { max_tokens: 0, messages: [] };
     const result = await createSocProvider(configuration, async (_url, init) => {
       wire = JSON.parse(String(init?.body));
       return envelope(JSON.stringify(content));
-    })({ intent: extra.intent ?? "edit", fields, message: "Refine", recent: [], answers: extra.answers });
+    })({ intent: extra.intent ?? "edit", fields, message: "Refine", recent: [] });
     return { wire, result };
   };
-  it("asks for the whole revised ticket on a short ticket and returns it for review", async () => {
-    const proposal = { title: "Add stamina refill", description: "## Acceptance criteria\n- Refills in 5 seconds." };
-    const { wire, result } = await call({ reply: "Suggested a refill time.", proposal }, short);
-    expect(wire.max_tokens).toBe(2500);
-    expect(wire.messages[0].content).toContain('"proposal":{"title"');
-    expect(wire.messages[0].content).not.toContain('"edits"');
-    expect(result).toEqual({ reply: "Suggested a refill time.", proposal, questions: null });
-  });
+  it.each([short, { title: "Add stamina refill", description: "x".repeat(3000) }])(
+    "asks for the whole revised ticket and returns it for review (%#)",
+    async fields => {
+      const proposal = { title: "Add stamina refill", description: "## Acceptance criteria\n- Refills in 5 seconds." };
+      const { wire, result } = await call({ reply: "Suggested a refill time.", proposal }, fields);
+      expect(wire.max_tokens).toBe(2500);
+      expect(wire.messages[0].content).toContain('"proposal":{"title"');
+      expect(wire.messages[0].content).toContain("3,000 characters");
+      expect(wire.messages[0].content).not.toContain('"edits"');
+      expect(result).toEqual({ reply: "Suggested a refill time.", proposal });
+    },
+  );
   it("treats a rewrite equal to the ticket as a reply-only result", async () => {
     expect((await call({ reply: "Already clear.", proposal: short }, short)).result.proposal).toBeNull();
   });
-  it("rejects exact-text edits on a short ticket", async () => {
+  it("rejects exact-text edits, which are no longer supported", async () => {
     await expect(
       call({ reply: "x", edits: [{ field: "title", find: "Add", replace: "Make" }] }, short),
     ).rejects.toMatchObject({ diagnostic: { reason: "invalid_schema" } });
   });
-  it("keeps exact-text edits with the small budget on a ticket over 6,000 characters", async () => {
-    expect(long.title.length + long.description.length).toBeGreaterThan(6000);
-    const { wire } = await call({ reply: "Fine." }, long);
-    expect(wire.max_tokens).toBe(1200);
-    expect(wire.messages[0].content).toContain('"edits"');
-  });
-  it.each([
-    "## Acceptance criteria\\n- The stamina bar shows stamina.",
-    "## Acceptance criteria\n-  The stamina bar\nshows stamina. ",
-  ])("applies a find that differs only in whitespace or escaped line breaks (%#)", async find => {
-    const { result } = await call(
-      { reply: "x", edits: [{ field: "description", find, replace: "## Acceptance criteria\n- Refills." }] },
-      long,
-    );
-    expect(result.proposal?.description).toBe(
-      long.description.replace(/## Acceptance[\s\S]*$/, "## Acceptance criteria\n- Refills.\n"),
-    );
-  });
-  it.each(["- Stamina bar shows stamina.", "Context line."])(
-    "still rejects a paraphrased or ambiguous find (%#)",
-    async find => {
-      await expect(
-        call({ reply: "x", edits: [{ field: "description", find, replace: "y" }] }, long),
-      ).rejects.toMatchObject({ diagnostic: { reason: "unmatched_edit" } });
-    },
-  );
-  it("rejects a huge repetitive find quickly as unmatched_edit", async () => {
-    const fields = { title: "Repeat", description: "a ".repeat(11000) };
-    const started = performance.now();
+  it("rejects a proposal whose description exceeds 3,000 characters", async () => {
     await expect(
-      call({ reply: "x", edits: [{ field: "description", find: "a ".repeat(4000) + "b", replace: "y" }] }, fields),
-    ).rejects.toMatchObject({ diagnostic: { reason: "unmatched_edit" } });
-    expect(performance.now() - started).toBeLessThan(200);
+      call({ reply: "x", proposal: { title: "T", description: "y".repeat(3001) } }, short),
+    ).rejects.toMatchObject({ diagnostic: { reason: "invalid_schema" } });
   });
   it("fails a draft that suggests no ticket", async () => {
     await expect(
       call({ reply: "Ticket updated.", proposal: null }, { title: "", description: "Idea" }, { intent: "draft" }),
     ).rejects.toMatchObject({ code: "invalid_output", diagnostic: { reason: "invalid_schema" } });
   });
-  it.each([short, long])("fails applied answers that change nothing (%#)", async fields => {
-    await expect(
-      call({ reply: "Ticket updated with your answers." }, fields, {
-        answers: [{ question: "How fast?", answer: "5 seconds" }],
-      }),
-    ).rejects.toMatchObject({ code: "invalid_output", diagnostic: { reason: "invalid_schema" } });
+  it.each(["draft", "edit"] as const)("sends %s instructions without gap questions or answers", async intent => {
+    const { wire } = await call({ reply: "Fine.", proposal: { title: "T", description: "D" } }, short, { intent });
+    expect(wire.messages[0].content).not.toMatch(/"questions"|answers/);
   });
   it("tells the model its changes are suggestions", async () => {
     const { wire } = await call({ reply: "Fine." }, short);

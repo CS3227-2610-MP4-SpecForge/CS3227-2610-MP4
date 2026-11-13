@@ -25,27 +25,11 @@ export const localFakeAi: AiProvider = async input => {
     throw new AiFailure("network_error", { source: "network", elapsed_ms: 567 });
   if (input.message.toLowerCase().includes("simulate failure")) throw new AiFailure("unavailable");
   if (input.message.toLowerCase().includes("slow proposal")) await new Promise(resolve => setTimeout(resolve, 1500));
-  if (input.intent === "gaps")
+  if (input.message.includes("description change"))
     return {
-      reply: "Two decisions affect scope.",
-      proposal: null,
-      questions: [
-        { prompt: "Which lists should keep filters?", options: ["Requests only", "Every list"] },
-        { prompt: "How long should filters persist?", options: ["This session", "Until changed"] },
-      ],
+      reply: "Here is a description change. Review it before applying.",
+      proposal: { ...input.fields, description: `${input.fields.description}\n\n## Decisions\n\n- Requests only` },
     };
-  if (input.answers) {
-    const lines = input.answers.map(item =>
-      item.answer === null ? `- Unresolved: ${item.question}` : `- ${item.question} ${item.answer}`,
-    );
-    return {
-      reply: "Recorded your answers.",
-      proposal: {
-        title: input.fields.title || fakeProposal.title,
-        description: `${input.fields.description || fakeProposal.description}\n\n## Decisions\n\n${lines.join("\n")}`,
-      },
-    };
-  }
   if (input.intent === "draft" || input.message.toLowerCase().includes("proposal"))
     return { reply: "Here is a proposed task. Review it before applying.", proposal: fakeProposal };
   return { reply: "Who is this feature for?", proposal: null };

@@ -1,7 +1,10 @@
 import { z } from "zod";
+import { requestFields } from "../requests";
+const within = (max: number) => z.string().refine(value => [...value].length <= max);
+const limitOf = (key: "title" | "description") => requestFields.find(field => field.key === key)!.max;
 export const taskFields = z.strictObject({
-  title: z.string().refine(value => [...value].length <= 160),
-  description: z.string().refine(value => [...value].length <= 24000),
+  title: within(limitOf("title")),
+  description: within(limitOf("description")),
 });
 const fields = taskFields;
 const revision = z.number().int().min(1).max(2147483647);

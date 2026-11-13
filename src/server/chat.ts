@@ -1,19 +1,14 @@
 import { aiDiagnostic, diagnosticSources } from "./ai-diagnostics";
 import type { AiDiagnostic } from "../ai-diagnostics";
-import { answerLimit, assistanceMessages, assistantIntents } from "../assistance";
+import { assistanceMessages, assistantIntents, messageLimit } from "../assistance";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { error, json, logFailure, readBody, serviceUnavailable } from "./http";
 import { taskFields } from "./requests";
-import { AiFailure, aiQuestion, pauseFor, questionLimits, type AiProvider, type AiReply } from "./soc";
+import { AiFailure, pauseFor, type AiProvider, type AiReply } from "./soc";
 import { limitBlock, limitResponse, type AiLimits } from "./ai-limits";
 export type ChatDependencies = { worker(): SupabaseClient; provider: AiProvider };
 const intent = z.enum(assistantIntents);
-const nonblank = (max: number) => z.string().refine(value => [...value].length <= max && value.trim() !== "");
-const answers = z
-  .array(z.strictObject({ question: nonblank(questionLimits.prompt), answer: nonblank(answerLimit).nullable() }))
-  .min(1)
-  .max(questionLimits.questions);
 const turnSchema = z.object({
   id: z.uuid(),
   request_id: z.uuid(),
@@ -32,8 +27,6 @@ const turnSchema = z.object({
   diagnostic: aiDiagnostic.nullable().default(null),
   created_at: z.string(),
   intent: intent.default("edit"),
-  questions: z.array(aiQuestion).nullable().default(null),
-  answers: answers.nullable().default(null),
 });
 const usageSchema = z.object({
   remaining: z.number().int().min(0),
@@ -47,7 +40,6 @@ const manual = "or keep editing manually.";
 const replySchema = z.object({
   reply: z.string().refine(value => value.trim() !== ""),
   proposal: taskFields.nullable().default(null),
-  questions: z.array(aiQuestion).min(1).max(questionLimits.questions).nullable().default(null),
 });
 // Fixed user-facing strings keyed by fixed database messages; raw database text never reaches the browser.
 const limits: Record<string, string> = {
@@ -125,27 +117,17 @@ export async function handleChat(
       message: z
         .string()
         .trim()
-        .refine(value => [...value].length <= 4000)
+        .refine(value => [...value].length <= messageLimit)
         .optional(),
-      answers: answers.optional(),
       retry: z.boolean().default(false),
     })
-    .refine(value =>
-      value.intent === "edit" ? value.answers !== undefined || Boolean(value.message) : value.answers === undefined,
-    )
+    .refine(value => value.intent !== "edit" || Boolean(value.message))
     .safeParse(await readBody(request, 262144));
   if (!input.success) return error("Enter a message of 1–4,000 characters and a valid current ticket.", 400);
   if (!dependencies || !limits)
     return serviceUnavailable(request, undefined, "AI is not configured. Continue editing manually.");
-  // Gap-check and apply-answers turns carry fixed server messages. A draft
-  // carries the PM's own rough idea when they typed one, else a fixed message.
-  const message = input.data.answers
-    ? assistanceMessages.answers
-    : input.data.intent === "edit"
-      ? input.data.message!
-      : input.data.intent === "draft" && input.data.message
-        ? input.data.message
-        : assistanceMessages[input.data.intent];
+  // A draft carries the PM's own rough idea when they typed one, else a fixed message.
+  const message = input.data.message || assistanceMessages.draft;
   const worker = dependencies.worker();
   const { data: admission, error: admissionError } = await worker.rpc("begin_chat_turn", {
     target_org: org,
@@ -157,7 +139,7 @@ export async function handleChat(
     user_message: message,
     retry_failed: input.data.retry,
     p_intent: input.data.intent,
-    p_answers: input.data.answers ?? null,
+    p_answers: null,
     ai_limits: limits,
   });
   const block = limitBlock(admissionError);
@@ -188,16 +170,9 @@ export async function handleChat(
         fields: turn.input_fields,
         message: turn.message,
         recent,
-        answers: turn.answers,
       }),
     );
-    // Output must suit the admitted intent: questions only for gaps, never a ticket change there.
-    if (
-      !reply.success ||
-      (reply.data.questions && turn.intent !== "gaps") ||
-      (reply.data.proposal && turn.intent === "gaps")
-    )
-      throw new AiFailure("invalid_output", { source: "invalid_output", reason: "invalid_schema" });
+    if (!reply.success) throw new AiFailure("invalid_output", { source: "invalid_output", reason: "invalid_schema" });
     result = reply.data;
   } catch (failure) {
     code = failure instanceof AiFailure ? failure.code : "unavailable";
@@ -220,7 +195,7 @@ export async function handleChat(
     worker_generation: turn.generation,
     human_reply: result?.reply ?? null,
     task_proposal: result?.proposal ?? null,
-    task_questions: result?.questions ?? null,
+    task_questions: null,
     failure_code: code,
     failure_diagnostic: diagnostic,
     pause_seconds: pause,

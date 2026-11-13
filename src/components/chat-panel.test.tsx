@@ -23,8 +23,6 @@ const turn = (overrides: Partial<ChatTurn>): ChatTurn => ({
   error_code: null,
   created_at: "2026-11-13T00:00:00Z",
   intent: "edit",
-  questions: null,
-  answers: null,
   ...overrides,
 });
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
@@ -57,12 +55,13 @@ describe("PM assistant turn outcomes", () => {
     await expect.element(page.getByText("No ticket changes suggested.", { exact: true })).toBeVisible();
   });
 
-  it("does not add the note to a gaps check", async () => {
-    const gaps = turn({ intent: "gaps", reply: "No material gaps." });
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({ turns: [gaps], usage }));
+  it("counts the message against the 4,000-character limit", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({ turns: [], usage }));
     renderComponent(<Assistant />);
-    await expect.element(page.getByText("No material gaps.")).toBeVisible();
-    await expect.element(page.getByText("No ticket changes suggested.", { exact: true })).not.toBeInTheDocument();
+    const composer = page.getByLabelText("Ask AI to change or explain this ticket");
+    await expect.element(composer).toHaveAccessibleDescription("0 / 4,000 characters");
+    await userEvent.fill(composer, "Shorter please");
+    await expect.element(composer).toHaveAccessibleDescription("14 / 4,000 characters");
   });
 
   it("shows a plain pending status without inviting edits", async () => {
