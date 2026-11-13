@@ -10,6 +10,7 @@ import { handleRequests } from "./requests";
 import { matchRoute, type Route, type SessionContext } from "./routes";
 import { handleTestPlans, type TestPlanDependencies } from "./test-plans";
 import { handleOrganisationAiUsage, type AiLimits } from "./ai-limits";
+import { handleOverview } from "./overview";
 
 export { createAuthAdmission } from "./auth";
 
@@ -72,6 +73,7 @@ export function createApplication(options: Options) {
           (await handleChat(request, client, user.id, options.chat, options.aiLimits)) ??
           (await handleTestPlans(request, client, user.id, options.testPlans, options.aiLimits)) ??
           (await handleOrganisationAiUsage(request, client, options.aiLimits)) ??
+          (await handleOverview(request, client)) ??
           (await handleDelivery(request, client)) ??
           (await handleRequests(request, client));
         if (handled) return handled;

@@ -14,10 +14,21 @@ import { PriorityPill, StatusPill, priorityOptions, statusOptions } from "./tick
 import { TicketMembers } from "./ticket-members";
 import type { TicketRead } from "@/requests";
 import { assigneeUsernameLabel } from "@/usernames";
+import {
+  derivedStatuses,
+  filterQuery,
+  localDay,
+  parseRequestFilters,
+  requestsHref,
+  uuidPattern,
+  type RequestFilters,
+} from "@/overview";
+import { OrganisationTabs } from "./organisation-tabs";
 
 const statusFilterOptions = [
   { value: "", label: "All statuses" },
   { value: "draft", label: "Private drafts" },
+  ...Object.entries(derivedStatuses).map(([value, label]) => ({ value, label })),
   ...Object.entries(ticketStatuses).map(([value, label]) => ({ value, label })),
 ];
 const priorityFilterOptions = [
@@ -31,13 +42,30 @@ const sortOptions = [
 ];
 type RequestPage = { requests: TicketRead[]; nextOffset: number | null };
 const emptyPage: RequestPage = { requests: [], nextOffset: null };
+const unrecognisedFilters = "Some filters in this link were not recognised, so defaults are shown instead.";
+
+/** The list API query: the URL filters, plus the viewer's day where a status depends on it. */
+function listQuery(filters: RequestFilters) {
+  const params = new URLSearchParams(filterQuery(filters));
+  if (filters.status === "overdue" || filters.status === "due_soon") params.set("today", localDay());
+  const query = params.toString();
+  return query ? "?" + query : "";
+}
 
 // The shared session banner reports a 401, so it does not hide the PM controls.
 function accessDenied(failure: unknown) {
   return failure instanceof ApiError && failure.status === 403;
 }
 
-export function RequestList({ organisationId }: { organisationId: string }) {
+export function RequestList({
+  organisationId,
+  initialSearch = {},
+}: {
+  organisationId: string;
+  /** The page URL's search parameters; only recognised filter values are used. */
+  initialSearch?: Record<string, string | string[] | undefined>;
+}) {
+  const [initial] = useState(() => parseRequestFilters(initialSearch));
   const [{ requests: items, nextOffset }, setPage] = useState(emptyPage);
   const [organisation, setOrganisation] = useState("");
   const [account, setAccount] = useState<{ id: string; role: string } | null>(null);
@@ -48,8 +76,13 @@ export function RequestList({ organisationId }: { organisationId: string }) {
   const [error, setError] = useNotificationState(true);
   const [reload, setReload] = useState(0);
   const [members, setMembers] = useState<TicketMember[]>([]);
-  const [filters, setFilters] = useState({ search: "", status: "", priority: "", assignee: "", sort: "updated" });
-  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState(initial.filters);
+  const [query, setQuery] = useState(() => listQuery(initial.filters));
+  // The filters behind the current list, which an asynchronous correction must start from.
+  const applied = useRef(initial.filters);
+  const [unrecognised, setUnrecognised] = useState(initial.invalid);
+  // A member named by a link may be beyond the first page of the member directory.
+  const [linkedMember, setLinkedMember] = useState<{ value: string; label: string } | null>(null);
   const creationKey = useRef<string | null>(null);
   const deliveryOperation = useRef(false);
   const busy = pending || savingDelivery;
@@ -59,7 +92,34 @@ export function RequestList({ organisationId }: { organisationId: string }) {
     { value: "me", label: "Assigned to me" },
     { value: "unassigned", label: "Unassigned" },
     ...members.map(member => ({ value: member.user_id, label: `${member.username} (${member.app_role})` })),
+    ...(linkedMember && !members.some(m => m.user_id === linkedMember.value) ? [linkedMember] : []),
   ];
+  useEffect(() => {
+    const assignee = initial.filters.assignee;
+    if (!uuidPattern.test(assignee)) return;
+    let active = true;
+    api(`/api/organisations/${organisationId}/ticket-members?selected=${assignee}`)
+      .then((result: { selected_members: TicketMember[] }) => {
+        if (!active) return;
+        const member = result.selected_members.find(found => found.user_id === assignee);
+        if (member) return setLinkedMember({ value: assignee, label: `${member.username} (${member.app_role})` });
+        // Not a current member: drop that filter rather than list nobody's tickets.
+        setFilters(current => ({ ...current, assignee: current.assignee === assignee ? "" : current.assignee }));
+        if (applied.current.assignee !== assignee) return;
+        const next = { ...applied.current, assignee: "" };
+        applied.current = next;
+        setUnrecognised(true);
+        setQuery(listQuery(next));
+        window.history.replaceState(null, "", requestsHref(organisationId, next));
+      })
+      .catch(() => {
+        // The filter still works by id; only its name is unknown.
+        if (active) setLinkedMember({ value: assignee, label: "Linked member" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [initial, organisationId]);
   useEffect(() => {
     let active = true;
     Promise.all([api(path + query), api("/api/account"), api(`/api/organisations/${organisationId}`)])
@@ -86,12 +146,14 @@ export function RequestList({ organisationId }: { organisationId: string }) {
   }, [path, organisationId, reload, query, setError]);
   function applyFilters() {
     if (busy || deliveryOperation.current) return;
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
     setDeliveryError("");
+    setUnrecognised(false);
     setLoaded(false);
-    setQuery("?" + params.toString());
+    applied.current = filters;
+    setQuery(listQuery(filters));
     setReload(n => n + 1);
+    // Keep the address in step so a reload or a shared link shows the same view.
+    window.history.replaceState(null, "", requestsHref(organisationId, filters));
   }
   async function more() {
     if (busy || deliveryOperation.current || nextOffset === null) return;
@@ -183,6 +245,8 @@ export function RequestList({ organisationId }: { organisationId: string }) {
           )}
         </div>
       </div>
+      <OrganisationTabs organisationId={organisationId} current="requests" />
+      {unrecognised && <Notice>{unrecognisedFilters}</Notice>}
 
       <form
         className="card stack request-filters"

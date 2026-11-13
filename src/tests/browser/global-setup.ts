@@ -14,6 +14,7 @@ const routes = [
   "/verify-email",
   "/workspace",
   "/profile",
+  `/organisations/${randomUUID()}/overview`,
   `/organisations/${randomUUID()}/requests`,
   `/organisations/${randomUUID()}/requests/${randomUUID()}`,
 ];

@@ -32,7 +32,7 @@ export const priority = z.enum(["low", "medium", "high"]);
 export const date = z.iso.date();
 export const ticketListQuery = z.strictObject({
   search: z.string().max(160).optional(),
-  status: z.enum(["draft", ...status.options]).optional(),
+  status: z.enum(["draft", "open", "overdue", "due_soon", ...status.options]).optional(),
   priority: priority.optional(),
   assignee: z.union([z.uuid(), z.enum(["me", "unassigned"])]).optional(),
   overdue: z.enum(["true", "false"]).optional(),
