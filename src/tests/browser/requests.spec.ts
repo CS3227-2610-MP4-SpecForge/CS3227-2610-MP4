@@ -1,6 +1,12 @@
-import { expectAccessible, recordTicketWrites, savedTicketStatus as saved, setDueDate } from "./ui.fixture";
+import {
+  expectAccessible,
+  recordTicketWrites,
+  savedTicketStatus as saved,
+  setDueDate,
+  answerConfirmation,
+} from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
-import { localFixture } from "../local.fixture";
+import { localFixture, testAiLimits } from "../local.fixture";
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
 async function login(page: Page, actor: { email: string; password: string }) {
   await page.goto("/sign-in");
@@ -63,6 +69,10 @@ test(
     try {
       await login(page, pm);
       await page.getByRole("link", { name: /Requirements team Admin/ }).click();
+      await page
+        .getByRole("navigation", { name: "Organisation sections" })
+        .getByRole("link", { name: "Requests", exact: true })
+        .click();
       await page.getByRole("button", { name: "New task", exact: true }).click();
       await page.getByLabel("Title", { exact: true }).focus();
       await page.keyboard.press("Tab");
@@ -240,15 +250,15 @@ test("failed saves require reconciliation; in-flight edits and stale editor text
     await page.goBack({ waitUntil: "domcontentloaded", timeout: 2000 }).catch(() => null);
     expect(historyWarning).toBe(true);
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Local stale edit to keep");
-    page.once("dialog", dialog => dialog.dismiss());
     await page.getByRole("link", { name: "Back to requests", exact: true }).click();
+    await answerConfirmation(page, "Leave with unsaved work?", "Stay");
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Local stale edit to keep");
-    page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "Reload saved version and discard edits", exact: true }).click();
+    await answerConfirmation(page, "Discard local edits?", "Discard and reload");
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("A newer saved version");
     await expect(saved(page)).toBeVisible();
-    page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "Delete draft", exact: true }).click();
+    await answerConfirmation(page, "Delete draft?", "Delete draft");
     await expect(page).toHaveURL(new RegExp(`/organisations/${org}/requests$`));
     await expect(page.getByText("No tickets yet.", { exact: false })).toBeVisible();
   } finally {
@@ -258,12 +268,7 @@ test("failed saves require reconciliation; in-flight edits and stale editor text
 
 test("same-document skip link keeps unsaved-work protection active", async ({ page }) => {
   const { fixture } = await setupEditor(page);
-  let warnings = 0;
-  const dismiss = async (dialog: import("@playwright/test").Dialog) => {
-    warnings++;
-    await dialog.dismiss();
-  };
-  page.on("dialog", dismiss);
+  const warning = page.getByRole("dialog", { name: "Leave with unsaved work?", exact: true });
   try {
     await page.route("**/api/organisations/*/requests/*", async route => {
       if (route.request().method() === "POST") await route.abort();
@@ -273,12 +278,11 @@ test("same-document skip link keeps unsaved-work protection active", async ({ pa
     await expect(page.getByText("Save failed — local edits preserved", { exact: true })).toBeVisible();
     await page.getByRole("link", { name: "Skip to content", exact: true }).focus();
     await page.getByRole("link", { name: "Skip to content", exact: true }).click();
-    expect(warnings).toBe(0);
+    await expect(warning).toHaveCount(0);
     await page.getByRole("link", { name: "Back to requests", exact: true }).click();
-    expect(warnings).toBe(1);
+    await answerConfirmation(page, "Leave with unsaved work?", "Stay");
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Unsaved navigation text");
   } finally {
-    page.off("dialog", dismiss);
     await fixture.cleanup();
   }
 });
@@ -312,10 +316,12 @@ test(
       await expect(lastTurn(page).getByText("All applied", { exact: true })).toBeVisible();
       await expect(saved(page)).toBeVisible();
       await askAi(page, "slow proposal");
-      await expect(page.getByText("AI is responding… You can keep editing.", { exact: true })).toBeVisible();
-      await page.getByLabel("Title", { exact: true }).fill("Manual edit during generation");
-      await expect(page.getByText("AI is responding… You can keep editing.", { exact: true })).toHaveCount(0);
-      await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Manual edit during generation");
+      await expect(page.getByText("AI is responding…", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Title", { exact: true })).not.toBeEditable();
+      await expect(page.getByLabel("Description", { exact: true })).not.toBeEditable();
+      await expect(page.getByText("AI is responding…", { exact: true })).toHaveCount(0);
+      await page.getByLabel("Title", { exact: true }).fill("Manual edit after generation");
+      await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Manual edit after generation");
       await expect(saved(page)).toBeVisible();
       await askAi(page, "Please suggest a task proposal.");
       await expect(lastTurn(page).getByText("1 change: title", { exact: true })).toBeVisible();
@@ -473,6 +479,7 @@ test("an unadmitted send can use the current task after reconciliation without l
           input_fields: input.fields,
           user_message: "A turn from another session",
           retry_failed: false,
+          ai_limits: testAiLimits,
         });
         expect(admitted.error).toBeNull();
         otherTurn = admitted.data.turn;
@@ -537,7 +544,9 @@ test("AI failures read as one plain sentence with diagnostics behind Details", a
       await expect(latest.getByText(expected)).toBeVisible();
       await expect(latest.getByRole("button", { name: "Try again", exact: true })).toBeEnabled();
     }
-    await expect(panel.getByText("20/20 AI requests left this hour.", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByText("20/20 AI requests left this hour. 200 of 200 left today.", { exact: true }),
+    ).toBeVisible();
     await page.reload();
     await openAi(page);
     await latest.getByText("Details", { exact: true }).click();
@@ -558,20 +567,26 @@ test("the usage meter shows what is left and blocks requests at the limit", asyn
     await page.getByLabel("Description", { exact: true }).fill("Rough notes");
     await expect(saved(page)).toBeVisible();
     await askAi(page, "Clarify this feature");
-    await expect(panel.getByText("19/20 AI requests left this hour.", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByText("19/20 AI requests left this hour. 199 of 200 left today.", { exact: true }),
+    ).toBeVisible();
     await expect(panel.getByRole("meter", { name: "AI requests left this hour", exact: true })).toHaveAttribute(
       "aria-valuenow",
       "19",
     );
     await askAi(page, "Explain the edge cases");
-    await expect(panel.getByText("18/20 AI requests left this hour.", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByText("18/20 AI requests left this hour. 198 of 200 left today.", { exact: true }),
+    ).toBeVisible();
     // Repeating an earlier request reuses that saved answer without a new turn.
     await askAi(page, "Clarify this feature");
     await expect(panel.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toHaveValue("");
     await expect(
       panel.getByRole("list", { name: "Conversation", exact: true }).getByText("Clarify this feature", { exact: true }),
     ).toHaveCount(1);
-    await expect(panel.getByText("18/20 AI requests left this hour.", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByText("18/20 AI requests left this hour. 198 of 200 left today.", { exact: true }),
+    ).toBeVisible();
     const target = { target_org: org, request_id: id, actor_id: pm.id };
     const current = (await pm.client.rpc("read_request", { target_org: org, request_id: id })).data;
     for (let i = 0; i < 18; i++) {
@@ -582,6 +597,7 @@ test("the usage meter shows what is left and blocks requests at the limit", asyn
         input_fields: current.fields,
         user_message: `Seeded ${i}`,
         retry_failed: false,
+        ai_limits: testAiLimits,
       });
       expect(admitted.error).toBeNull();
       expect(
@@ -599,7 +615,9 @@ test("the usage meter shows what is left and blocks requests at the limit", asyn
     }
     await page.reload();
     await openAi(page);
-    await expect(panel.getByText(/^0\/20 AI requests left this hour\. More at .+\.$/)).toBeVisible();
+    await expect(
+      panel.getByText(/^0\/20 AI requests left this hour\. More at .+\. 180 of 200 left today\.$/),
+    ).toBeVisible();
     await panel.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("One more");
     await expect(panel.getByRole("button", { name: "Ask AI", exact: true })).toBeDisabled();
     await expect(panel.getByRole("button", { name: "Check for gaps", exact: true })).toBeDisabled();
@@ -697,8 +715,8 @@ test("Draft with AI says why it is unavailable after a save conflict", async ({ 
     const draftButton = page.getByRole("button", { name: "Draft with AI", exact: true });
     await expect(draftButton).toBeDisabled();
     await expect(draftButton).toHaveAccessibleDescription("Resolve the save problem above before using AI.");
-    page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "Reload saved version and discard edits", exact: true }).click();
+    await answerConfirmation(page, "Discard local edits?", "Discard and reload");
     await expect(draftButton).toBeEnabled();
     await expect(page.getByText("Resolve the save problem above before using AI.", { exact: true })).toHaveCount(0);
   } finally {

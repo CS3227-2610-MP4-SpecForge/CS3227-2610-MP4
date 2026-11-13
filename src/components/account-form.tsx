@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { legacyUsernamePrefix, reservedUsernameMessage, usernameHint, usernamePattern } from "@/usernames";
+import { useState, type ReactNode } from "react";
+import { reservedUsername, reservedUsernameMessage, usernameHint, usernamePattern } from "@/usernames";
 import { api, failureMessage } from "./http";
 import { BackLink, Button, Dropdown, Field, useNotificationState } from "./ui";
 
@@ -10,7 +10,7 @@ const signupRoles = [
   { value: "PM", label: "Product Manager", tone: "purple" },
   { value: "Developer", label: "Developer", tone: "blue" },
 ] as const;
-export function AccountForm({ mode }: { mode: "signup" | "signin" | "verify" }) {
+export function AccountForm({ mode, footer }: { mode: "signup" | "signin" | "verify"; footer?: ReactNode }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -23,7 +23,7 @@ export function AccountForm({ mode }: { mode: "signup" | "signin" | "verify" }) 
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
-    if (mode === "signup" && username.toLowerCase().startsWith(legacyUsernamePrefix)) {
+    if (mode === "signup" && reservedUsername(username)) {
       setError(reservedUsernameMessage);
       setMessage("");
       return;
@@ -191,6 +191,7 @@ export function AccountForm({ mode }: { mode: "signup" | "signin" | "verify" }) 
             </>
           )}
         </div>
+        {footer}
       </div>
     </section>
   );

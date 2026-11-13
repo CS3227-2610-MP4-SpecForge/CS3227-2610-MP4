@@ -28,7 +28,8 @@
     "db:stop": "node src/tooling/database.mjs stop",
     "db:reset": "node src/tooling/database.mjs reset",
     "db:env": "node src/tooling/database.mjs env",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
+    "demo:remove": "node src/tooling/demo-remove.mjs"
   },
   "dependencies": {
     "@daypicker/react": "10.0.2",

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
 import { localFixture } from "../local.fixture";
-import { expectAccessible } from "./ui.fixture";
+import { expectAccessible, answerConfirmation } from "./ui.fixture";
 
 for (const role of ["PM", "Developer"] as const) {
   test(`${role} views and edits their profile`, { tag: "@smoke" }, async ({ page }) => {
@@ -104,21 +104,23 @@ test("profile handles loading failures, validation, save failures and cancelled 
       "Unable to save. Please retry.",
     );
     await expect(username).toHaveValue("local_unsaved_name");
-    page.once("dialog", dialog => dialog.dismiss());
     await page.getByRole("link", { name: "SpecForge home" }).click();
+    await answerConfirmation(page, "Leave with unsaved work?", "Stay");
     await expect(page).toHaveURL(/\/profile$/);
     await expect(username).toHaveValue("local_unsaved_name");
     await page.getByRole("button", { name: "Account options" }).click();
-    page.once("dialog", dialog => dialog.dismiss());
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await answerConfirmation(page, "Leave with unsaved work?", "Stay");
+    // The menu stays open while asking, so focus returns to Sign out.
+    await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeFocused();
     expect((await page.request.get("/api/account")).status()).toBe(200);
     await expect(username).toHaveValue("local_unsaved_name");
     await page.unroute("**/api/account");
     await save.click();
     await expect(page.getByRole("status").filter({ hasText: "Profile updated." })).toBeVisible();
     await username.fill("another_local_name");
-    page.once("dialog", dialog => dialog.accept());
     await page.getByRole("link", { name: "SpecForge home" }).click();
+    await answerConfirmation(page, "Leave with unsaved work?", "Leave");
     await expect(page).toHaveURL(/\/workspace$/);
   } finally {
     await fixture.cleanup();

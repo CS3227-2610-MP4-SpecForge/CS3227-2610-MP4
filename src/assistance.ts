@@ -10,7 +10,13 @@ export const assistanceMessages = {
   answers: "Apply my answers to the ticket.",
 } as const;
 export const usageLimit = 20;
-export type AiUsage = { remaining: number; limit: number; resets_at: string | null };
+export type AiUsage = {
+  remaining: number;
+  limit: number;
+  resets_at: string | null;
+  /** The caller's own Singapore-day allowance, across both AI features. */
+  daily?: { remaining: number; limit: number; resets_at: string };
+};
 export type AiQuestion = { prompt: string; options: string[] };
 export type AiAnswer = { question: string; answer: string | null };
 export const answerLimit = 500;

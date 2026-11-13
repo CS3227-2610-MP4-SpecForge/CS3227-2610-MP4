@@ -37,6 +37,17 @@ services:
         sync: false
       - key: SOCLAAS_CHAT_MODEL
         sync: false
+      # Shared AI limits: lower than production's defaults. 0 switches AI off.
+      - key: AI_SITE_CONCURRENT
+        value: "2"
+      - key: AI_SITE_PER_MINUTE
+        value: "10"
+      - key: AI_SITE_PER_DAY
+        value: "60"
+      - key: AI_ORG_PER_DAY
+        value: "40"
+      - key: AI_USER_PER_DAY
+        value: "20"
 
   - type: web
     name: specforge-prod

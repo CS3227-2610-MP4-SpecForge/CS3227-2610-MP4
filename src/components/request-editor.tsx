@@ -13,6 +13,7 @@ import { TicketDelivery, TicketDeliveryFields, CopyTicketLink } from "./ticket-d
 import { TicketVisibility } from "./ticket-visibility";
 import { TicketActivity } from "./ticket-activity";
 import { TestPlanPanel } from "./test-plan-panel";
+import { useConfirm } from "./confirm";
 import { BackLink, Button, Field, Notice, useNotificationState, useNotifications } from "./ui";
 import { useUnsavedChanges } from "./use-unsaved-changes";
 
@@ -159,6 +160,17 @@ function RequestEditor({
   const [busy, setBusy] = useState<"autosave" | "explicit" | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const { notify } = useNotifications();
+  const ask = useConfirm();
+  // Autosave pauses while a confirmation is open, as the native dialog paused it.
+  const [confirming, setConfirming] = useState(false);
+  async function confirm(options: Parameters<typeof ask>[0]) {
+    setConfirming(true);
+    try {
+      return await ask(options);
+    } finally {
+      setConfirming(false);
+    }
+  }
   const [, setMessage] = useNotificationState(false);
   function reportProblem(value: Problem | null, toast = true) {
     problemLive.current = value;
@@ -257,14 +269,14 @@ function RequestEditor({
     }
   }
   useEffect(() => {
-    if (published || !dirty || busy || applying || problem || !withinLimits) return;
+    if (published || !dirty || busy || applying || problem || !withinLimits || confirming) return;
     const timer = window.setTimeout(() => {
       void save("save_draft");
     }, 750);
     return () => window.clearTimeout(timer);
     // save reads the current refs; rescheduling follows observable editor state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, delivery, published, dirty, busy, applying, problem, withinLimits]);
+  }, [fields, delivery, published, dirty, busy, applying, problem, withinLimits, confirming]);
   useUnsavedChanges(dirty || Boolean(busy), leaving);
   async function reconcile() {
     if (operation.current) return;
@@ -309,7 +321,15 @@ function RequestEditor({
     }
   }
   async function reloadSaved() {
-    if (operation.current || !window.confirm("Discard your local edits and load the saved version?")) return;
+    if (operation.current) return;
+    const discard = await confirm({
+      title: "Discard local edits?",
+      message: "Your unsaved changes will be replaced by the saved version.",
+      confirmLabel: "Discard and reload",
+      cancelLabel: "Keep editing",
+      danger: true,
+    });
+    if (!discard || operation.current) return;
     operation.current = true;
     setBusy("explicit");
     try {
@@ -408,6 +428,9 @@ function RequestEditor({
   const blocked = Boolean(problem && problem.kind !== "retry");
   const canAsk = !busy && !applying && !blocked && withinLimits && (published || !dirty);
   const assistant = useAssistant({ path: path + "/chat", canSend: canAsk, onSuggestion: receiveSuggestion });
+  // Title and Description freeze while AI works so its suggestion matches what is on screen.
+  // A failed conversation read leaves "running" unconfirmed, so it never locks the editor.
+  const aiWorking = assistant.busy || (assistant.running && !assistant.error);
   const [draftHint, setDraftHint] = useState(false);
   // Say why Draft with AI is unavailable when the reason will not clear by itself.
   const draftBlocked = blocked
@@ -460,11 +483,13 @@ function RequestEditor({
           onReject={ids => reject(reviewing, ids)}
           onClose={closeReview}
           blockedReason={
-            blocked
-              ? "Resolve the save problem on the ticket before accepting AI changes."
-              : busy === "explicit" || applying
-                ? "Wait for the ticket to finish saving."
-                : null
+            aiWorking
+              ? "Wait for AI to finish responding."
+              : blocked
+                ? "Resolve the save problem on the ticket before accepting AI changes."
+                : busy === "explicit" || applying
+                  ? "Wait for the ticket to finish saving."
+                  : null
           }
         />
       )}
@@ -488,7 +513,7 @@ function RequestEditor({
             <div className="actions">
               <Button
                 className="secondary"
-                disabled={Boolean(busy) || applying || blocked || !sameFields(fields, undo.after)}
+                disabled={Boolean(busy) || applying || blocked || aiWorking || !sameFields(fields, undo.after)}
                 onClick={undoDraft}
               >
                 Undo AI draft
@@ -506,6 +531,8 @@ function RequestEditor({
             required
             maxLength={320}
             value={fields.title}
+            readOnly={aiWorking}
+            hint={aiWorking ? "AI is responding. Title and Description unlock when it replies." : undefined}
             disabled={busy === "explicit"}
             onChange={event => edit("title", event.target.value)}
           />
@@ -522,7 +549,7 @@ function RequestEditor({
               <p className="hint">{problem.message}</p>
               <div className="actions">
                 {problem.kind === "ambiguous" && (
-                  <Button className="secondary" disabled={Boolean(busy)} onClick={reconcile}>
+                  <Button className="secondary" disabled={Boolean(busy) || aiWorking} onClick={reconcile}>
                     Check saved version
                   </Button>
                 )}
@@ -531,7 +558,7 @@ function RequestEditor({
                     Retry draft save
                   </Button>
                 )}
-                <Button className="secondary" disabled={Boolean(busy)} onClick={reloadSaved}>
+                <Button className="secondary" disabled={Boolean(busy) || aiWorking} onClick={reloadSaved}>
                   Reload saved version and discard edits
                 </Button>
               </div>
@@ -627,6 +654,8 @@ function RequestEditor({
                   required={descriptionMode === "write"}
                   maxLength={48000}
                   value={fields.description}
+                  readOnly={aiWorking}
+                  aria-describedby={aiWorking ? "request-title-hint" : undefined}
                   placeholder={`Fill in the rough details, then use "Draft with AI" to polish.`}
                   disabled={busy === "explicit"}
                   onChange={event => edit("description", event.target.value)}
@@ -658,8 +687,14 @@ function RequestEditor({
                   type="button"
                   className="secondary"
                   disabled={Boolean(busy) || applying || blocked}
-                  onClick={() => {
-                    if (window.confirm("Delete this private draft? This cannot be undone.")) void save("delete_draft");
+                  onClick={async () => {
+                    const remove = await confirm({
+                      title: "Delete draft?",
+                      message: "This private draft will be permanently deleted. This cannot be undone.",
+                      confirmLabel: "Delete draft",
+                      danger: true,
+                    });
+                    if (remove) void save("delete_draft");
                   }}
                 >
                   Delete draft

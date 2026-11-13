@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { chromium, type FullConfig } from "@playwright/test";
+import { resetLocalAiWindows } from "../local.fixture";
 
 // `next dev` compiles each route, including its client chunks, on the first
 // visit. Visit every page once before the tests start, so that compile time is
@@ -13,11 +14,14 @@ const routes = [
   "/verify-email",
   "/workspace",
   "/profile",
+  `/organisations/${randomUUID()}/overview`,
   `/organisations/${randomUUID()}/requests`,
   `/organisations/${randomUUID()}/requests/${randomUUID()}`,
 ];
 
 export default async function warmUp(config: FullConfig) {
+  // Shared AI windows persist across runs on one day; start each run empty.
+  resetLocalAiWindows();
   const baseURL = config.projects[0].use.baseURL!;
   const browser = await chromium.launch();
   try {

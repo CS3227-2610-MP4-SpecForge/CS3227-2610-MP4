@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createApplication } from "../server/application";
+import { testAiLimits } from "./local.fixture";
 import { AiFailure } from "../server/soc";
 import { logFailure } from "../server/http";
 
@@ -152,6 +153,7 @@ describe("server failure logging", () => {
     };
     const app = await signedIn(() => Response.json({ saved: null, turns: [] }), {
       testPlans: { worker: () => worker, provider },
+      aiLimits: testAiLimits,
     });
     const response = await app(
       post(`/api/organisations/${org}/requests/${org}/test-plan`, {
@@ -201,7 +203,10 @@ describe("server failure logging", () => {
     const provider = async () => {
       throw new TypeError(`${sentinelEmail} ${sentinelText}`);
     };
-    const app = await signedIn(() => Response.json([]), { chat: { worker: () => worker, provider } });
+    const app = await signedIn(() => Response.json([]), {
+      chat: { worker: () => worker, provider },
+      aiLimits: testAiLimits,
+    });
     const response = await app(
       post(`/api/organisations/${org}/requests/${org}/chat`, {
         key: org,

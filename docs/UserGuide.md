@@ -1,60 +1,84 @@
 # SpecForge User Guide
 
+SpecForge helps product teams turn rough ideas into clear tickets and test
+plans. Product Managers draft and refine tickets with an AI assistant;
+Developers pick up published tickets and generate test cases for them.
+
+Open SpecForge at <https://specforge-prod.onrender.com/sign-in>.
+
 ## Contents
 
-- [Current features](#current-features) and [where to run it](#where-to-run-it)
+- [Get started](#get-started): [demo kit](#try-it-with-a-demo-kit) or
+  [your own account](#create-an-account)
 - [Five-minute walkthrough](#five-minute-walkthrough)
-- [Try the local app](#try-the-local-app): accounts, verification and organisations
+- [Organisations and members](#organisations-and-members)
+- [Organisation overview](#organisation-overview)
+- [Tickets](#tickets)
+- [AI assistant](#ai-assistant) (Product Managers)
+- [Test plans](#test-plans) (Developers)
 - [Your profile](#your-profile)
-- [Notifications](#notifications) and [when your session ends](#when-your-session-ends)
-- [Invitations and membership](#invitations-and-membership)
-- [Ticket delivery and team discussion](#ticket-delivery-and-team-discussion)
-- [Tasks and AI chat](#tasks-and-ai-chat) (Product Managers)
-- [Test plans](#test-plans-developer-ai) (Developers)
-- [Failures](#failures)
+- [Troubleshooting](#troubleshooting)
 
-## Current features
+## Get started
 
-This version supports email/password signup, email-code verification, login,
-logout, creating/listing/selecting your organisations, invitations and membership
-management, ticket drafting/publication, delivery tracking and team comments. Both Product Managers and
-Developers use the same workspace. Organisation creators become admins.
+SpecForge has two roles, chosen when an account is created:
 
-Each role has its own AI feature, both on SoC LLM. Product Managers get private
-ticket drafting, inline suggestions and discussion. Developers get generated test
-plans on published tickets ([below](#test-plans-developer-ai)).
+- **Product Manager (PM):** writes tickets, with help from the AI assistant.
+- **Developer:** works on published tickets, updates their status and generates
+  test plans.
 
-Demo kits remain future work.
+Anyone can create an organisation and becomes its admin. Admins invite members
+and manage who belongs.
 
-## Where to run it
+If the site takes a moment to load on your first visit, wait a few seconds: it
+is waking up.
 
-- **Production:** <https://specforge-prod.onrender.com>
-- **Development:** <https://specforge-dev.onrender.com>
+### Try it with a demo kit
 
-Both are deployed by the team's GitHub Actions workflows (see
-[Deployment](DeveloperGuide.md#deployment-and-environments)). Signing up on a
-hosted environment needs the verification email to reach you; if no code
-arrives, use the local app below, where every email is captured locally.
+A demo kit gives you two ready-to-use logins, one **Product Manager** and one
+**Developer**, without using your own email.
+
+1. On the **Sign in** page, choose **Create demo kit** under **Try SpecForge**.
+2. Copy both logins. They are shown **only once**: reloading or leaving the page
+   clears them.
+3. Sign in with each login in its own browser or private window. As the PM,
+   create an organisation and invite the Developer's demo email, then accept the
+   invitation as the Developer. The [walkthrough](#five-minute-walkthrough)
+   continues from step 4.
+
+Demo accounts work exactly like ordinary accounts. A limited number of kits can
+be created at a time; if the page says the limit is reached, it tells you when
+to try again, or you can create your own account instead.
+
+### Create an account
+
+1. Choose **Create an account**. Enter a username (3–24 letters, digits or
+   underscores), your email address and a password of at least 12 characters.
+2. Pick **Product Manager** or **Developer** from **Application role**. Your role
+   cannot be changed later.
+3. Open the verification email and select its link, then sign in with your email
+   and password. If no email arrives within a few minutes, check your spam
+   folder, or [use a demo kit](#try-it-with-a-demo-kit).
+
+To sign out, open the account menu (your username, top right) and choose
+**Sign out**.
 
 ## Five-minute walkthrough
 
 This tour uses both roles. Use two browsers, or one normal and one private
-window, so each account stays signed in. The sections after this one explain
-every step in more detail.
+window, so each account stays signed in.
 
-1. **Create two accounts.** In the first window choose **Create an account**,
-   pick **Product Manager**, and verify the email with its code (see
-   [Try the local app](#try-the-local-app) for where local codes arrive). In the
-   second window create and verify a **Developer** account.
+1. **Sign in as both roles.** Use a [demo kit](#try-it-with-a-demo-kit), or
+   [create](#create-an-account) one Product Manager and one Developer account.
 2. **Create an organisation.** As the PM, enter a name under **Create an
    organisation** and choose **Create organisation**. You become its admin.
 
    ![An empty workspace with the Create an organisation panel](images/workspace-empty.png)
 
 3. **Invite the Developer.** Choose **Manage** on the organisation card, enter
-   the Developer's email under **Invite by email**, and choose **Send invitation**. In the
-   Developer's window, choose **Refresh membership**, then **Accept** under
-   **Your invitations**.
+   the Developer's email under **Invite by email**, and choose **Send
+   invitation**. In the Developer's window, choose **Refresh membership**, then
+   **Accept** under **Your invitations**.
 4. **Draft a ticket with AI.** As the PM, open the organisation and choose
    **New task**. Type a rough idea into **Description**, for example "Remember
    filters when I return to the request list", then choose **Draft with AI**.
@@ -70,9 +94,9 @@ every step in more detail.
 
    ![Reviewing one proposed title change](images/change-review.png)
 
-   If a request fails, the reply says your ticket is unchanged and the request
-   was not counted. Open **Details** to see what happened, then **Try again**.
-   (This example failure was simulated locally.)
+   If a request does not go through, the reply says your ticket is unchanged and
+   the request is given back to your own allowance. Open **Details** to see why,
+   then **Try again**.
 
    ![A failed AI request with its Details open](images/ai-failure-details.png)
 
@@ -87,415 +111,212 @@ every step in more detail.
 
    ![Three suggested test cases ready to review and save](images/test-plan-panel.png)
 
-## Try the local app
+## Organisations and members
 
-Follow the [developer setup](DeveloperGuide.md#local-setup), then open
-<http://localhost:3000>. Use disposable test information, not production data.
-On a hosted environment the steps are the same, except that the code arrives in
-your own inbox instead of the local one.
+**Your organisations.** The workspace lists the organisations you belong to.
+Select a card to open its **Overview**, and switch to **Requests** with the tabs
+under the organisation's name. Select **SpecForge** in the navbar to come back. You can belong to several organisations, and each one's tickets stay
+private to its members.
 
-1. Choose **Create an account**. Enter a username, an email address, and a
-   password of 12–128 characters. Select **Product Manager** or **Developer**
-   from the **Application role** dropdown. Usernames
-   use 3–24 letters, digits, or underscores and are stored in lowercase. Each
-   username is unique across SpecForge. If no verification code arrives, try a
-   different username or sign in if you already have an account. Your username
-   can be changed from your profile; your application role is fixed after signup. Accounts created before this
-   change have a generated username beginning with `legacy_`.
-2. Choose **Enter your verification code** after signup. For local testing, open
-   <http://127.0.0.1:55324> and find the email addressed to your disposable account.
-   Enter its eight-digit code and email on the verification screen. This local
-   inbox captures messages; it does not send email to real inboxes.
-3. Successful verification opens **Organisations**. Select **SpecForge** in the
-   navbar to return to this page from elsewhere. You cannot create an
-   organisation before verification. Use **Send a new code** if needed; resend
-   and sign-in attempts are rate-limited. Local codes expire after one hour and
-   cannot be reused after verification.
-4. Enter a name of 1–80 characters and choose **Create organisation**. You become
-   its first admin. Either application role can create multiple organisations.
-5. Select an organisation card to open its requests page. Only organisations you belong
-   to appear. The page has its own address, so you can reload or bookmark it.
-6. Hover over your username and email in the navbar (or select them by click or
-   keyboard), then choose **Sign out**. If a ticket has unsaved work, cancel the
-   departure warning to keep editing or confirm to leave. Use the ordinary
-   email/password sign-in form to return. Other members' organisations are not discoverable through your account.
+**Inviting.** Admins choose **Manage** on an organisation card, enter an email
+under **Invite by email** and choose **Send invitation**. The email does not need
+an account yet: once its owner signs up, the invitation is waiting under **Your
+invitations** in their workspace, where they can **Accept** or **Decline**
+(choose **Refresh membership** to check for new ones). Invitations expire after
+seven days; admins can **Resend** or **Cancel invitation** from **Outgoing
+invitations**.
 
-Password recovery and account deletion are not available. Save your test
-credentials; a new account will not inherit the previous account's memberships.
-Admin status does not change your PM/Developer application role.
+**Managing members.** In **Manage**, admins see every member with their role and
+can **Promote admin**, **Demote admin** or **Remove member**. Any member can
+**Leave organisation**. An organisation always keeps at least one admin, so the
+last admin must promote someone else first. Admin status is separate from your
+PM or Developer role. Someone who leaves or is removed needs a new invitation to
+return.
+
+**AI usage.** In **Manage**, admins also see how many AI requests the
+organisation has left today, for example "AI today: 52 of 80 left · resets at
+midnight Singapore time". It counts every member's PM assistant and test-plan
+requests together. Other members don't see this bar.
+
+## Organisation overview
+
+Every member sees the same read-only summary of the organisation's published
+tickets. Private drafts never count, except your own in your summary line.
+
+- **Your work:** how many open tickets are assigned to you and how many of them
+  are overdue. Product Managers also see their private drafts.
+- **Tickets by status:** one count per status, plus **Overdue** (past its due
+  date and not Done or Cancelled) and **Due in the next 7 days**. Each ticket
+  counts once, however many people are assigned to it.
+- **Workload:** each member's open, overdue and high-priority tickets, then
+  **Unassigned**. A ticket shared by two people appears on both their rows, so
+  the rows are not meant to be added up.
+
+Select any number to open **Requests** with the matching filters already
+applied; a zero is plain text. "Overdue" and "due" use your own calendar day.
+Reload the page to refresh the counts.
+
+![The Overview tab with status counts and the workload table](images/organisation-overview.png)
+
+## Tickets
+
+### Creating and publishing
+
+Product Managers choose **New task** on an organisation's Requests page. A ticket
+has a **Title** and a **Description**. Description supports Markdown (headings,
+lists, bold, italics and code blocks); use **Preview** to see how it will look
+and **Write** to keep editing.
+
+A new ticket is a private draft: only you can see it, and it saves automatically
+as you type. When it is ready, choose **Publish** to share it with every member
+of the organisation. After that, edits stay on your screen until you choose
+**Update**, so members always see the last version you saved. You can delete a
+draft with **Delete draft**; published tickets stay.
+
+The banner above the title always tells you who can see the ticket. Use **Copy
+ticket link** to share it with another member. **About this ticket** shows the
+author and when it was created and last saved.
+
+### Due date, priority and assignees
+
+Below the title, the author can set:
+
+- **Due date:** pick a day from the calendar, type a date, or choose **Clear
+  date**.
+- **Priority:** Low, Medium or High.
+- **Assignees:** up to five members. Type part of an email, then pick from the
+  list.
+
+### Delivery status
+
+Published tickets have a **Delivery status**: To do, In progress, In review,
+Done or Cancelled. The author and the ticket's assignees can change it. Other
+members can read the ticket and comment.
+
+### The Requests table
+
+Each organisation's Requests page lists its tickets with **Title**, **Owner**,
+**Assignees**, **Status** and **Priority**. Select a title to open a ticket.
+
+- **Search and filter** by title, status, priority or assignee (including
+  **Assigned to me** and **Unassigned**), then choose **Apply filters**. Status
+  also offers **Open**, **Overdue** and **Due in the next 7 days**. Applied
+  filters stay in the page address, so a reload keeps them and you can share the
+  link. If a link's filters are not recognised, the defaults are shown instead.
+- **Sort** by **Recently updated**, **Due date** or **Status**.
+- **Change status or priority** straight from the table, if you are allowed to.
+- **Load more tickets** shows the next page.
+
+### Team discussion
+
+Published tickets have a **Team discussion & activity** section where members
+post comments. It also records publication, edits and delivery changes, with who
+made them and when. **Load older activity** shows earlier entries.
+
+## AI assistant
+
+The AI assistant is for Product Managers and appears beside your own tickets.
+Its conversation is private to you, even after the ticket is published.
+
+- **Draft with AI:** write a rough idea in **Description** and choose **Draft
+  with AI** to turn it into a full ticket. **Undo AI draft** restores your idea.
+- **Ask AI:** ask a question or request a change in the box at the bottom of the
+  panel.
+- **Check for gaps:** lists up to five open questions about the ticket, each with
+  suggested answers. Pick an answer, choose **Leave undecided**, or write **Your
+  own answer**, then choose **Apply answers** to get a suggestion that includes
+  them.
+
+While the AI is responding, **Title** and **Description** are read-only so the
+suggestion matches what you see; you can still select and copy text. A reply
+that suggests no change says **No ticket changes suggested.**
+
+**Reviewing suggestions.** The AI never edits or publishes your ticket by
+itself. Each suggestion appears as a card; choose **Review changes** to see your
+text beside the proposed text, then **Accept** or **Reject** each change, or use
+**Accept all** or **Reject all**. **Formatted** shows both sides as rendered
+Markdown. If you have since edited the part a change refers to, that change is
+marked as outdated and the rest stay usable. Always read the suggestions before
+accepting or publishing.
+
+**If a request does not go through,** your ticket is unchanged and the request is
+given back to your own hourly and daily counts. It still counts toward your
+organisation's and SpecForge's limits below. Open **Details** to see why, then
+choose **Try again**.
+
+**Usage.** The bar above the instruction box shows how many AI requests you have
+left this hour (20 per hour) and today (40 per day, shared with test plans).
+When you run low it also shows when the hourly count resets. You can always keep
+editing by hand.
+
+**Shared limits.** Your organisation can make 80 AI requests per day in total,
+across all members and both AI features. SpecForge also limits total AI use
+across the site and pauses briefly when the SoC service is busy. Days reset at
+midnight Singapore time. See [AI limit messages](#ai-limit-messages).
+
+Use **Hide AI assistant** and **Show AI assistant** to make more room; your
+conversation is kept. On phones the assistant appears below the ticket.
+
+## Test plans
+
+Developers can generate a test plan for any **published** ticket in their
+organisation. Open the ticket and choose **Show test plan**.
+
+1. Optionally type a focus note, for example "concentrate on the invitation
+   expiry rules".
+2. Choose **Generate test cases**. You get up to 12 cases, each with a title, a
+   kind (**Happy path**, **Edge case** or **Failure**), any preconditions,
+   numbered steps and the expected result.
+3. Review the cases, then choose **Save to ticket**, or **Discard** to throw them
+   away. Saving again replaces the saved plan.
+
+Every member of the organisation can see the saved plan, along with who saved it
+and when. If the ticket changes after a plan was generated, SpecForge asks you to
+generate a fresh one so the plan always matches the ticket. Each Developer can
+generate up to 20 plans per hour. Plans also count toward your 40 AI requests
+per day and your organisation's shared limits (see [AI assistant](#ai-assistant)).
+
+Product Managers see saved plans but do not generate them.
 
 ## Your profile
 
-Open the navbar account dropdown and choose **Profile**, above **Sign out**.
-Your profile shows your username, application role, verified email address and
-actual account creation date, plus your organisations and Admin/Member status.
-The initial avatar is generated from your username.
+Open the account menu and choose **Profile** to see your username, role, email,
+when you joined, and your organisations. To change your username, edit
+**Username** and choose **Save changes**. Your new name appears everywhere,
+including on existing tickets.
 
-To change your username, edit **Username** and choose **Save changes**. Names
-follow the same rules as signup and must be unique. **Cancel** restores the saved
-name. A successful change updates the navbar immediately and your current name
-appears on existing tickets and team labels; ticket ownership stays with your
-account. Previous names are not reserved. Email and role are read-only.
+## Troubleshooting
 
-If saving fails, your typed name stays available for retry. Leaving with unsaved
-changes, including signing out, asks for confirmation. A profile loading failure
-has a **Retry loading profile** action.
+- **Can't sign in:** check your email and password, and make sure you have
+  opened the verification link.
+- **No verification email:** check your spam folder, or
+  [use a demo kit](#try-it-with-a-demo-kit).
+- **"Too many attempts":** wait a minute, then try again.
+- **"Your session has ended":** choose **Sign in again**. Anything you were typing
+  stays on screen; if a ticket was mid-save, choose **Retry draft save** after
+  signing in.
+- **An invitation or member change didn't work:** choose **Refresh membership**
+  and try again. The invitation may have expired or someone else may have made a
+  change.
+- **A ticket won't save:** your text is kept on screen. Choose **Check saved
+  version**, then try again. If someone else saved a newer version, you can
+  reload it.
+- **"You don't have permission":** your access to that organisation or ticket
+  has changed. Ask an admin.
+- **An AI request or test plan didn't go through:** nothing changed. Choose **Try
+  again** or **Retry generation**.
 
-## Notifications
+### AI limit messages
 
-Action feedback appears at the top centre of the screen for three seconds.
-Success/information uses purple styling; errors use red. New notifications replace
-older ones and restart the timer. Banners float above an open modal without
-moving its content or changing keyboard focus.
+These are expected limits, not errors. Your ticket and test plan are unchanged.
 
-Loading indicators, field guidance, save/conflict state and saved AI failure
-history stay beside their related controls. Retry/reconciliation controls and
-unsaved input remain available after an error banner disappears. Signup's
-verification link also remains available after its notification expires.
+| Message starts with | Why | What to do |
+| --- | --- | --- |
+| "SpecForge's AI is at capacity right now" | Too many AI requests across SpecForge at once, or SoC asked us to slow down. | Wait the minutes shown, then try again. |
+| "SpecForge's AI has reached today's limit" | SpecForge's daily AI total is used up. | Try again after midnight Singapore time. |
+| "Your organisation has used today's AI allowance" | Your organisation's 80 requests for today are used. | Try again after midnight Singapore time. An admin can see the count in **Manage**. |
+| "You have used today's 40 AI requests" | Your own daily allowance is used. **Ask AI** or **Generate test cases** stays disabled until it resets. | Try again after midnight Singapore time. |
+| "SoC is busy right now" (in **Details**) | The SoC AI service turned the request away. | Try again in a minute or two. |
 
-## When your session ends
+In every case you can keep editing or planning by hand.
 
-If you sign out in another tab, or your sign-in expires, the next action that
-reaches the server shows a red banner below the navbar: "Your session has ended.
-Sign in again to continue." It stays until an action succeeds again. SpecForge
-does not move you away from the page, so text you were typing stays on screen.
-Autosave stops; a ticket draft shows **Retry draft save** so you can save after
-signing in again.
-
-Choose **Sign in again** to go to the sign-in page. If the ticket has unsaved
-work, the usual departure warning asks first. To keep the text, cancel, copy it,
-or sign in from a new tab and then retry the save. The workspace and profile
-pages hold no unsaved work and still go straight to sign-in. A "no permission"
-message is different: your session is fine, but your access to that item changed.
-
-## Invitations and membership
-
-The management overlay groups invitation controls in a light-purple **Invite Member** panel. **Existing members** lists usernames with an Admin pill where applicable and their application role underneath. Admins appear first; each group is sorted alphabetically by username. Promote/demote controls appear beside each member.
-
-Choose **Manage** beside an organisation to open its management overlay. Close it
-with the **X** in the fixed header or Escape. The header stays visible while the
-management content scrolls. On opening, Shift+Tab reaches the X; Tab moves
-through the management controls. Admins use **Invite by email** for any email address,
-including one that has not registered. The invitation immediately appears in
-**Outgoing invitations**. No invitation email is sent.
-
-After registering and verifying that email, the recipient finds the invitation
-under **Your invitations** in their workspace and can **Accept** or **Decline**.
-Email matching ignores case and surrounding spaces. Accepting grants ordinary
-membership, never admin access. Invitations expire seven days after creation or
-resend. Duplicate sends reuse the outstanding invite without extending expiry;
-use **Resend** on an expired invite. Existing members cannot be invited again.
-
-Outgoing invitations include pending, expired and declined entries. Use **Cancel
-invitation** on the right of the row to withdraw any unaccepted invite. Accepted
-and cancelled entries disappear; accepted membership cannot be cancelled through
-an invitation. Declined recipients need a fresh invitation to try again.
-
-Creation shows **Invitation created.** and cancellation shows **The invitation has
-been withdrawn** in a top-centre overlay for three seconds. These banners float
-above the modal without moving content. Duplicate sends show **Invitation already
-pending.** Error/failure notifications also use three-second overlays, with a red
-background. Retry controls and blocked-save state remain available after the
-notification disappears.
-
-Admins see members and their fixed application roles. Use **Promote admin**,
-**Demote admin** or **Remove member** after confirming. Members can **Leave
-organisation**. The last admin must promote someone else before leaving, being
-removed or being demoted. Admin access does not change application roles.
-
-Removal/leaving immediately ends access. Rejoining requires a fresh invitation.
-Close and reopen **Manage** to pick up management changes made in another browser; use **Refresh membership** in the workspace for incoming invitations; server
-permissions always use current membership. Invitations and member lists currently
-display at most 100 entries. New invitations and resends share a limit of 20
-attempts per hour per organisation, including unknown addresses and duplicates.
-
-## Ticket delivery and team discussion
-
-A purple visibility banner runs along the top edge of the ticket panel, above
-the title. **Back to requests**, **Back to workspace**, and **Back to sign in**
-share a left-arrow icon. A lock with **This task is
-private and unpublished** means only its author can read it. After publication,
-an eye with **This task is visible to members of the [organisation name]
-organisation** describes the saved ticket's audience. Unsaved published edits
-keep this banner because members still see the last saved version.
-
-The title appears once at the top of the ticket. Delivery fields sit beneath
-it, followed by Description and team discussion/activity. Use **Copy ticket
-link** to share the page. Links still require current organisation membership;
-drafts remain private even when someone is assigned. **About this ticket** is
-always visible below **Publish** or **Update**. It shows the author and ticket
-timestamps, followed by the author's save status. Drafts show **Last autosaved**
-after their next autosave. Older drafts with no recorded autosave time and
-published tickets show **Last saved**. Readers see the details below
-**Refresh saved request**, before team discussion.
-
-Beneath the title, the author sets a date-only **Due date**, **Priority**
-(Low, Medium or High), and zero to five assignees. The **Assignees** label shows
-the current count, such as **(2/5)**. Click the box and start typing an email.
-Matching current organisation members appear in a
-scrollable list; click a suggestion or use the arrow keys and Enter to select it.
-Use Escape to close suggestions and the × beside an email to remove it. Either
-PMs or Developers can be assigned. Search your own email to assign yourself. All draft fields autosave privately.
-**Publish** publishes the whole ticket, including delivery details. Due date is optional and can be cleared after
-publication. After publication, **Update** saves text and delivery edits together. Existing published tickets without a deadline remain unscheduled
-until their author sets one. A departed member is unassigned automatically;
-rejoining does not restore old assignments.
-
-Drafts show a disabled **To do** delivery status. This describes progress; the
-visibility banner describes who can read the ticket. Published tickets have a
-**Delivery status**: To do, In progress, In review, Done
-or Cancelled. The author and current assignees can change it, including reopening
-completed work. Only the author changes scheduling, priority and assignments.
-Other members can read and comment. Draft/publication state remains separate from
-delivery status. Overdue and due-today indicators use your browser's local date;
-Done and Cancelled tickets are excluded from overdue work.
-
-Priority appears as a colored pill: **Low** is yellow, **Medium** orange, and
-**High** red. Existing Urgent tickets become High. Click the priority or delivery
-status pill to choose a value; use arrow keys and Enter, or Escape to dismiss.
-Status colors are gray (To do/Cancelled), blue (In progress), purple (In review),
-and green (Done). Read-only tickets and request-list badges use the same pills.
-
-Click **Due date** to open the purple calendar. Choose a day, navigate with the
-month/year controls, or enter **Exact date** as YYYY-MM-DD and select **Apply
-date**. **Today** selects your local calendar day; **Clear date** leaves the
-ticket Unscheduled. Escape or clicking outside dismisses the calendar without
-applying pending text. Use arrow keys to move between days and Enter to select.
-Draft changes autosave; published changes still require **Update**.
-
-The Requests table shows **Title**, **Owner**, **Assignees**, **Status** and
-**Priority**. Select a title to open the ticket. On narrow screens, scroll the
-table sideways to see all columns. Before any ticket exists, a PM sees how to
-start one with **New task**, and a Developer sees that tickets appear once a
-Product Manager publishes them.
-
-Select a status or priority dropdown in the table to save that change immediately.
-The owner can change priority, including on private drafts. The owner and
-current assignees can change status on published tasks. The table refreshes the
-applied filters after an edit, so the task may move or leave the results.
-
-Search by title or use the status, priority and assignee dropdowns, including
-**Assigned to me** and **Unassigned**. Sort by **Recently updated**, **Due date**
-or **Status**, then select the search icon or **Apply filters**. Status sorts
-private drafts first, then To do, In progress, In review, Cancelled and Done.
-Filters and sorting run across all visible tickets. **Load more tickets**
-fetches another page. Reload the page for a fresh default view, or select
-**Apply filters** again to refresh your filtered results.
-
-**Team discussion & activity** is shared with current organisation members on
-published tickets. Post plain-text comments up to 4,000 Unicode characters;
-comments cannot be edited or deleted. Each member can post 20 comments per minute
-per organisation. A lost response preserves your comment and offers **Retry
-comment**, which safely repeats the same attempt. Check activity before starting
-a new attempt. **Load older activity** reads another 50 entries.
-
-Activity records publication, requirements edits and delivery changes with actor
-and time. It does not include old description text, private draft changes or AI
-conversations. Existing changes from before this feature have no backfilled
-activity. On a save conflict, your local input remains visible. Authors can use
-**Reload saved version and discard edits**; assigned readers can use **Reload
-delivery details**. These recovery controls appear only when needed.
-
-## Tasks and AI chat
-
-Select an organisation card to open its requests page. PMs select **New task**
-to create a private draft. Current members can read published tasks. The two
-task fields are **Title** (up to 160 Unicode characters) and **Description**
-(up to 24,000).
-Description is free-form Markdown; headings are optional. Existing requests keep
-their title and all old section contents under description headings.
-Use **Write** to edit the Markdown and **Preview** to see how the current text,
-including unsaved edits, will appear to readers. Switch back to **Write** to
-continue editing. You can publish or update from either tab.
-
-New drafts show editable **Title** and **Description** immediately. Write
-directly, or write a rough idea in **Description** and choose **Draft with AI**
-beside the Write and Preview tabs. On an empty ticket you can also type the rough
-idea into the AI assistant's box and choose **Ask AI**. Rough ideas autosave privately like
-any draft. A fresh AI draft fills the editor and has **Undo AI draft** during the
-current editing session while its generated content is unchanged. AI never
-publishes for you; failed, stale or recovered generations require review instead.
-
-The ticket occupies the main workspace. The right **AI assistant** panel starts
-open. It shows the whole conversation as one scrolling transcript, oldest first,
-and follows the newest reply; if you have scrolled up, a **New reply ↓** button
-appears instead. The usage bar, **Check for gaps** and the instruction box stay
-at the bottom of the panel. Use **Hide AI
-assistant** or **Show AI assistant** to collapse or reopen it; on phones it
-appears beneath the ticket. Collapsing keeps your conversation, typed instruction
-and pending suggestion. Chat is private to the original PM
-author, including from admins and after publication.
-
-Use the **Ask AI to change or explain this ticket** box and **Ask AI** for
-questions and suggested edits. Review suggestions before applying them.
-
-**Check for gaps** lists up to five open decisions, each with suggested answers,
-**Leave undecided** and **Your own answer**. It never changes the ticket. Answer
-what you can and choose **Apply answers**: one request writes your answers into a
-suggestion, recording undecided questions as unresolved. Unanswered questions are
-left out.
-
-SoC writing remains experimental: a valid response can add unsupported requirements,
-omit supplied details, or contradict an unresolved question. Check the entire draft
-and every suggestion before accepting or publishing. If a writing action returns
-only discussion, no ticket changes are available to review; continue manually or
-send a more specific instruction. Invalid responses preserve your existing work.
-AI edits change exact pieces of text; if the text it names is not in your ticket
-exactly once, nothing is applied.
-
-A complete title/description suggestion can still be reviewed if SoC omits its
-accompanying message; the app displays “Review these suggested ticket changes.”
-Extra response fields are ignored. Incomplete ticket suggestions still fail safely
-rather than replacing either field with partial content.
-
-Each AI reply that suggests ticket changes shows a card with a summary (for
-example “3 changes: title and 2 in Description”), a status (**Not reviewed**,
-**1 of 3 applied**, **All applied**, **Dismissed** or **Outdated**) and **Review
-changes**. Review opens a window with your original text on the left and the
-proposed text on the right, one row per change: the title first, then each
-changed part of the Description. Changed words are highlighted, unchanged lines
-are collapsed, and **Formatted** shows both sides as rendered Markdown.
-
-- **Accept** applies that change to the editor straight away; the row then shows
-  **Applied** with **Undo**.
-- **Reject** marks the row **Rejected**. Rejections last until you reload the page.
-- **Accept all** and **Reject all** act on every change that is still open.
-- **Done**, ✕ or Esc closes the window.
-
-A change can be accepted only while the text it replaces is still in your ticket,
-unchanged and appearing once. If you have edited that part since, the row says
-“You've changed this part since” and cannot be accepted; other changes in the same
-suggestion stay usable. Accepted changes are ordinary edits, so if a save problem
-appears, accepting is paused until you resolve it. Recovered or historical AI
-drafts never automatically replace the editor.
-
-All draft fields autosave 750 ms after a pause. Accepting AI changes in a draft
-follows that same autosave. **Publish** requires a nonempty title/description and publishes all ticket
-fields together. Due date and assignees are optional. Published
-edits, including delivery details and accepted AI changes, remain local until
-**Update**. Readers see only the last saved ticket. If required fields are missing, clicking
-**Publish** focuses the missing field and shows validation.
-Only the original PM author can edit ticket requirements; assigned Developers can update delivery status. Admin status grants no additional ticket-editing rights.
-
-**Delete draft** asks confirmation; submitted tasks cannot be deleted. Leaving
-or removal ends access; submitted work remains visible to members and rejoining
-restores author access. Ticket lists and details show the author's username.
-The Requests table, assignee filters and activity history also use usernames.
-The ticket's assignee picker still searches by email.
-
-On ticket save failure, local text and delivery edits are preserved and automatic saving stops. Use
-**Check saved version** before retrying, or explicitly reload/discard after a
-conflict. New-draft retries use the same creation key to avoid duplicates.
-
-After a lost response, SpecForge checks the saved conversation automatically.
-If the send reached the server, its turn appears in the conversation. If the
-check finds no turn, **Send again** uses the current ticket. If the check fails,
-reopen the AI assistant to try again. A failure shows one sentence saying your
-ticket is unchanged and did not use one of your hourly AI requests, plus **Try again** while the
-ticket snapshot still matches. **Details** explains what happened:
-
-- **Invalid AI output:** new failures explain whether the response was cut short,
-  was not valid JSON, had the wrong ticket structure, or could not be safely used.
-  Earlier failures keep the generic message because their exact reason was not
-  recorded. JSON response mode improves formatting; ticket validation remains.
-
-- **Local deadline.** The notice reads “AI response timed out after 90 seconds.”
-  Earlier timeouts show their recorded duration in whole seconds.
-- **Upstream HTTP error:** SoC returned an actual status such as 502, 504 or 429;
-  the notice includes that status and app-observed elapsed time. A 502 alone
-  does not prove the upstream cause was a timeout.
-- **Network failure:** the connection or response stream failed without an
-  upstream HTTP error response.
-- **Browser waiting limit.** If the browser's 110-second wait expires, SpecForge
-  checks the turn's saved status.
-
-Provider failure details survive chat reloads. Older failed turns retain a generic
-notice because no detailed status/timing was recorded. Elapsed time measures
-what this app observed, not SoC's internal processing duration.
-
-There are no automatic provider retries or fallback models. Manual editing
-remains available when AI fails. Unsaved task text warns before departure and
-is not stored in browser persistent storage.
-
-**Usage.** A bar above the instruction box shows, for example, **14/20 AI requests
-left this hour**. It turns red at zero and adds the reset time once fewer than five remain. Failed requests give their
-request back, but every attempt counts toward the 40-attempt limit.
-Repeating a request that already completed on the unchanged ticket shows the
-saved answer without using a request. At most 40 attempts (including failures)
-are allowed per hour. When a limit is reached, the panel says which one;
-manual editing always remains available.
-
-App limits (not SoC quotas): one active AI request per ticket/account, the
-hourly limits above, 4,000-character instructions and a 90-second provider
-deadline. AI sees the current ticket, your instruction and at most your three
-latest completed requests. If the ticket alone is too long for AI, the panel
-says so before sending. Chat storage is bounded to 1 MiB per ticket. Long or
-truncated AI responses fail safely; ask for a concise change or edit manually.
-
-Markdown display supports headings, lists, paragraphs, `**bold text**`,
-`*italic text*` or `_italic text_`, and fenced code. Raw HTML, images and links
-are displayed as text.
-Ticket lists use 50-item pages with **Load more tickets**.
-
-## Test plans (Developer AI)
-
-Sign in with an account whose role is **Developer** and open any **published**
-ticket in an organisation you belong to. Below the ticket, select **Show test
-plan**.
-
-**Generating.** Optionally type a focus note (up to 500 characters), for example
-"concentrate on the invitation expiry rules", then select **Generate test
-cases**. The assistant reads only the ticket title and description and returns up
-to 12 cases. Each case has a title, a kind pill (**Happy path** green, **Edge
-case** yellow, **Failure** red), optional preconditions, numbered steps and one
-expected result.
-
-**Reviewing and saving.** Generated cases are a suggestion: nothing reaches the
-ticket until you select **Save to ticket**. **Discard** removes them from your
-view. Once saved, every member of the organisation sees the plan, together with
-the username of the developer who saved it and when. Saving again shows
-**Replace saved plan** and increases the version number.
-
-**What you cannot do.** Product Managers see a saved plan read-only and have no
-Generate button; the ticket author cannot generate one either. Draft tickets have
-no test plan section at all. Individual cases cannot be edited before saving: it
-is save-all or discard, and you can generate again.
-
-**Staleness.** If the ticket is edited after cases are generated, the panel says
-so and saving is refused, so a plan built on older wording cannot be written over
-newer behaviour. A saved plan whose ticket has since changed is shown with a
-warning to generate a fresh one.
-
-**Discarded suggestions.** Occasionally the model writes a case that is longer
-than a ticket can store, usually a rambling expected result. That single case is
-dropped and the rest are kept, and the panel's message says how many were
-discarded, so a count lower than the message implies is expected rather than a
-fault. Generate again if you want the dropped case back.
-
-**Limits.** 20 generations per developer per hour, one generation at a time per
-developer, and one saved plan per ticket. Cases are suggestions, not verified
-requirements: check them against the ticket before relying on them.
-
-## Failures
-
-- Invalid credentials or an unverified email: check your details or verify email.
-- Invalid/expired code: request a new code and use the most recent email.
-- Too many attempts: wait before retrying; repeated submissions do not help.
-- Connection/service failure: retry explicitly. Do not assume a failed or timed-out
-  organisation creation did not commit; reload the list before creating again.
-- Invitation/member change unavailable: refresh membership; the invitation may
-  have expired or changed, permissions may have changed, or the last-admin rule
-  may block the action. Do not repeatedly submit a timed-out change; refresh first.
-- Workspace loading failure: use **Retry loading workspace**. Signed-out users
-  are redirected to sign-in.
-- Session ended on any other page: see [When your session ends](#when-your-session-ends).
-- Test plan AI failure: the panel names what happened (timeout, upstream error,
-  invalid output, usage limit). Nothing is saved to the ticket. **Retry
-  generation** repeats the same request explicitly; it is disabled once the
-  ticket has changed, in which case generate a new plan instead.
-- Test plan could not load: the panel shows why and **Retry loading test
-  plan**. It says "No test plan yet." only after it has checked successfully.
-
-- No verification email on a hosted environment: hosted signup depends on the
-  environment's email delivery. Use the local app instead. Generated demo
-  accounts that skip email are planned but not provided yet.

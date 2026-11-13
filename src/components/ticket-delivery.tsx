@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { deadlineLabel, type Delivery } from "@/delivery";
 import type { FeatureRequest } from "@/requests";
 import { api, ApiError, failureMessage } from "./http";
+import { useConfirm } from "./confirm";
 import { Button, DatePicker, Dropdown, useNotificationState } from "./ui";
 import { PriorityPill, StatusPill, priorityOptions, statusOptions } from "./ticket-pills";
 import { TicketMembers } from "./ticket-members";
@@ -25,6 +26,7 @@ export function TicketDelivery({
   const [busy, setBusy] = useState(false);
   const operation = useRef(false);
   const [error, setError] = useNotificationState(true);
+  const confirm = useConfirm();
   const [, setMessage] = useNotificationState(false);
   const [blocked, setBlocked] = useState(false);
   const author = item.author_id === accountId;
@@ -87,8 +89,17 @@ export function TicketDelivery({
     }
   }
   async function reload() {
-    if (operation.current || (dirty && !window.confirm("Discard local delivery edits and reload saved details?")))
-      return;
+    if (operation.current) return;
+    const discard =
+      !dirty ||
+      (await confirm({
+        title: "Discard delivery edits?",
+        message: "Your unsaved delivery changes will be replaced by the saved details.",
+        confirmLabel: "Discard and reload",
+        cancelLabel: "Keep editing",
+        danger: true,
+      }));
+    if (!discard || operation.current) return;
     operation.current = true;
     setBusy(true);
     try {

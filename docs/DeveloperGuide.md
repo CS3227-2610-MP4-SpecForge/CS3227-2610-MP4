@@ -50,6 +50,12 @@ suppress CLI output that can contain generated local credentials. When a command
 fails, the tail of that output is relayed with credential-shaped values redacted,
 because a failure with no reason at all cannot be diagnosed in CI.
 
+Local Auth email never leaves the machine: the inbox at <http://127.0.0.1:55324>
+captures every message. Locally, sign-up sends an eight-digit code that the
+**Enter your verification code** screen accepts (codes expire after one hour);
+hosted projects send Supabase's confirmation link instead. Use disposable
+accounts, or create a demo kit from the sign-in page, which needs no email.
+
 `db:env` updates ignored `.env.local` with local Supabase public values, the
 server-only local AI worker key and `APP_ORIGIN`, preserving unrelated settings
 and writing atomically with mode 0600. It does not change `.env` or copy a hosted
@@ -138,6 +144,7 @@ failed SoC call is not a 503: it comes back as a failed, refunded turn.
 | GET | `/health` | Anyone | 200, 503 |
 | POST | `/auth/signup`, `/auth/verify`, `/auth/signin`, `/auth/resend` | Anyone; 30 per minute per server instance | 200 or 202, 400, 401 (sign-in), 429 |
 | POST | `/auth/signout` | Anyone | 200 |
+| POST | `/demo-kits` | Anyone; empty JSON body; 10 per minute per server instance, then 5 per 10 minutes and 30 per Singapore day per environment | 201, 400, 405, 429 (with `limit` and `Retry-After`), 503 |
 | GET, POST | `/account` | Signed in | 200, 400, 409 (username taken) |
 | GET, POST | `/organisations` | Signed in | 200, 201 (created), 400 |
 | GET | `/organisations/[org]` | Member | 200, 404 |
@@ -152,8 +159,10 @@ failed SoC call is not a 503: it comes back as a failed, refunded turn.
 | POST | `/organisations/[org]/requests/[id]/delivery` | Author, or an assignee for status | 200, 400, 403, 409 |
 | GET, POST | `/organisations/[org]/requests/[id]/activity` | Member, published tickets | 200, 400, 403, 409, 429 |
 | GET | `/organisations/[org]/ticket-members` | Member | 200, 400 |
+| GET | `/organisations/[org]/overview?day=YYYY-MM-DD` | Member | 200, 400, 403, 404 |
 | GET, POST | `/organisations/[org]/requests/[id]/chat` | The ticket's PM author | 200, 202 (running), 400, 403, 409, 429 |
 | GET, POST, PUT | `/organisations/[org]/requests/[id]/test-plan` | Developers generate and save; members read the saved plan | 200, 202 (running), 400, 403, 409, 429 |
+| GET | `/organisations/[org]/ai-usage` | Organisation admins | 200, 403, 404, 503 |
 
 The sections below give each group's request and response shapes.
 
@@ -170,7 +179,7 @@ requirement across all profiles. The additive migration assigns reserved
 `createdAt` from the protected profile.
 
 The app gives the same signup response for accepted requests and ambiguous Auth
-provisioning failures, with guidance to try a different username if no code
+provisioning failures, with guidance to try a different username if no verification email
 arrives. The raw Supabase Auth signup endpoint may return different statuses for
 a username collision and an existing email because repeat signups can skip the
 profile trigger. This difference remains visible to callers of that endpoint.
@@ -193,6 +202,9 @@ adds:
 - `GET /api/invitations`; `POST /api/invitations/[id]` with `action`
   accept/decline.
 - `GET /api/organisations/[id]/members` (admins only).
+- `GET /api/organisations/[id]/ai-usage` (admins only): `{remaining, limit,
+  resets_at}` for the organisation's AI requests today; see
+  [Shared AI limits](#shared-ai-limits).
 - `GET/POST /api/organisations/[id]/invitations`; POST accepts `email`.
 - `POST /api/organisations/[id]/invitations/[invitationId]` with cancel/resend.
 - `POST /api/organisations/[id]/members/[userId]` with remove/promote/demote/leave.
@@ -203,9 +215,8 @@ quota increments. HTTP maps `limited` to 429 and `member` to 409. Creation and
 duplicate responses return truthful messages at 202; withdrawal returns its
 message at 200. Other RPC failures map to 400 (validation), 403 (permission), 409
 (transition conflict) or 503 (service failure), without raw error messages.
-Admin rosters and invitation lists are capped at 100; pagination is still a
-release/scale limitation. Invitations are in-app; no SMTP or service-role key is
-needed for them.
+Admin rosters and invitation lists return at most 100 entries each. Invitations
+are in-app; no SMTP or service-role key is needed for them.
 
 #### Tickets and delivery
 
@@ -217,11 +228,22 @@ content plus JSON escaping; account and membership endpoints keep 8 KiB.
 - `GET /api/organisations/[org]/requests` uses `list_ticket_page`: 50 entries,
   `nextOffset`, filters `search/status/priority/assignee/overdue/today/sort` and
   `offset`. Filtering occurs before pagination; `today` is the viewer's ISO
-  calendar day for overdue filtering. Sort accepts `updated`, `due`, or `status`
+  calendar day for overdue filtering. Besides `draft` and the five delivery
+  statuses, `status` accepts `open` (published and not Done or Cancelled),
+  `overdue` and `due_soon` (open and due today or within six days); the last two
+  require `today`. Sort accepts `updated`, `due`, or `status`
   (statuses are grouped before pagination, with Done last). Offset pages reflect
   live updates, so a refresh is needed if concurrent edits reorder results.
   Legacy `list_requests` remains a capped compatibility RPC; the UI does not use
   it.
+- `GET /api/organisations/[org]/overview?day=` uses `organisation_overview`:
+  per-status totals plus `overdue` and `due_soon`, the caller's own `mine`
+  (`drafts` only for PMs), and `workload` rows for at most 100 current members
+  plus `unassigned` and `member_total`. Totals count each published ticket once;
+  a workload row counts a ticket once for each of its assignees, so rows are
+  never summed. The overview and the list share the `private.ticket_open`,
+  `ticket_overdue` and `ticket_due_soon` predicates and `private.viewer_day`
+  validation, so every count equals the length of the list it links to.
 - `POST .../requests` with `{creationKey}` creates a private draft.
   `POST .../requests/[id]` takes one of `save_draft`, `submit`,
   `save_published` or `delete_draft`, with the expected revision.
@@ -273,6 +295,20 @@ The shared `Modal` (used by organisation management and AI change review)
 registers its native top-layer element explicitly so notifications from anywhere
 remain visible above the modal. Host changes preserve the deadline. Keep
 persistent save/conflict state, field guidance and saved AI history contextual.
+
+#### Organisation tabs and URL filters
+
+Organisation pages share `OrganisationTabs` (Overview and Requests links).
+Workspace cards open Overview. `src/overview.ts` owns the Requests URL filter
+format: `parseRequestFilters` keeps only recognised `search`, `status`,
+`priority`, `assignee` and `sort` values and flags anything else, so the page
+shows a generic notice without echoing the input; `requestsHref` builds the
+Overview links. The Requests page reads its `searchParams` on the server and
+passes them to `RequestList`. Apply filters writes the filters back with
+`history.replaceState`, and the list query adds `today` only for the `overdue`
+and `due_soon` statuses, so a shared link stays valid on later days. A linked
+assignee outside the loaded member page is resolved with
+`ticket-members?selected=`; an id that is not a current member is dropped.
 
 #### Session expiry
 
@@ -497,6 +533,10 @@ transaction, so no user activity was invented.
 - Supabase `getUser` verifies protected identity. Server-only sessions use
   HttpOnly, SameSite=Lax cookies and Secure when the configured origin is HTTPS.
   Authenticated JSON is private/no-store. No browser Supabase client is used.
+- Password recovery and self-service account deletion are out of scope by
+  product decision ([product spec](../workflow/specs/2026-11-07-product-mvp.md)):
+  each adds an emailed-link or destructive flow to secure, while testers can
+  always create a new account or demo kit.
 - Public signup uses ordinary Auth signup, not admin preconfirmation. Local Auth
   requires email confirmation. The custom confirmation email displays a code
   rather than placing a credential in an application URL.
@@ -510,8 +550,29 @@ transaction, so no user activity was invented.
 - Supabase HTTP requests have a 10-second timeout; the separate SoC adapter has
   a 90-second deadline and browser chat waits up to 110 seconds.
 - Keep all real keys and sensitive request contents out of logs. The SoC adapter
-  is server-only; demo provisioning and privileged browser actions remain
-  unimplemented.
+  is server-only, and the browser never holds a privileged key.
+- Demo kits (`src/server/demo-kits.ts`,
+  [spec](../workflow/specs/2026-11-12-demo-kits.md)) are the one public path that
+  uses `SUPABASE_SECRET_KEY`. `POST /api/demo-kits` first sheds load in memory
+  (10 per minute per instance, separate from the sign-in counter), then reserves
+  a slot through the service-role-only `reserve_demo_kit` RPC. That RPC
+  serialises under an advisory lock and counts in `private.demo_kit_windows`
+  using the database clock: at most `DEMO_KITS_PER_10_MINUTES` (default and
+  maximum 5) and `DEMO_KITS_PER_DAY` (default and maximum 30). Any other value,
+  including 0, turns the endpoint off with a 503. Only after a reservation does
+  it call the Admin API: it creates two confirmed accounts with random
+  `@example.com` emails and passwords and `app_metadata.demo_kit` set to a random
+  32-hex code, or deletes the first if the second fails. Credentials appear only
+  in the 201 body and the sign-in page's component state, which `pagehide`
+  clears. Failures log only the allowlisted line below.
+- The trusted demo marker is `raw_app_meta_data.demo_kit`, which only the Admin
+  API can write. Auth writes it after inserting the user, so the deferred
+  constraint trigger `check_demo_profile` checks at commit: a marked account must
+  be named `demo_pm_`/`demo_dev_` plus its code's first 8 characters, and no
+  other account may use a `demo_` name. `rename_username` and the API also
+  reject `demo_` names. Residual risks: one caller can use up the shared daily
+  cap, and each demo PM adds its own AI quota (at most 30 × 20 requests an hour
+  per environment).
 - Server failure logging: every unexpected failure that becomes a 503 (the
   `createApplication` catch-all and RPC, schema or configuration failures in the
   handlers, plus the invalid-`APP_ORIGIN` 503 in `runtime.ts`) and every AI
@@ -526,23 +587,28 @@ transaction, so no user activity was invented.
   bodies, headers, cookies, emails, IDs and AI text are excluded by construction.
   Expected 4xx outcomes log nothing. Lines are not rate-limited, so an upstream
   outage produces one line per failed request.
-- Hosted verification needs custom SMTP: Supabase's default sender restricts
-  recipients. Configure and test delivery and the confirmation template before
-  claiming ordinary online signup works.
-- The CSP restricts script evaluation to development but still allows inline
-  framework scripts and styles. It is not a strict nonce-based injection
-  defence. Organisation lists currently return at most the local PostgREST cap
-  (100); pagination remains necessary before expanding beyond peer-testing scale.
+- Accepted disclosure on `GET /api/health`: anyone can learn the deployed
+  commit, whether the database answers and whether AI is configured, which lets
+  an attacker match the live build to the public source. Each request makes one
+  Supabase call of up to 3 seconds with no throttle; the key and function are
+  public anyway, but if abuse appears, cache the result for a few seconds or
+  rate-limit the route.
+- Hosted email verification uses each Supabase project's sender, which delivers
+  only to permitted recipients until custom SMTP is configured
+  ([First-time setup](#first-time-setup) step 7). Demo kits give testers access
+  without email.
+- The CSP restricts script evaluation to development but allows the inline
+  scripts and styles the Next.js framework emits; a nonce-based policy would
+  force every page to render dynamically. Injection is instead prevented at the
+  source: no untrusted text is ever rendered as HTML (next item). Organisation
+  lists return at most the PostgREST row cap (`max_rows = 100`).
 - Untrusted text is never executed: ticket Markdown uses a small React text-only
   renderer for headings, lists, paragraphs and code, and HTML, URLs and images are
   never executed or fetched. AI change review and test plans render text as React
   children.
 - Deployment is team-controlled automation under `.github/workflows/`; see
   [Deployment and environments](#deployment-and-environments). Both environments
-  have been deployed, with migrations applied by the workflow. Hosted use beyond
-  the sign-up page has not been verified: SoC reachability from the host, hosted
-  request deadlines and custom SMTP still need checking against the real
-  environments before claiming online signup and AI features work.
+  are deployed by the workflow, which applies migrations first.
 
 ## AI features
 
@@ -619,8 +685,10 @@ per account per hour. Every failed turn is refunded once, only within the window
 that charged it; attempts are never refunded, so the attempt cap bounds SoC
 spend. An identical completed request on the current ticket returns the saved
 turn with no call or charge. `read_ai_usage()` returns the signed-in account's
-`{remaining, limit, resets_at}`; GET and POST chat responses include it, and 429
-responses name the limit. 120-second leases and generation checks reject late
+`{remaining, limit, resets_at}` plus its own `daily_used` and `daily_resets_at`;
+GET and POST chat responses include it, with the daily cap added as `daily`, and
+429 responses name the limit. The [shared AI limits](#shared-ai-limits) apply on
+top of these per-account limits. 120-second leases and generation checks reject late
 workers; expired turns are retried only on explicit action, never
 automatically. Completion rechecks access, so output after removal is neither
 stored nor returned. Conversation rows cap at 1 MiB, with completion capacity
@@ -631,10 +699,16 @@ Each request sends a shared rule block plus that intent's rules, then one JSON
 payload `{ticket, instruction, recent, answers?}`. `recent` holds at most the
 three latest completed turns as `{message, reply}` with replies cut to 1,000
 characters; proposals and older turns are never sent. Output budgets are 2,000
-tokens for `draft`, 600 for `gaps` and 1,200 for `edit`. Edits return exact-text
+tokens for `draft` and 600 for `gaps`. An `edit` on a ticket of at most 6,000
+title-plus-description characters (`rewriteLimit`) asks for the whole revised
+ticket as a `proposal` within 2,500 tokens; a proposal equal to the ticket is a
+reply-only result. Longer tickets use 1,200 tokens and exact-text
 `{field, find, replace}` changes (at most 10). `applyEdits` applies them only
-when each `find` matches exactly once (literal; overlapping matches count), then
-stores the full resulting fields as the proposal for the usual review. Draft
+when each `find` matches exactly once — literally, or else as the same words
+with any whitespace between them (literal `\n` counts as a line break) — then
+stores the full resulting fields as the proposal for the usual review. A draft,
+or an edit carrying gap answers, that suggests no change fails as
+`invalid_schema` ([reliable AI edits](../workflow/specs/2026-11-13-reliable-ai-edits.md)). Draft
 descriptions and edit replacements are cleaned first: `unescapeLineBreaks` turns
 literal `\n` outside code fences into line breaks, and `stripRepeatedTitle`
 drops a copy of the title at the top of a drafted description. Serialized
@@ -725,11 +799,52 @@ text, never as Markdown or HTML.
 locked row and refuses a mismatch, and compares the expected plan revision with
 the stored one so two developers saving at once cannot silently clobber.
 
+### Shared AI limits
+
+[Spec](../workflow/specs/2026-11-13-site-wide-ai-limit.md). Both AI features
+share one SoC key, so they also share these limits, all counted in the database
+(`private.ai_usage_windows`) and checked under one advisory lock inside
+`begin_chat_turn` and `begin_test_plan_turn`, after the per-account limits and
+before the per-account charge:
+
+| Setting | Default | Maximum | Development (`render.yaml`) | What it counts |
+| --- | --- | --- | --- | --- |
+| `AI_SITE_CONCURRENT` | 4 | 8 | 2 | SoC requests running at once (unexpired leases) |
+| `AI_SITE_PER_MINUTE` | 20 | 60 | 10 | Dispatches per clock minute |
+| `AI_SITE_PER_DAY` | 200 | 1000 | 60 | Dispatches per Singapore day |
+| `AI_ORG_PER_DAY` | 80 | 500, and at most the site day | 40 | One organisation's dispatches per Singapore day |
+| `AI_USER_PER_DAY` | 40 | 200, and at most the organisation day | 20 | One account's dispatches per Singapore day |
+
+- **Configuration.** `aiLimits` in `src/server/ai-limits.ts` parses the
+  settings. A missing setting takes its default. An empty, non-integer or
+  oversized value, a broken user ≤ organisation ≤ site order, or **0 (the kill
+  switch)** turns both AI features off with 503 "AI is not configured". The
+  RPCs check the same bounds again (`private.valid_ai_limits`).
+- **Refunds.** A failed dispatch is refunded to the account's hourly and daily
+  counts (the daily only on the same Singapore day), but never to the site or
+  organisation windows, so an outage cannot become unlimited retries. Replays and
+  identical completed requests are not counted.
+- **SoC pause.** When SoC answers 429 or 503, `requestSocJson` reads
+  `Retry-After` (whole seconds, bounded to 5–600; anything else is 60) and the
+  finish RPC records a site-wide pause (`private.ai_soc_pause`) that only ever
+  extends. Paused dispatches get the `site` notice; the failed turn shows "SoC
+  is busy right now…".
+- **Responses.** A block returns 429 with `Retry-After` and
+  `{error, limit, retryAfter}`; `limit` is `site`, `site_daily`, `organisation`
+  or `user_daily`. Blocks are expected and never logged.
+- **Reads.** Browsers can read only their own daily count (`read_ai_usage`) and,
+  for organisation admins, their organisation's daily total
+  (`read_organisation_ai_usage`, which checks `private.is_admin` itself and
+  refuses everyone else with the same 42501). Site counts and the pause are not
+  readable from a browser.
+- **Unverified.** SoC's real quotas are undocumented in the public SoCLaaS guide.
+  These numbers are app choices; the pause is what adapts them to SoC's real limit.
+
 ### Observed provider behaviour
 
-These are small samples against `https://soclaas-api.comp.nus.edu.sg/v1`, not a
-service level, and passing local tests (which use a fake provider) say nothing
-about live reliability:
+These are measurements against `https://soclaas-api.comp.nus.edu.sg/v1`. They
+explain the app's deadlines and failure handling; routine tests use a fake
+provider, and the [live provider suite](#focused-checks) covers the real one:
 
 - **Latency and failures.** Successful calls took 6.6 to 9.1 seconds for a chat
   turn or a 12-case plan. One attempt returned HTTP 502 after 60.1 seconds, which
@@ -741,15 +856,14 @@ about live reliability:
   `gemma4:26b` once returned HTTP 503 (`no healthy provider backends`). Being
   listed does not mean a model will serve a request; the configured default is
   `qwen3.5:9b`.
-- **Output quality.** Both models produced usable drafts and edits, but also
-  invented scope, dropped stated requirements and occasionally returned invalid
-  JSON or an over-limit field. Validation rejects the malformed cases; human
-  review before applying or publishing is the control for the rest. No prompt or
-  model change has shown a reliable improvement.
+- **Output quality.** Like any LLM, both models can add scope, omit a stated
+  requirement or return malformed JSON or an over-limit field. That is why every
+  AI output is a proposal: validation rejects malformed replies, and nothing
+  reaches a ticket until the PM reviews and accepts each change.
 - **Budgets.** A 12-case plan cost 472 prompt and 490 completion tokens, so the
-  completion budget is not the binding constraint. The model regularly writes
-  one test plan case that overruns a stored limit; validation discards that case
-  and keeps the rest.
+  completion budget is not the binding constraint. A generated case that exceeds
+  a stored limit is discarded individually, the rest are kept, and the panel
+  reports the count.
 
 The individual experiments, with their exact cases and results:
 [writing check](../logs/2026-11-08-soc-writing-stabilization.md),
@@ -844,7 +958,10 @@ Browser runs are designed to be repeatable:
 
 `node src/tooling/test-local.mjs <mode>` runs one slice against the local stack:
 
-- Database: `profile`, `requests`, `chat`, `delivery`, `test-plans`.
+- Database: `profile`, `requests`, `chat` (including the shared AI limits),
+  `delivery`, `test-plans`,
+  `demo-kits` (which empties the local demo-kit counters first, through the local
+  database container).
 - Browser: `requests-browser`, `delivery-browser`, `layout-browser`, each with an
   optional test-name regex as a final argument, e.g.
   `node src/tooling/test-local.mjs requests-browser "a lost first-draft response"`.
@@ -880,7 +997,7 @@ It makes exactly two calls, one per role feature, and is skipped unless
 set. Run it after changing a prompt, a validator or a stored limit.
 
 One lint dependency override upgrades `minimatch` under TypeScript ESLint to a
-patched compatible release. Re-evaluate the override when upstream updates.
+patched compatible release.
 
 ## Deployment
 
@@ -899,9 +1016,9 @@ Both callers delegate to the reusable `deploy.yml`, so the steps and their order
 exist once: apply migrations, ask Render to build and deploy this exact commit,
 wait until it is live, then check the release (below). The production caller first runs
 the whole of `ci.yml` on the merge commit, so production is never reached without
-a passing suite. Merging into `main` is the human decision. The `production`
-environment does not yet have a required reviewer; adding one (first-time setup
-step 4) would make deployment a second, separate approval.
+a passing suite. Merging into `main` is the human decision; a required reviewer
+on the `production` environment (first-time setup step 4) adds a second,
+separate approval for deployment.
 
 Both Render services have auto-deploy turned off. The repository owns the
 trigger and the gates: `src/tooling/render-deploy.mjs` calls the Render API to
@@ -953,6 +1070,30 @@ Application runtime configuration — `APP_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SOCLAAS_BASE_URL`,
 `SOCLAAS_API_KEY`, `SOCLAAS_CHAT_MODEL` — is set in each Render service's
 Environment tab, pointing each environment at its own Supabase project.
+`DEMO_KITS_PER_10_MINUTES` and `DEMO_KITS_PER_DAY` are optional and only lower
+the demo-kit caps (defaults 5 and 30); see [Security](#security). The five
+`AI_*` limit settings are optional too; `render.yaml` sets lower development
+values and production uses the defaults. Set one to 0 to switch AI off; see
+[Shared AI limits](#shared-ai-limits).
+
+**Removing demo kits.** From a maintainer machine, with that environment's
+`NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SECRET_KEY` exported (never committed):
+
+```sh
+npm run demo:remove -- --project <project-ref> --all
+```
+
+This is a dry run: it prints how many kits and accounts it found, how many
+organisations they created, and how many memberships of other accounts would
+end. Add `--yes` to delete, or use `--kit <code>` instead of `--all` for one kit.
+`--project` must match the configured URL (`local` for the local stack), or
+nothing runs. It selects accounts only by the exact `app_metadata.demo_kit`
+marker, lists every page of users before deleting, and re-reads each account
+just before deleting it. It prints counts only. Its warning covers only organisations the
+kits created: a demo account that joined someone else's organisation also takes
+its drafts, comments, activity and test plans there with it. A kit request that
+times out after Auth has already created an account leaves a marked account
+with no known password; `demo:remove` finds it like any other kit account.
 `APP_ORIGIN` must be the exact HTTPS origin of that environment: the server fails
 closed on a missing or non-HTTPS origin in production rather than inferring one
 from request headers.
@@ -1001,9 +1142,8 @@ from request headers.
 5. In repository settings, set Pages to build from GitHub Actions.
 6. Push to `dev` and confirm the development deployment, then open a pull request
    to `main`.
-7. Configure custom SMTP on both Supabase projects and test the confirmation
-   email before telling peer testers that signup works. Supabase's default sender
-   restricts recipients. Also check each project's Auth rate limits
+7. Configure custom SMTP on both Supabase projects and send a test confirmation
+   email, because Supabase's default sender restricts recipients. Also check each project's Auth rate limits
    (Authentication, Rate Limits): they are the real limit on sign-up, sign-in,
    verification and email sending, because the app's own cap is per instance.
 
@@ -1052,8 +1192,21 @@ Claude Code configuration in `.claude/` makes independent review enforceable:
   which follows `workflow/agents/code-reviewer.md` and ends with a
   `Verdict: approved` or `Verdict: needs-fixes` line.
 - `settings.json` runs `hooks/review-gate.mjs`. It records a hash of the
-  uncommitted `src/` diff each time `code-reviewer` finishes. It denies
-  `git commit` until that exact diff is approved. When a turn ends with
+  uncommitted `src/` diff each `code-reviewer` run reviews: at launch for a
+  background review, at finish for a foreground one. The hash covers each
+  changed, new or renamed-away file's path, mode and working-tree content, so
+  staging files before a commit does not invalidate an approval. Because a
+  commit takes the index, a commit is also denied while staged `src/` content
+  differs from the working tree, unless it uses `-a`. Only the
+  report's final non-empty line counts as its verdict. A background review
+  returns only a launch notice, so the gate keeps the launched diff as pending
+  and reads the verdict from the reviewer's own hand-back message or
+  `SubagentStop` event. A foreground reviewer's verdict comes back in the Agent
+  result, or, when it hands back its report, is held until that result arrives.
+  Either way the gate approves only a diff that has not changed since the
+  reviewer saw it. Concurrent reviews can lose an update, which leaves the diff
+  unapproved, never wrongly approved. It denies `git commit` until that exact
+  diff is approved. When a turn ends with
   unreviewed `src/` changes, it asks once for a review (pauses for user input are
   allowed). Once a session log under `logs/` has also changed, it insists. State
   is kept in ignored `local/review/state.json`. Set `SPECFORGE_REVIEW_GATE=off` to
@@ -1081,7 +1234,7 @@ the session summaries under `logs/`. Review instructions are not enforcement;
 tests and database controls provide the concrete evidence.
 
 Reference research: [Homebrew](https://github.com/CS3227-2610-MP3-Homebrew/CS3227-2610-MP3)
-informed the React/Next.js/Supabase and future demo-kit discussion. Its source and
+informed the React/Next.js/Supabase choice and the demo-kit design. Its source and
 workflow were not copied into this implementation. Supabase's official SSR,
 email-code and RLS documentation informed integration. Next.js, React, Supabase,
 Zod, Vitest and Playwright are dependencies; consult their package licenses.

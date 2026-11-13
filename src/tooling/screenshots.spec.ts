@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { localFixture } from "../tests/local.fixture";
 import { savedTicketStatus as saved } from "../tests/browser/ui.fixture";
+import { localDay } from "../overview";
 
 // Walks the User Guide's five-minute journey against the local stack with the
 // fake AI and saves the screenshots the guide shows. The two demo accounts and
@@ -135,6 +137,35 @@ test("User Guide screenshots", async ({ page, browser }) => {
       window.scrollBy(0, -32);
     });
     await shot(reader, "test-plan-panel");
+
+    // A few more published tickets, so the Overview has something to count.
+    const day = (offset: number) => localDay(new Date(Date.now() + offset * 86_400_000));
+    const extra = [
+      { title: "Export filtered requests", due_date: day(-2), priority: "high", assignee_ids: [developer.id] },
+      { title: "Keyboard shortcuts", due_date: day(3), priority: "medium", assignee_ids: [developer.id, pm.id] },
+      { title: "Empty-state copy", due_date: day(10), priority: "low", assignee_ids: [] },
+    ];
+    for (const { title, ...changes } of extra) {
+      const draft = ok(
+        "create_request",
+        await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() }),
+      );
+      const args = { target_org: org, request_id: draft.id };
+      ok("update_delivery", await pm.client.rpc("update_delivery", { ...args, expected_revision: 1, changes }));
+      ok(
+        "publish_request",
+        await pm.client.rpc("publish_request", {
+          ...args,
+          expected_revision: 1,
+          content: { title, description: "A sample ticket for the Overview screenshot." },
+          acknowledged: true,
+          first_submission: true,
+        }),
+      );
+    }
+    await reader.goto(`/organisations/${org}/overview`);
+    await expect(reader.getByRole("link", { name: "1 Overdue", exact: true })).toBeVisible();
+    await shot(reader, "organisation-overview", reader.locator("main"));
     await context.close();
   } finally {
     await fixture.cleanup();

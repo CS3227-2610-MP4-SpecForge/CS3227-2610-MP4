@@ -1,4 +1,11 @@
-import { recordTicketWrites, savedTicketStatus, selectPill, setDueDate, settleAfter } from "./ui.fixture";
+import {
+  recordTicketWrites,
+  savedTicketStatus,
+  selectPill,
+  setDueDate,
+  settleAfter,
+  answerConfirmation,
+} from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { localFixture } from "../local.fixture";
@@ -236,7 +243,12 @@ test("priority and delivery status use accessible colored pill dropdowns", async
     await filters.getByRole("searchbox", { name: "Search by title" }).fill("nonmatching title");
     await filters.getByRole("button", { name: "Apply search" }).click();
     await expect(page.getByText("No tickets match these filters.", { exact: true })).toBeVisible();
+    // Applied filters live in the address, so a reload keeps them (organisation overview spec).
+    await expect(page).toHaveURL(/search=nonmatching\+title/);
     await page.reload();
+    await expect(page.getByText("No tickets match these filters.", { exact: true })).toBeVisible();
+    await expect(filters.getByRole("searchbox", { name: "Search by title" })).toHaveValue("nonmatching title");
+    await page.goto(`/organisations/${org}/requests`);
     await expect(row.getByRole("combobox", { name: "Priority for Colored work" })).toHaveText("Low");
     await expect(row.getByRole("combobox", { name: "Status for Colored work" })).toHaveText("In review");
     await expect(page.getByText("Loading members…", { exact: true })).toHaveCount(0);
@@ -535,8 +547,8 @@ test("delivery conflicts preserve edits and a lost comment response retries with
     await page.getByRole("button", { name: "Update", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: "saved request changed" })).toBeVisible();
     await expect(page.getByLabel("Due date", { exact: true })).toHaveText("25 Dec 2026");
-    page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "Reload saved version and discard edits", exact: true }).click();
+    await answerConfirmation(page, "Discard local edits?", "Discard and reload");
     await expect(page.getByLabel("Priority", { exact: true })).toHaveText("High");
     await expect(page.getByLabel("Due date", { exact: true })).toHaveText("20 Dec 2026");
     let dropped = false;

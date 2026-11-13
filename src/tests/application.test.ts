@@ -149,7 +149,7 @@ describe("account and organisation HTTP interface", () => {
       expect(response.status).toBe(202);
       expect(await response.json()).toEqual({
         message:
-          "Check your email for a verification code. If no code arrives, try a different username or sign in if you already have an account.",
+          "Check your email for a verification link. If no email arrives, try a different username or sign in if you already have an account.",
       });
       expect(submitted).toMatchObject({ email: "pm@example.com", data: { role, username: "atlas_pm" } });
       expect(submitted).not.toHaveProperty("email_confirm");
@@ -198,7 +198,7 @@ describe("account and organisation HTTP interface", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(await response.json()).toEqual({
       message:
-        "Check your email for a verification code. If no code arrives, try a different username or sign in if you already have an account.",
+        "Check your email for a verification link. If no email arrives, try a different username or sign in if you already have an account.",
     });
   });
   it("rejects malformed verification codes without contacting Supabase", async () => {
@@ -303,5 +303,87 @@ describe("account and organisation HTTP interface", () => {
       error:
         status === 429 ? "Too many attempts. Try again later." : "Service temporarily unavailable. Try again later.",
     });
+  });
+});
+
+describe("organisation overview HTTP interface", () => {
+  const org = "22222222-2222-4222-8222-222222222222";
+  const member = "33333333-3333-4333-8333-333333333333";
+  const overview = {
+    totals: { to_do: 2, in_progress: 1, in_review: 1, done: 1, cancelled: 1, overdue: 1, due_soon: 2 },
+    mine: { open: 2, overdue: 1 },
+    workload: {
+      members: [{ user_id: member, username: "dev_one", app_role: "Developer", open: 2, overdue: 1, high: 1 }],
+      member_total: 1,
+      unassigned: { open: 2, overdue: 0, high: 0 },
+    },
+  };
+  async function signedIn(rpc: (name: string, body: unknown) => Response) {
+    const payload = Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64url");
+    const user = {
+      id: "11111111-1111-4111-8111-111111111111",
+      email: "dev@example.com",
+      email_confirmed_at: "2026-11-07T00:00:00Z",
+      app_metadata: {},
+      user_metadata: {},
+      created_at: "2026-11-07T00:00:00Z",
+    };
+    const calls: { name: string; body: unknown }[] = [];
+    const { app } = fixture(async (input, init) => {
+      const url = String(input);
+      if (url.includes("/token"))
+        return Response.json({
+          access_token: `e30.${payload}.fixture`,
+          refresh_token: "fixture",
+          expires_in: 3600,
+          token_type: "bearer",
+          user,
+        });
+      if (url.includes("/auth/v1/user")) return Response.json(user);
+      const name = url.split("/rpc/")[1] ?? "";
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      calls.push({ name, body });
+      return rpc(name, body);
+    });
+    await app(post("/api/auth/signin", { email: user.email, password: "a-long-test-password" }));
+    return { app, calls };
+  }
+  const read = (app: (request: Request) => Promise<Response>, query = "?day=2026-11-13", id = org) =>
+    app(new Request(`${origin}/api/organisations/${id}/overview${query}`));
+
+  it("requires a session", async () => {
+    const { app } = fixture();
+    expect((await read(app)).status).toBe(401);
+  });
+  it("passes the organisation and viewer's day and returns only the aggregate fields", async () => {
+    const leaky = structuredClone(overview) as typeof overview & { extra?: string };
+    leaky.extra = "private";
+    (leaky.workload.members[0] as Record<string, unknown>).email = "dev@example.com";
+    const { app, calls } = await signedIn(() => Response.json(leaky));
+    const response = await read(app);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ overview });
+    expect(calls).toEqual([{ name: "organisation_overview", body: { target_org: org, viewer_day: "2026-11-13" } }]);
+  });
+  it("rejects malformed days, ids and methods before calling the database", async () => {
+    const { app, calls } = await signedIn(() => Response.json(overview));
+    for (const query of ["", "?day=13-11-2026", "?day=2026-11-13&day=2026-11-14", "?day=" + "9".repeat(200)])
+      expect((await read(app, query)).status).toBe(400);
+    expect((await read(app, "?day=2026-11-13", "not-a-uuid")).status).toBe(404);
+    expect((await app(post(`/api/organisations/${org}/overview?day=2026-11-13`, {}))).status).toBe(404);
+    expect(calls).toEqual([]);
+  });
+  it("maps database refusals to safe answers", async () => {
+    const answers: Record<string, [number, number]> = { "42501": [403, 403], "22023": [400, 400], XX000: [500, 503] };
+    for (const [code, [upstream, expected]] of Object.entries(answers)) {
+      const { app } = await signedIn(() =>
+        Response.json({ code, message: "private diagnostic" }, { status: upstream }),
+      );
+      const response = await read(app);
+      expect(response.status).toBe(expected);
+      expect(JSON.stringify(await response.json())).not.toContain("private diagnostic");
+    }
+    const { app } = await signedIn(() => Response.json({ totals: "garbled" }));
+    expect((await read(app)).status).toBe(503);
   });
 });

@@ -8,7 +8,10 @@ import { createApplication, createAuthAdmission } from "./application";
 import { createTestPlanProvider } from "./test-plan-ai";
 import { logFailure } from "./http";
 import { createDatabaseProbe, healthResponse } from "./health";
+import { createDemoKitAdmission, databaseReservation, demoKitCaps } from "./demo-kits";
+import { aiLimits } from "./ai-limits";
 const admitAuth = createAuthAdmission();
+const admitDemoKit = createDemoKitAdmission();
 
 // Each external HTTP request has one deadline and no automatic transport retries.
 const boundedFetch: typeof fetch = (input, init) =>
@@ -41,7 +44,7 @@ export async function handleRequest(request: Request) {
   const jar = await cookies();
   const staged = new Map<string, { name: string; value: string; options: import("@supabase/ssr").CookieOptions }>();
   let client: ReturnType<typeof createServerClient> | undefined;
-  // One worker factory and one fake-adapter gate for every AI feature.
+  // One secret-key worker factory for AI features and demo kits; never cookie-bound.
   const worker = () => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SECRET_KEY;
@@ -79,10 +82,17 @@ export async function handleRequest(request: Request) {
       ),
       ai: () => socConfigured(socConfiguration()),
     });
+  const demoKits = {
+    reserve: databaseReservation(worker, demoKitCaps(process.env)),
+    admin: () => worker().auth.admin,
+    admitLocal: admitDemoKit,
+  };
   const response = await createApplication({
     origin,
     admitAuth,
     health,
+    demoKits,
+    aiLimits: aiLimits(process.env),
     chat: {
       worker,
       async provider(input) {

@@ -3,11 +3,14 @@ import { accountRoutes } from "./account";
 import { admittedAuthPaths, authRoutes, createAuthAdmission, unavailable } from "./auth";
 import { handleChat, type ChatDependencies } from "./chat";
 import { handleDelivery } from "./delivery";
+import { demoKitPath, handleDemoKit, type DemoKitDependencies } from "./demo-kits";
 import { error, InputError, json, serviceUnavailable } from "./http";
 import { organisationRoutes } from "./organisations";
 import { handleRequests } from "./requests";
 import { matchRoute, type Route, type SessionContext } from "./routes";
 import { handleTestPlans, type TestPlanDependencies } from "./test-plans";
+import { handleOrganisationAiUsage, type AiLimits } from "./ai-limits";
+import { handleOverview } from "./overview";
 
 export { createAuthAdmission } from "./auth";
 
@@ -17,7 +20,10 @@ type Options = {
   admitAuth?: () => boolean;
   chat?: ChatDependencies;
   testPlans?: TestPlanDependencies;
+  /** Shared AI caps; null when configuration turns AI off. */
+  aiLimits?: AiLimits | null;
   health?: () => Promise<Response>;
+  demoKits?: DemoKitDependencies;
 };
 
 /** Paths that need a signed-in, email-verified user, even when no route then matches. */
@@ -34,7 +40,7 @@ const sessionRoutes: Route<SessionContext>[] = [...organisationRoutes, ...accoun
 
 /**
  * The single entry point for /api. Order matters: origin check, then the public
- * health check, then auth admission and auth routes, then the identity check
+ * health check and demo kits, then auth admission and auth routes, then the identity check
  * before any organisation, ticket or account route.
  */
 export function createApplication(options: Options) {
@@ -47,6 +53,8 @@ export function createApplication(options: Options) {
       const path = new URL(request.url).pathname;
       // Public and sessionless; a GET, so it already skips the origin check.
       if (path === "/api/health" && request.method === "GET" && options.health) return await options.health();
+      // Public and sessionless, with its own admission; never reaches the session check.
+      if (path === demoKitPath && options.demoKits) return await handleDemoKit(request, options.demoKits);
       if (request.method === "POST" && admittedAuthPaths.includes(path) && !admitAuth()) {
         return json({ error: "Too many attempts. Try again in a minute." }, 429);
       }
@@ -62,8 +70,10 @@ export function createApplication(options: Options) {
         if (!data.user.email_confirmed_at) return error("Verify your email to continue.", 403);
         const user = data.user;
         const handled =
-          (await handleChat(request, client, user.id, options.chat)) ??
-          (await handleTestPlans(request, client, user.id, options.testPlans)) ??
+          (await handleChat(request, client, user.id, options.chat, options.aiLimits)) ??
+          (await handleTestPlans(request, client, user.id, options.testPlans, options.aiLimits)) ??
+          (await handleOrganisationAiUsage(request, client, options.aiLimits)) ??
+          (await handleOverview(request, client)) ??
           (await handleDelivery(request, client)) ??
           (await handleRequests(request, client));
         if (handled) return handled;
