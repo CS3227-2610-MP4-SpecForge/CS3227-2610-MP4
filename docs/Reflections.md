@@ -52,6 +52,12 @@ decisions were made.
 ### A rule that nothing checks will be skipped
 
 Writing the review step into the instructions was not enough to make it happen.
+The Developer test plan generator was a concrete example: it sent ticket text
+to an LLM and introduced authorisation decisions, yet its session log recorded
+that both the required security preflight and independent code review had been
+missed ([test plan log](../logs/2026-11-09-developer-test-plans.md)). Writing the
+rule had not been enough to ensure it was followed.
+
 In our process experiment (below), our own workflow skipped the mandatory
 independent review in three of four runs. A separate set of test runs showed
 the reviewer skipped in four of five runs while it existed only as a written

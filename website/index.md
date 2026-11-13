@@ -7,9 +7,9 @@ title: SpecForge
 
 **A shared workspace for product managers and developers.**
 
-Client requests arrive vague. SpecForge is where a product manager turns one into
-a clear, reviewable feature ticket with help from an LLM, publishes it to the
-organisation, and tracks it through delivery alongside the developers who build
+Client requests arrive vague. SpecForge is where you can turn turns one into
+a clear, reviewable feature ticket with help from an LLM, publish it to your
+organisation, and tracks its delivery alongside the developers who build
 it.
 
 - **Live application:** [specforge-prod.onrender.com](https://specforge-prod.onrender.com)
@@ -76,7 +76,7 @@ the workflow and not just the code.
 
 | Member | Role | Responsibility |
 | --- | --- | --- |
-| _add your name_ | Product manager features | Ticket drafting, publication, AI rewriting and suggestion review |
-| _add your name_ | Developer features | Developer-facing AI and delivery workflow |
+| Pan Xinping | Product manager features | Ticket drafting, publication, AI rewriting and suggestion review. Organisation management features. |
+| Chuah Zi Yang | Developer features | Developer-facing AI and delivery workflow |
 
 Built for CS3227 Machine Problem 4, National University of Singapore.
