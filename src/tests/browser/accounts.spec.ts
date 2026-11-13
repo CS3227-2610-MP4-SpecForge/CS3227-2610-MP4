@@ -120,7 +120,7 @@ for (const role of ["PM", "Developer"] as const) {
         await expect(headingRow).not.toContainText(email);
         await expect(headingRow.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(0);
         await page.getByRole("link", { name: new RegExp(`${role} test team Admin`) }).press("Enter");
-        await expect(page).toHaveURL(/\/requests$/);
+        await expect(page).toHaveURL(/\/overview$/);
         await expect(accountControl).toContainText(username.toLowerCase());
         await page.getByRole("link", { name: "SpecForge home" }).click();
         await expect(page).toHaveURL(/\/workspace$/);
@@ -298,7 +298,7 @@ test("organisation links navigate directly and Manage switches team context", { 
     await close.click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.getByRole("link", { name: /First team Admin/ }).click();
-    await expect(page).toHaveURL(`/organisations/${first}/requests`);
+    await expect(page).toHaveURL(`/organisations/${first}/overview`);
   } finally {
     await fixture.cleanup();
   }

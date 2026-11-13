@@ -243,7 +243,12 @@ test("priority and delivery status use accessible colored pill dropdowns", async
     await filters.getByRole("searchbox", { name: "Search by title" }).fill("nonmatching title");
     await filters.getByRole("button", { name: "Apply search" }).click();
     await expect(page.getByText("No tickets match these filters.", { exact: true })).toBeVisible();
+    // Applied filters live in the address, so a reload keeps them (organisation overview spec).
+    await expect(page).toHaveURL(/search=nonmatching\+title/);
     await page.reload();
+    await expect(page.getByText("No tickets match these filters.", { exact: true })).toBeVisible();
+    await expect(filters.getByRole("searchbox", { name: "Search by title" })).toHaveValue("nonmatching title");
+    await page.goto(`/organisations/${org}/requests`);
     await expect(row.getByRole("combobox", { name: "Priority for Colored work" })).toHaveText("Low");
     await expect(row.getByRole("combobox", { name: "Status for Colored work" })).toHaveText("In review");
     await expect(page.getByText("Loading members…", { exact: true })).toHaveCount(0);

@@ -69,6 +69,7 @@ test(
     try {
       await login(page, pm);
       await page.getByRole("link", { name: /Requirements team Admin/ }).click();
+      await page.getByRole("link", { name: "Requests", exact: true }).click();
       await page.getByRole("button", { name: "New task", exact: true }).click();
       await page.getByLabel("Title", { exact: true }).focus();
       await page.keyboard.press("Tab");

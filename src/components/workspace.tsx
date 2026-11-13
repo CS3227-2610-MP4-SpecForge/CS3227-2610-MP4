@@ -119,7 +119,7 @@ export function Workspace() {
               <ul className="organisation-list">
                 {organisations.map(org => (
                   <li className="organisation-entry" key={org.id}>
-                    <Link className="organisation-card" href={`/organisations/${org.id}/requests`}>
+                    <Link className="organisation-card" href={`/organisations/${org.id}/overview`}>
                       <span className="organisation-symbol" aria-hidden="true">
                         {org.name.charAt(0).toUpperCase()}
                       </span>

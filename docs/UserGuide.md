@@ -12,6 +12,7 @@ Open SpecForge at <https://specforge-prod.onrender.com/sign-in>.
   [your own account](#create-an-account)
 - [Five-minute walkthrough](#five-minute-walkthrough)
 - [Organisations and members](#organisations-and-members)
+- [Organisation overview](#organisation-overview)
 - [Tickets](#tickets)
 - [AI assistant](#ai-assistant) (Product Managers)
 - [Test plans](#test-plans) (Developers)
@@ -113,8 +114,8 @@ window, so each account stays signed in.
 ## Organisations and members
 
 **Your organisations.** The workspace lists the organisations you belong to.
-Select a card to open its Requests page; select **SpecForge** in the navbar to
-come back. You can belong to several organisations, and each one's tickets stay
+Select a card to open its **Overview**, and switch to **Requests** with the tabs
+under the organisation's name. Select **SpecForge** in the navbar to come back. You can belong to several organisations, and each one's tickets stay
 private to its members.
 
 **Inviting.** Admins choose **Manage** on an organisation card, enter an email
@@ -136,6 +137,26 @@ return.
 organisation has left today, for example "AI today: 52 of 80 left · resets at
 midnight Singapore time". It counts every member's PM assistant and test-plan
 requests together. Other members don't see this bar.
+
+## Organisation overview
+
+Every member sees the same read-only summary of the organisation's published
+tickets. Private drafts never count, except your own in your summary line.
+
+- **Your work:** how many open tickets are assigned to you and how many of them
+  are overdue. Product Managers also see their private drafts.
+- **Tickets by status:** one count per status, plus **Overdue** (past its due
+  date and not Done or Cancelled) and **Due in the next 7 days**. Each ticket
+  counts once, however many people are assigned to it.
+- **Workload:** each member's open, overdue and high-priority tickets, then
+  **Unassigned**. A ticket shared by two people appears on both their rows, so
+  the rows are not meant to be added up.
+
+Select any number to open **Requests** with the matching filters already
+applied; a zero is plain text. "Overdue" and "due" use your own calendar day.
+Reload the page to refresh the counts.
+
+![The Overview tab with status counts and the workload table](images/organisation-overview.png)
 
 ## Tickets
 
@@ -178,7 +199,10 @@ Each organisation's Requests page lists its tickets with **Title**, **Owner**,
 **Assignees**, **Status** and **Priority**. Select a title to open a ticket.
 
 - **Search and filter** by title, status, priority or assignee (including
-  **Assigned to me** and **Unassigned**), then choose **Apply filters**.
+  **Assigned to me** and **Unassigned**), then choose **Apply filters**. Status
+  also offers **Open**, **Overdue** and **Due in the next 7 days**. Applied
+  filters stay in the page address, so a reload keeps them and you can share the
+  link. If a link's filters are not recognised, the defaults are shown instead.
 - **Sort** by **Recently updated**, **Due date** or **Status**.
 - **Change status or priority** straight from the table, if you are allowed to.
 - **Load more tickets** shows the next page.

@@ -159,6 +159,7 @@ failed SoC call is not a 503: it comes back as a failed, refunded turn.
 | POST | `/organisations/[org]/requests/[id]/delivery` | Author, or an assignee for status | 200, 400, 403, 409 |
 | GET, POST | `/organisations/[org]/requests/[id]/activity` | Member, published tickets | 200, 400, 403, 409, 429 |
 | GET | `/organisations/[org]/ticket-members` | Member | 200, 400 |
+| GET | `/organisations/[org]/overview?day=YYYY-MM-DD` | Member | 200, 400, 403, 404 |
 | GET, POST | `/organisations/[org]/requests/[id]/chat` | The ticket's PM author | 200, 202 (running), 400, 403, 409, 429 |
 | GET, POST, PUT | `/organisations/[org]/requests/[id]/test-plan` | Developers generate and save; members read the saved plan | 200, 202 (running), 400, 403, 409, 429 |
 | GET | `/organisations/[org]/ai-usage` | Organisation admins | 200, 403, 404, 503 |
@@ -227,11 +228,22 @@ content plus JSON escaping; account and membership endpoints keep 8 KiB.
 - `GET /api/organisations/[org]/requests` uses `list_ticket_page`: 50 entries,
   `nextOffset`, filters `search/status/priority/assignee/overdue/today/sort` and
   `offset`. Filtering occurs before pagination; `today` is the viewer's ISO
-  calendar day for overdue filtering. Sort accepts `updated`, `due`, or `status`
+  calendar day for overdue filtering. Besides `draft` and the five delivery
+  statuses, `status` accepts `open` (published and not Done or Cancelled),
+  `overdue` and `due_soon` (open and due today or within six days); the last two
+  require `today`. Sort accepts `updated`, `due`, or `status`
   (statuses are grouped before pagination, with Done last). Offset pages reflect
   live updates, so a refresh is needed if concurrent edits reorder results.
   Legacy `list_requests` remains a capped compatibility RPC; the UI does not use
   it.
+- `GET /api/organisations/[org]/overview?day=` uses `organisation_overview`:
+  per-status totals plus `overdue` and `due_soon`, the caller's own `mine`
+  (`drafts` only for PMs), and `workload` rows for at most 100 current members
+  plus `unassigned` and `member_total`. Totals count each published ticket once;
+  a workload row counts a ticket once for each of its assignees, so rows are
+  never summed. The overview and the list share the `private.ticket_open`,
+  `ticket_overdue` and `ticket_due_soon` predicates and `private.viewer_day`
+  validation, so every count equals the length of the list it links to.
 - `POST .../requests` with `{creationKey}` creates a private draft.
   `POST .../requests/[id]` takes one of `save_draft`, `submit`,
   `save_published` or `delete_draft`, with the expected revision.
@@ -283,6 +295,20 @@ The shared `Modal` (used by organisation management and AI change review)
 registers its native top-layer element explicitly so notifications from anywhere
 remain visible above the modal. Host changes preserve the deadline. Keep
 persistent save/conflict state, field guidance and saved AI history contextual.
+
+#### Organisation tabs and URL filters
+
+Organisation pages share `OrganisationTabs` (Overview and Requests links).
+Workspace cards open Overview. `src/overview.ts` owns the Requests URL filter
+format: `parseRequestFilters` keeps only recognised `search`, `status`,
+`priority`, `assignee` and `sort` values and flags anything else, so the page
+shows a generic notice without echoing the input; `requestsHref` builds the
+Overview links. The Requests page reads its `searchParams` on the server and
+passes them to `RequestList`. Apply filters writes the filters back with
+`history.replaceState`, and the list query adds `today` only for the `overdue`
+and `due_soon` statuses, so a shared link stays valid on later days. A linked
+assignee outside the loaded member page is resolved with
+`ticket-members?selected=`; an id that is not a current member is dropped.
 
 #### Session expiry
 
