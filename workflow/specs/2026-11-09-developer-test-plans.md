@@ -87,6 +87,9 @@ role has none.
   draft ticket is refused, worker-only admission and completion, stale-plan
   save conflict, admission and capacity limits.
 - Browser: a developer generates with the local fake provider, reviews, saves,
-  and a second account sees the saved plan. **Not written yet**: the local fake
-  provider (`localFakeTestPlanAi`) is in place for it, but no Playwright spec
-  covers the panel, so the UI has had no executed check.
+  and a second account sees the saved plan. Covered by
+  `src/tests/browser/notifications.spec.ts` (a Developer generates with
+  `localFakeTestPlanAi`, saves, generates again and keeps the saved plan and
+  **Replace saved plan** after a failed save), the component test
+  `src/components/test-plan-panel.test.tsx` (loading, empty and retry states) and
+  `src/tests/test-plans.database.test.ts` (other members read the saved plan).

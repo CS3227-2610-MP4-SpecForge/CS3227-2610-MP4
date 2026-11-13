@@ -17,6 +17,8 @@ export function AccountMenu() {
   const container = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const submitting = useRef(false);
+  // Keep the menu (and Sign out, for focus return) open while a departure is confirmed.
+  const departing = useRef(false);
   const account = identity?.pathname === pathname ? identity.account : undefined;
 
   useEffect(() => {
@@ -54,10 +56,10 @@ export function AccountMenu() {
   useEffect(() => {
     if (!open) return;
     function outside(event: PointerEvent) {
-      if (!container.current?.contains(event.target as Node)) setOpen(false);
+      if (!departing.current && !container.current?.contains(event.target as Node)) setOpen(false);
     }
     function escape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !departing.current) {
         setOpen(false);
         trigger.current?.focus();
       }
@@ -71,7 +73,12 @@ export function AccountMenu() {
   }, [open]);
 
   async function signout() {
-    if (submitting.current || !requestDeparture()) return;
+    if (submitting.current || departing.current) return;
+    departing.current = true;
+    const leave = await requestDeparture().finally(() => {
+      departing.current = false;
+    });
+    if (!leave || submitting.current) return;
     submitting.current = true;
     setPending(true);
     setError("");
@@ -97,10 +104,12 @@ export function AccountMenu() {
       ref={container}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => {
-        if (!container.current?.contains(document.activeElement) && !error && !pending) setOpen(false);
+        if (!departing.current && !container.current?.contains(document.activeElement) && !error && !pending)
+          setOpen(false);
       }}
       onBlur={event => {
-        if (!submitting.current && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+        if (!submitting.current && !departing.current && !event.currentTarget.contains(event.relatedTarget))
+          setOpen(false);
       }}
     >
       <button

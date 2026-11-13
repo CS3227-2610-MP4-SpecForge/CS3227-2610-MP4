@@ -22,7 +22,6 @@ test("a visitor creates a demo kit and both logins work together without a mailb
   const ids: string[] = [];
   const context = await browser.newContext();
   const developerPage = await context.newPage();
-  page.on("dialog", dialog => dialog.accept());
   try {
     await page.goto(origin + "/sign-in");
     await page.getByRole("button", { name: "Create demo kit", exact: true }).click();

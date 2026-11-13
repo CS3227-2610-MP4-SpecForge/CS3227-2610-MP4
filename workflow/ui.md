@@ -98,6 +98,25 @@ active modal's top layer, or renders at the page level when there is no modal.
 Host changes do not restart the event timer. Banners float at viewport top centre,
 occupy no layout space, and do not move focus or block pointer interaction.
 
+Modals can stack. The provider keeps a stack of hosts, so after a nested modal
+closes, banners return to the modal still open beneath it.
+
+## Confirmations
+
+Never use `window.confirm`. RootLayout mounts `ConfirmProvider`; call
+`const confirm = useConfirm()` and `await confirm({ title, message?, confirmLabel,
+cancelLabel?, danger? })`, which resolves `true` only from the confirm button.
+Cancel, the close button and Esc resolve `false`. The dialog reuses `Modal`
+(`confirm-modal` size), focuses the cancel button first, returns focus to the
+trigger and queues overlapping requests. Phrase the title as the question
+("Remove member?"), put consequences in `message`, name the confirm button with
+the action ("Remove member", not "OK"), and set `danger` for destructive or
+access-losing actions; it uses the shared `.button.danger` variant.
+
+The unsaved-changes guard uses the same dialog for in-app links and sign out
+(`requestDeparture()` is async). Browser refresh, close and history navigation keep
+the native unload prompt, which browsers do not allow pages to restyle.
+
 Keep loading/progress, empty states, field validation, save/conflict state and
 saved AI failure history contextual. Their state and retry/reconciliation controls
 must remain available after a related transient banner expires. `Notice` remains

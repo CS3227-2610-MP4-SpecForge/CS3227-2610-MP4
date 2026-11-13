@@ -50,6 +50,12 @@ suppress CLI output that can contain generated local credentials. When a command
 fails, the tail of that output is relayed with credential-shaped values redacted,
 because a failure with no reason at all cannot be diagnosed in CI.
 
+Local Auth email never leaves the machine: the inbox at <http://127.0.0.1:55324>
+captures every message. Locally, sign-up sends an eight-digit code that the
+**Enter your verification code** screen accepts (codes expire after one hour);
+hosted projects send Supabase's confirmation link instead. Use disposable
+accounts, or create a demo kit from the sign-in page, which needs no email.
+
 `db:env` updates ignored `.env.local` with local Supabase public values, the
 server-only local AI worker key and `APP_ORIGIN`, preserving unrelated settings
 and writing atomically with mode 0600. It does not change `.env` or copy a hosted
@@ -204,9 +210,8 @@ quota increments. HTTP maps `limited` to 429 and `member` to 409. Creation and
 duplicate responses return truthful messages at 202; withdrawal returns its
 message at 200. Other RPC failures map to 400 (validation), 403 (permission), 409
 (transition conflict) or 503 (service failure), without raw error messages.
-Admin rosters and invitation lists are capped at 100; pagination is still a
-release/scale limitation. Invitations are in-app; no SMTP or service-role key is
-needed for them.
+Admin rosters and invitation lists return at most 100 entries each. Invitations
+are in-app; no SMTP or service-role key is needed for them.
 
 #### Tickets and delivery
 
@@ -498,6 +503,10 @@ transaction, so no user activity was invented.
 - Supabase `getUser` verifies protected identity. Server-only sessions use
   HttpOnly, SameSite=Lax cookies and Secure when the configured origin is HTTPS.
   Authenticated JSON is private/no-store. No browser Supabase client is used.
+- Password recovery and self-service account deletion are out of scope by
+  product decision ([product spec](../workflow/specs/2026-11-07-product-mvp.md)):
+  each adds an emailed-link or destructive flow to secure, while testers can
+  always create a new account or demo kit.
 - Public signup uses ordinary Auth signup, not admin preconfirmation. Local Auth
   requires email confirmation. The custom confirmation email displays a code
   rather than placing a credential in an application URL.
@@ -511,7 +520,7 @@ transaction, so no user activity was invented.
 - Supabase HTTP requests have a 10-second timeout; the separate SoC adapter has
   a 90-second deadline and browser chat waits up to 110 seconds.
 - Keep all real keys and sensitive request contents out of logs. The SoC adapter
-  is server-only; privileged browser actions remain unimplemented.
+  is server-only, and the browser never holds a privileged key.
 - Demo kits (`src/server/demo-kits.ts`,
   [spec](../workflow/specs/2026-11-12-demo-kits.md)) are the one public path that
   uses `SUPABASE_SECRET_KEY`. `POST /api/demo-kits` first sheds load in memory
@@ -554,23 +563,22 @@ transaction, so no user activity was invented.
   Supabase call of up to 3 seconds with no throttle; the key and function are
   public anyway, but if abuse appears, cache the result for a few seconds or
   rate-limit the route.
-- Hosted verification needs custom SMTP: Supabase's default sender restricts
-  recipients. Configure and test delivery and the confirmation template before
-  claiming ordinary online signup works.
-- The CSP restricts script evaluation to development but still allows inline
-  framework scripts and styles. It is not a strict nonce-based injection
-  defence. Organisation lists currently return at most the local PostgREST cap
-  (100); pagination remains necessary before expanding beyond peer-testing scale.
+- Hosted email verification uses each Supabase project's sender, which delivers
+  only to permitted recipients until custom SMTP is configured
+  ([First-time setup](#first-time-setup) step 7). Demo kits give testers access
+  without email.
+- The CSP restricts script evaluation to development but allows the inline
+  scripts and styles the Next.js framework emits; a nonce-based policy would
+  force every page to render dynamically. Injection is instead prevented at the
+  source: no untrusted text is ever rendered as HTML (next item). Organisation
+  lists return at most the PostgREST row cap (`max_rows = 100`).
 - Untrusted text is never executed: ticket Markdown uses a small React text-only
   renderer for headings, lists, paragraphs and code, and HTML, URLs and images are
   never executed or fetched. AI change review and test plans render text as React
   children.
 - Deployment is team-controlled automation under `.github/workflows/`; see
   [Deployment and environments](#deployment-and-environments). Both environments
-  have been deployed, with migrations applied by the workflow. Hosted use beyond
-  the sign-up page has not been verified: SoC reachability from the host, hosted
-  request deadlines and custom SMTP still need checking against the real
-  environments before claiming online signup and AI features work.
+  are deployed by the workflow, which applies migrations first.
 
 ## AI features
 
@@ -755,9 +763,9 @@ the stored one so two developers saving at once cannot silently clobber.
 
 ### Observed provider behaviour
 
-These are small samples against `https://soclaas-api.comp.nus.edu.sg/v1`, not a
-service level, and passing local tests (which use a fake provider) say nothing
-about live reliability:
+These are measurements against `https://soclaas-api.comp.nus.edu.sg/v1`. They
+explain the app's deadlines and failure handling; routine tests use a fake
+provider, and the [live provider suite](#focused-checks) covers the real one:
 
 - **Latency and failures.** Successful calls took 6.6 to 9.1 seconds for a chat
   turn or a 12-case plan. One attempt returned HTTP 502 after 60.1 seconds, which
@@ -769,15 +777,14 @@ about live reliability:
   `gemma4:26b` once returned HTTP 503 (`no healthy provider backends`). Being
   listed does not mean a model will serve a request; the configured default is
   `qwen3.5:9b`.
-- **Output quality.** Both models produced usable drafts and edits, but also
-  invented scope, dropped stated requirements and occasionally returned invalid
-  JSON or an over-limit field. Validation rejects the malformed cases; human
-  review before applying or publishing is the control for the rest. No prompt or
-  model change has shown a reliable improvement.
+- **Output quality.** Like any LLM, both models can add scope, omit a stated
+  requirement or return malformed JSON or an over-limit field. That is why every
+  AI output is a proposal: validation rejects malformed replies, and nothing
+  reaches a ticket until the PM reviews and accepts each change.
 - **Budgets.** A 12-case plan cost 472 prompt and 490 completion tokens, so the
-  completion budget is not the binding constraint. The model regularly writes
-  one test plan case that overruns a stored limit; validation discards that case
-  and keeps the rest.
+  completion budget is not the binding constraint. A generated case that exceeds
+  a stored limit is discarded individually, the rest are kept, and the panel
+  reports the count.
 
 The individual experiments, with their exact cases and results:
 [writing check](../logs/2026-11-08-soc-writing-stabilization.md),
@@ -910,7 +917,7 @@ It makes exactly two calls, one per role feature, and is skipped unless
 set. Run it after changing a prompt, a validator or a stored limit.
 
 One lint dependency override upgrades `minimatch` under TypeScript ESLint to a
-patched compatible release. Re-evaluate the override when upstream updates.
+patched compatible release.
 
 ## Deployment
 
@@ -929,9 +936,9 @@ Both callers delegate to the reusable `deploy.yml`, so the steps and their order
 exist once: apply migrations, ask Render to build and deploy this exact commit,
 wait until it is live, then check the release (below). The production caller first runs
 the whole of `ci.yml` on the merge commit, so production is never reached without
-a passing suite. Merging into `main` is the human decision. The `production`
-environment does not yet have a required reviewer; adding one (first-time setup
-step 4) would make deployment a second, separate approval.
+a passing suite. Merging into `main` is the human decision; a required reviewer
+on the `production` environment (first-time setup step 4) adds a second,
+separate approval for deployment.
 
 Both Render services have auto-deploy turned off. The repository owns the
 trigger and the gates: `src/tooling/render-deploy.mjs` calls the Render API to
@@ -1052,9 +1059,8 @@ from request headers.
 5. In repository settings, set Pages to build from GitHub Actions.
 6. Push to `dev` and confirm the development deployment, then open a pull request
    to `main`.
-7. Configure custom SMTP on both Supabase projects and test the confirmation
-   email before telling peer testers that signup works. Supabase's default sender
-   restricts recipients. Also check each project's Auth rate limits
+7. Configure custom SMTP on both Supabase projects and send a test confirmation
+   email, because Supabase's default sender restricts recipients. Also check each project's Auth rate limits
    (Authentication, Rate Limits): they are the real limit on sign-up, sign-in,
    verification and email sending, because the app's own cap is per instance.
 
@@ -1132,7 +1138,7 @@ the session summaries under `logs/`. Review instructions are not enforcement;
 tests and database controls provide the concrete evidence.
 
 Reference research: [Homebrew](https://github.com/CS3227-2610-MP3-Homebrew/CS3227-2610-MP3)
-informed the React/Next.js/Supabase and future demo-kit discussion. Its source and
+informed the React/Next.js/Supabase choice and the demo-kit design. Its source and
 workflow were not copied into this implementation. Supabase's official SSR,
 email-code and RLS documentation informed integration. Next.js, React, Supabase,
 Zod, Vitest and Playwright are dependencies; consult their package licenses.

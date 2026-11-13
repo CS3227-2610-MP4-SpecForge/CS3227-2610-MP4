@@ -1,4 +1,10 @@
-import { expectAccessible, recordTicketWrites, savedTicketStatus as saved, setDueDate } from "./ui.fixture";
+import {
+  expectAccessible,
+  recordTicketWrites,
+  savedTicketStatus as saved,
+  setDueDate,
+  answerConfirmation,
+} from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
 import { localFixture } from "../local.fixture";
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
@@ -240,15 +246,15 @@ test("failed saves require reconciliation; in-flight edits and stale editor text
     await page.goBack({ waitUntil: "domcontentloaded", timeout: 2000 }).catch(() => null);
     expect(historyWarning).toBe(true);
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Local stale edit to keep");
-    page.once("dialog", dialog => dialog.dismiss());
     await page.getByRole("link", { name: "Back to requests", exact: true }).click();
+    await answerConfirmation(page, "Leave with unsaved work?", "Stay");
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Local stale edit to keep");
-    page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "Reload saved version and discard edits", exact: true }).click();
+    await answerConfirmation(page, "Discard local edits?", "Discard and reload");
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("A newer saved version");
     await expect(saved(page)).toBeVisible();
-    page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "Delete draft", exact: true }).click();
+    await answerConfirmation(page, "Delete draft?", "Delete draft");
     await expect(page).toHaveURL(new RegExp(`/organisations/${org}/requests$`));
     await expect(page.getByText("No tickets yet.", { exact: false })).toBeVisible();
   } finally {
@@ -258,12 +264,7 @@ test("failed saves require reconciliation; in-flight edits and stale editor text
 
 test("same-document skip link keeps unsaved-work protection active", async ({ page }) => {
   const { fixture } = await setupEditor(page);
-  let warnings = 0;
-  const dismiss = async (dialog: import("@playwright/test").Dialog) => {
-    warnings++;
-    await dialog.dismiss();
-  };
-  page.on("dialog", dismiss);
+  const warning = page.getByRole("dialog", { name: "Leave with unsaved work?", exact: true });
   try {
     await page.route("**/api/organisations/*/requests/*", async route => {
       if (route.request().method() === "POST") await route.abort();
@@ -273,12 +274,11 @@ test("same-document skip link keeps unsaved-work protection active", async ({ pa
     await expect(page.getByText("Save failed — local edits preserved", { exact: true })).toBeVisible();
     await page.getByRole("link", { name: "Skip to content", exact: true }).focus();
     await page.getByRole("link", { name: "Skip to content", exact: true }).click();
-    expect(warnings).toBe(0);
+    await expect(warning).toHaveCount(0);
     await page.getByRole("link", { name: "Back to requests", exact: true }).click();
-    expect(warnings).toBe(1);
+    await answerConfirmation(page, "Leave with unsaved work?", "Stay");
     await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Unsaved navigation text");
   } finally {
-    page.off("dialog", dismiss);
     await fixture.cleanup();
   }
 });
@@ -697,8 +697,8 @@ test("Draft with AI says why it is unavailable after a save conflict", async ({ 
     const draftButton = page.getByRole("button", { name: "Draft with AI", exact: true });
     await expect(draftButton).toBeDisabled();
     await expect(draftButton).toHaveAccessibleDescription("Resolve the save problem above before using AI.");
-    page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "Reload saved version and discard edits", exact: true }).click();
+    await answerConfirmation(page, "Discard local edits?", "Discard and reload");
     await expect(draftButton).toBeEnabled();
     await expect(page.getByText("Resolve the save problem above before using AI.", { exact: true })).toHaveCount(0);
   } finally {

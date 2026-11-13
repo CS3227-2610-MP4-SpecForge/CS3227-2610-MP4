@@ -13,15 +13,18 @@ const NotificationContext = createContext<Notifications | null>(null);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notification, setNotification] = useState<Notification>();
-  const [host, setHost] = useState<HTMLElement | null>(null);
+  // Modals can stack (a confirmation over organisation management); the newest
+  // open one hosts the banner, and closing it hands the banner back to the next.
+  const [hosts, setHosts] = useState<HTMLElement[]>([]);
+  const host = hosts.at(-1) ?? null;
   const sequence = useRef(0);
   const notify = useCallback((message: string, danger = false) => {
     // The persistent session banner already says this; a toast would cover it.
     if (message && message !== sessionEndedMessage) setNotification({ id: ++sequence.current, message, danger });
   }, []);
   const registerHost = useCallback((element: HTMLElement) => {
-    setHost(element);
-    return () => setHost(current => (current === element ? null : current));
+    setHosts(current => [...current.filter(item => item !== element), element]);
+    return () => setHosts(current => current.filter(item => item !== element));
   }, []);
   useEffect(() => {
     if (!notification) return;
