@@ -699,10 +699,16 @@ Each request sends a shared rule block plus that intent's rules, then one JSON
 payload `{ticket, instruction, recent, answers?}`. `recent` holds at most the
 three latest completed turns as `{message, reply}` with replies cut to 1,000
 characters; proposals and older turns are never sent. Output budgets are 2,000
-tokens for `draft`, 600 for `gaps` and 1,200 for `edit`. Edits return exact-text
+tokens for `draft` and 600 for `gaps`. An `edit` on a ticket of at most 6,000
+title-plus-description characters (`rewriteLimit`) asks for the whole revised
+ticket as a `proposal` within 2,500 tokens; a proposal equal to the ticket is a
+reply-only result. Longer tickets use 1,200 tokens and exact-text
 `{field, find, replace}` changes (at most 10). `applyEdits` applies them only
-when each `find` matches exactly once (literal; overlapping matches count), then
-stores the full resulting fields as the proposal for the usual review. Draft
+when each `find` matches exactly once — literally, or else as the same words
+with any whitespace between them (literal `\n` counts as a line break) — then
+stores the full resulting fields as the proposal for the usual review. A draft,
+or an edit carrying gap answers, that suggests no change fails as
+`invalid_schema` ([reliable AI edits](../workflow/specs/2026-11-13-reliable-ai-edits.md)). Draft
 descriptions and edit replacements are cleaned first: `unescapeLineBreaks` turns
 literal `\n` outside code fences into line breaks, and `stripRepeatedTitle`
 drops a copy of the title at the top of a drafted description. Serialized

@@ -307,6 +307,10 @@ export function ChatPanel({
                     <div className="chat-bubble assistant-message">
                       <strong>AI</strong>
                       {turn.reply && <Markdown text={turn.reply} />}
+                      {/* A reply can claim a change it never made, so say plainly when there is none. */}
+                      {turn.status === "completed" && !turn.proposal && turn.intent !== "gaps" && (
+                        <p className="hint">No ticket changes suggested.</p>
+                      )}
                       {turn.status === "completed" && turn.proposal && (
                         <ChangeCard
                           turn={turn}
@@ -361,7 +365,7 @@ export function ChatPanel({
               {(busy || running) && (
                 <li className="chat-bubble assistant-message chat-pending">
                   <strong>AI</strong>
-                  <span role="status">AI is responding… You can keep editing.</span>
+                  <span role="status">AI is responding…</span>
                 </li>
               )}
             </ol>
