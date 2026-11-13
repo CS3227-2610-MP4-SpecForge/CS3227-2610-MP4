@@ -227,6 +227,10 @@ Its conversation is private to you, even after the ticket is published.
   own answer**, then choose **Apply answers** to get a suggestion that includes
   them.
 
+While the AI is responding, **Title** and **Description** are read-only so the
+suggestion matches what you see; you can still select and copy text. A reply
+that suggests no change says **No ticket changes suggested.**
+
 **Reviewing suggestions.** The AI never edits or publishes your ticket by
 itself. Each suggestion appears as a card; choose **Review changes** to see your
 text beside the proposed text, then **Accept** or **Reject** each change, or use

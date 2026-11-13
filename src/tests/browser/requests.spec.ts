@@ -69,7 +69,10 @@ test(
     try {
       await login(page, pm);
       await page.getByRole("link", { name: /Requirements team Admin/ }).click();
-      await page.getByRole("link", { name: "Requests", exact: true }).click();
+      await page
+        .getByRole("navigation", { name: "Organisation sections" })
+        .getByRole("link", { name: "Requests", exact: true })
+        .click();
       await page.getByRole("button", { name: "New task", exact: true }).click();
       await page.getByLabel("Title", { exact: true }).focus();
       await page.keyboard.press("Tab");
@@ -313,10 +316,12 @@ test(
       await expect(lastTurn(page).getByText("All applied", { exact: true })).toBeVisible();
       await expect(saved(page)).toBeVisible();
       await askAi(page, "slow proposal");
-      await expect(page.getByText("AI is responding… You can keep editing.", { exact: true })).toBeVisible();
-      await page.getByLabel("Title", { exact: true }).fill("Manual edit during generation");
-      await expect(page.getByText("AI is responding… You can keep editing.", { exact: true })).toHaveCount(0);
-      await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Manual edit during generation");
+      await expect(page.getByText("AI is responding…", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Title", { exact: true })).not.toBeEditable();
+      await expect(page.getByLabel("Description", { exact: true })).not.toBeEditable();
+      await expect(page.getByText("AI is responding…", { exact: true })).toHaveCount(0);
+      await page.getByLabel("Title", { exact: true }).fill("Manual edit after generation");
+      await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Manual edit after generation");
       await expect(saved(page)).toBeVisible();
       await askAi(page, "Please suggest a task proposal.");
       await expect(lastTurn(page).getByText("1 change: title", { exact: true })).toBeVisible();

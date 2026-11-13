@@ -699,10 +699,16 @@ Each request sends a shared rule block plus that intent's rules, then one JSON
 payload `{ticket, instruction, recent, answers?}`. `recent` holds at most the
 three latest completed turns as `{message, reply}` with replies cut to 1,000
 characters; proposals and older turns are never sent. Output budgets are 2,000
-tokens for `draft`, 600 for `gaps` and 1,200 for `edit`. Edits return exact-text
+tokens for `draft` and 600 for `gaps`. An `edit` on a ticket of at most 6,000
+title-plus-description characters (`rewriteLimit`) asks for the whole revised
+ticket as a `proposal` within 2,500 tokens; a proposal equal to the ticket is a
+reply-only result. Longer tickets use 1,200 tokens and exact-text
 `{field, find, replace}` changes (at most 10). `applyEdits` applies them only
-when each `find` matches exactly once (literal; overlapping matches count), then
-stores the full resulting fields as the proposal for the usual review. Draft
+when each `find` matches exactly once — literally, or else as the same words
+with any whitespace between them (literal `\n` counts as a line break) — then
+stores the full resulting fields as the proposal for the usual review. A draft,
+or an edit carrying gap answers, that suggests no change fails as
+`invalid_schema` ([reliable AI edits](../workflow/specs/2026-11-13-reliable-ai-edits.md)). Draft
 descriptions and edit replacements are cleaned first: `unescapeLineBreaks` turns
 literal `\n` outside code fences into line breaks, and `stripRepeatedTitle`
 drops a copy of the title at the top of a drafted description. Serialized
@@ -1186,8 +1192,21 @@ Claude Code configuration in `.claude/` makes independent review enforceable:
   which follows `workflow/agents/code-reviewer.md` and ends with a
   `Verdict: approved` or `Verdict: needs-fixes` line.
 - `settings.json` runs `hooks/review-gate.mjs`. It records a hash of the
-  uncommitted `src/` diff each time `code-reviewer` finishes. It denies
-  `git commit` until that exact diff is approved. When a turn ends with
+  uncommitted `src/` diff each `code-reviewer` run reviews: at launch for a
+  background review, at finish for a foreground one. The hash covers each
+  changed, new or renamed-away file's path, mode and working-tree content, so
+  staging files before a commit does not invalidate an approval. Because a
+  commit takes the index, a commit is also denied while staged `src/` content
+  differs from the working tree, unless it uses `-a`. Only the
+  report's final non-empty line counts as its verdict. A background review
+  returns only a launch notice, so the gate keeps the launched diff as pending
+  and reads the verdict from the reviewer's own hand-back message or
+  `SubagentStop` event. A foreground reviewer's verdict comes back in the Agent
+  result, or, when it hands back its report, is held until that result arrives.
+  Either way the gate approves only a diff that has not changed since the
+  reviewer saw it. Concurrent reviews can lose an update, which leaves the diff
+  unapproved, never wrongly approved. It denies `git commit` until that exact
+  diff is approved. When a turn ends with
   unreviewed `src/` changes, it asks once for a review (pauses for user input are
   allowed). Once a session log under `logs/` has also changed, it insists. State
   is kept in ignored `local/review/state.json`. Set `SPECFORGE_REVIEW_GATE=off` to

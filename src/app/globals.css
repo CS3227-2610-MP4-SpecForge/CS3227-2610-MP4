@@ -815,6 +815,13 @@ button:disabled {
   resize: vertical;
   min-height: 120px;
 }
+/* Frozen while AI responds: still selectable, visibly not editable. */
+.field input[readonly]:not(:disabled),
+.field textarea[readonly]:not(:disabled) {
+  background: var(--background);
+  color: var(--muted);
+  cursor: default;
+}
 .checkbox-field {
   display: flex;
   align-items: start;
