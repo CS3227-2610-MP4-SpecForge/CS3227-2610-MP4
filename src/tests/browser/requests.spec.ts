@@ -295,7 +295,11 @@ test(
     try {
       const panel = assistantPanel(page);
       await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Description", { exact: true })).toHaveAccessibleDescription("0 / 3,000 characters");
       await page.getByLabel("Description", { exact: true }).fill("Rough notes");
+      await expect(page.getByLabel("Description", { exact: true })).toHaveAccessibleDescription(
+        "11 / 3,000 characters",
+      );
       await expect(saved(page)).toBeVisible();
       await askAi(page, "Clarify this feature");
       await expect(page.getByText("Who is this feature for?", { exact: true })).toBeVisible();
@@ -620,7 +624,6 @@ test("the usage meter shows what is left and blocks requests at the limit", asyn
     ).toBeVisible();
     await panel.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("One more");
     await expect(panel.getByRole("button", { name: "Ask AI", exact: true })).toBeDisabled();
-    await expect(panel.getByRole("button", { name: "Check for gaps", exact: true })).toBeDisabled();
     await expect(page.getByLabel("Title", { exact: true })).toBeEditable();
   } finally {
     await fixture.cleanup();
@@ -765,66 +768,6 @@ test("switching to manual writing during the first-draft freshness check prevent
   }
 });
 
-test("Check for gaps asks structured questions and applies answers in one request for review", async ({ page }) => {
-  const { fixture, pm, org, id } = await setupEditor(page);
-  try {
-    await page.getByLabel("Title", { exact: true }).fill("Remember my filters");
-    const original = "## Problem description\n\nKeep my wording.\n\n## Out of scope\n\nNo cross-device sync.";
-    await page.getByLabel("Description", { exact: true }).fill(original);
-    await expect(saved(page)).toBeVisible();
-    const panel = page.getByRole("complementary", { name: "AI assistant", exact: true });
-    await panel.getByRole("button", { name: "Check for gaps", exact: true }).click();
-    const checklist = panel.getByRole("region", { name: "Open questions", exact: true });
-    await expect(checklist.getByRole("group", { name: "Which lists should keep filters?", exact: true })).toBeVisible();
-    await expect(lastTurn(page).getByRole("button", { name: "Review changes", exact: true })).toHaveCount(0);
-    await expect(page.getByLabel("Description", { exact: true })).toHaveValue(original);
-    await expect(checklist.getByRole("button", { name: "Apply answers", exact: true })).toBeDisabled();
-    await panel
-      .getByLabel("Ask AI to change or explain this ticket", { exact: true })
-      .fill("Keep this instruction while I write.");
-    await page.getByRole("button", { name: "Hide AI assistant", exact: true }).click();
-    await page.getByRole("button", { name: "Show AI assistant", exact: true }).click();
-    await expect(panel.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toHaveValue(
-      "Keep this instruction while I write.",
-    );
-    await checklist
-      .getByRole("group", { name: "Which lists should keep filters?", exact: true })
-      .getByLabel("Requests only", { exact: true })
-      .check();
-    await checklist
-      .getByRole("group", { name: "How long should filters persist?", exact: true })
-      .getByLabel("Leave undecided", { exact: true })
-      .check();
-    await page.screenshot({ path: "test-results/ticket-gaps-desktop.png", fullPage: true });
-    await checklist.getByRole("button", { name: "Apply answers", exact: true }).click();
-    await expect(lastTurn(page).getByText("1 change in Description", { exact: true })).toBeVisible();
-    // The answered checklist becomes read-only.
-    await expect(panel.getByRole("region", { name: "Open questions", exact: true })).toHaveCount(0);
-    await expect(page.getByLabel("Description", { exact: true })).toHaveValue(original);
-    const turns = (await pm.client.rpc("read_chat", { target_org: org, request_id: id })).data;
-    expect(turns).toHaveLength(2);
-    expect(turns[1]).toMatchObject({
-      intent: "edit",
-      answers: [
-        { question: "Which lists should keep filters?", answer: "Requests only" },
-        { question: "How long should filters persist?", answer: null },
-      ],
-    });
-    await acceptAll(page);
-    await expect(page.getByLabel("Description", { exact: true })).toHaveValue(
-      original +
-        "\n\n## Decisions\n\n- Which lists should keep filters? Requests only\n- Unresolved: How long should filters persist?",
-    );
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
-    await expect(panel.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: "test-results/ticket-review-mobile.png", fullPage: true });
-  } finally {
-    await fixture.cleanup();
-  }
-});
-
 test("a lost first-draft response preserves the rough idea and requires review after recovery", async ({ page }) => {
   const fixture = localFixture();
   const pm = await fixture.actor("PM");
@@ -931,7 +874,6 @@ test("a failed first-draft freshness check leaves the draft for review with a us
 test("each change is accepted, rejected or undone on its own and edited parts become outdated", async ({ page }) => {
   const { fixture } = await setupEditor(page);
   try {
-    const panel = assistantPanel(page);
     await page.getByLabel("Description", { exact: true }).fill("Rough notes");
     await expect(saved(page)).toBeVisible();
     await askAi(page, "Please suggest a task proposal.");
@@ -956,13 +898,7 @@ test("each change is accepted, rejected or undone on its own and edited parts be
     await expect(lastTurn(page).getByText("0 of 2 applied", { exact: true })).toBeVisible();
     await page.getByLabel("Title", { exact: true }).fill("Remember my filters");
     await expect(saved(page)).toBeVisible();
-    await panel.getByRole("button", { name: "Check for gaps", exact: true }).click();
-    const checklist = panel.getByRole("region", { name: "Open questions", exact: true });
-    await checklist
-      .getByRole("group", { name: "Which lists should keep filters?", exact: true })
-      .getByLabel("Requests only", { exact: true })
-      .check();
-    await checklist.getByRole("button", { name: "Apply answers", exact: true }).click();
+    await askAi(page, "Suggest a description change.");
     await expect(lastTurn(page).getByText("1 change in Description", { exact: true })).toBeVisible();
     // An edit elsewhere in the ticket leaves the change usable.
     await page.getByLabel("Title", { exact: true }).fill("Remember filters per list");

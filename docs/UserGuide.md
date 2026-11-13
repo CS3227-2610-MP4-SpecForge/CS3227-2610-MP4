@@ -165,7 +165,9 @@ Reload the page to refresh the counts.
 Product Managers choose **New task** on an organisation's Requests page. A ticket
 has a **Title** and a **Description**. Description supports Markdown (headings,
 lists, bold, italics and code blocks); use **Preview** to see how it will look
-and **Write** to keep editing.
+and **Write** to keep editing. Title holds up to 160 characters and Description
+up to 3,000; the count in each box's bottom-right corner turns red if you go
+over, and the ticket cannot be saved until you shorten it.
 
 A new ticket is a private draft: only you can see it, and it saves automatically
 as you type. When it is ready, choose **Publish** to share it with every member
@@ -221,11 +223,8 @@ Its conversation is private to you, even after the ticket is published.
 - **Draft with AI:** write a rough idea in **Description** and choose **Draft
   with AI** to turn it into a full ticket. **Undo AI draft** restores your idea.
 - **Ask AI:** ask a question or request a change in the box at the bottom of the
-  panel.
-- **Check for gaps:** lists up to five open questions about the ticket, each with
-  suggested answers. Pick an answer, choose **Leave undecided**, or write **Your
-  own answer**, then choose **Apply answers** to get a suggestion that includes
-  them.
+  panel, for example "What is missing from this ticket?". A message can be up
+  to 4,000 characters; the box shows your count.
 
 While the AI is responding, **Title** and **Description** are read-only so the
 suggestion matches what you see; you can still select and copy text. A reply

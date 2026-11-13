@@ -221,7 +221,7 @@ are in-app; no SMTP or service-role key is needed for them.
 #### Tickets and delivery
 
 Storage and HTTP `fields` contain exactly `{title, description}`; limits are
-160 and 24,000 Unicode code points. Create, read, list, save, submit and delete
+160 and 3,000 Unicode code points (the database enforces the same bound). Create, read, list, save, submit and delete
 actions use revision conflicts. Request JSON allows 192 KiB, enough for valid
 content plus JSON escaping; account and membership endpoints keep 8 KiB.
 
@@ -666,10 +666,11 @@ sequenceDiagram
 ### PM assistant
 
 **Routes.** `GET /api/organisations/[org]/requests/[id]/chat` reads the complete
-private chat. POST accepts `{key, revision, fields, intent, message?, answers?,
-retry}` with a 256 KiB body cap. `intent` is `draft`, `gaps` or `edit`; draft,
-gap-check and apply-answers turns use fixed server messages from
-`src/assistance.ts`. No client history, actor identity, provider URL or model,
+private chat. POST accepts `{key, revision, fields, intent, message?, retry}`
+with a 256 KiB body cap. `intent` is `draft` or `edit`; a draft sent without the
+PM's own words uses a fixed server message from `src/assistance.ts`. Check for
+gaps and Apply answers were removed ([spec](../workflow/specs/2026-11-13-remove-gap-check.md));
+a `chat_turns` constraint refuses `gaps` turns, questions and answers. No client history, actor identity, provider URL or model,
 or system prompt is accepted. Session-bound `read_chat` and RLS enforce verified
 current PM authorship, including for submitted tasks. Authenticated clients
 cannot mutate chat storage or call worker admission or completion.
@@ -679,7 +680,7 @@ authorization, the server worker calls service-role-only `begin_chat_turn` and
 `finish_chat_turn`. Both independently recheck verified identity, current
 membership and authorship and use organisation-first locks. The privileged key
 never reaches browser code. Each idempotent key binds an immutable editor
-snapshot, message, intent and answers. Persistent admission allows one running
+snapshot, message and intent. Persistent admission allows one running
 turn per request and per account, 20 charged requests and 40 admitted attempts
 per account per hour. Every failed turn is refunded once, only within the window
 that charged it; attempts are never refunded, so the attempt cap bounds SoC
@@ -696,20 +697,17 @@ reserved at admission and a final exact check.
 
 **Prompt policy** ([PM assistant redesign](../workflow/specs/2026-11-10-pm-ai-assistant-redesign.md)).
 Each request sends a shared rule block plus that intent's rules, then one JSON
-payload `{ticket, instruction, recent, answers?}`. `recent` holds at most the
+payload `{ticket, instruction, recent}`. `recent` holds at most the
 three latest completed turns as `{message, reply}` with replies cut to 1,000
 characters; proposals and older turns are never sent. Output budgets are 2,000
-tokens for `draft` and 600 for `gaps`. An `edit` on a ticket of at most 6,000
-title-plus-description characters (`rewriteLimit`) asks for the whole revised
+tokens for `draft`. An `edit` asks for the whole revised
 ticket as a `proposal` within 2,500 tokens; a proposal equal to the ticket is a
-reply-only result. Longer tickets use 1,200 tokens and exact-text
-`{field, find, replace}` changes (at most 10). `applyEdits` applies them only
-when each `find` matches exactly once — literally, or else as the same words
-with any whitespace between them (literal `\n` counts as a line break) — then
-stores the full resulting fields as the proposal for the usual review. A draft,
-or an edit carrying gap answers, that suggests no change fails as
+reply-only result. Exact-text `find`/`replace` edits were removed once tickets
+were capped at 3,000 characters ([short tickets](../workflow/specs/2026-11-13-short-tickets.md));
+stored `unmatched_edit` diagnostics on older turns still display. A draft
+that suggests no change fails as
 `invalid_schema` ([reliable AI edits](../workflow/specs/2026-11-13-reliable-ai-edits.md)). Draft
-descriptions and edit replacements are cleaned first: `unescapeLineBreaks` turns
+descriptions and edit proposals are cleaned first: `unescapeLineBreaks` turns
 literal `\n` outside code fences into line breaks, and `stripRepeatedTitle`
 drops a copy of the title at the top of a drafted description. Serialized
 messages stay within 48,000 UTF-8 bytes, with 4,000-character instructions. No
@@ -745,18 +743,16 @@ so **Draft with AI** (in the Description header) and the sidebar share one
 request guard. On an empty ticket the sidebar composer sends a `draft` request
 carrying the PM's text. Only a direct, newly requested first-draft completion
 may fill the private editor automatically, with a freshness recheck and **Undo AI
-draft**. `ChatPanel` renders one transcript (each reply with its change card,
-gaps checklist or plain failure with Details), the usage bar, one composer and
-**Check for gaps** ([AI chat review spec](../workflow/specs/2026-11-11-ai-chat-review-modal.md)).
-Only the newest unanswered gaps checklist is interactive. `src/ticket-changes.ts`
+draft**. `ChatPanel` renders one transcript (each reply with its change card, a "No ticket
+changes suggested." note or plain failure with Details), the usage bar and one
+composer ([AI chat review spec](../workflow/specs/2026-11-11-ai-chat-review-modal.md)).
+`src/ticket-changes.ts`
 splits a turn's `input_fields` → `proposal` into changes in the browser (a line
 diff, each change located by its lines plus the unchanged line on each side) and
 derives open, applied or outdated status from the current ticket; nothing per
 change is stored. `ChangeReview` (in a shared `Modal`) applies or undoes one
 change as an ordinary editor edit. Rejections live in `RequestEditor` state for
-the page session. Gap questions are stored on `gaps` turns; answers are stored
-on the `edit` turn that applies them, and **Leave undecided** and **Your own
-answer** are added by the client. After an ambiguous send, `useAssistant` reads
+the page session. After an ambiguous send, `useAssistant` reads
 the saved conversation and checks the original turn key, offering an explicit
 resend only when that key is absent.
 

@@ -260,6 +260,17 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
         })
       ).error?.code,
     ).toBe("22023");
+    // The database enforces the 3,000-character description limit, not only the server.
+    expect(
+      (
+        await pm.client.rpc("save_draft", {
+          target_org: org,
+          request_id: draft.id,
+          expected_revision: 2,
+          content: { ...fields, description: "x".repeat(3001) },
+        })
+      ).error?.code,
+    ).toBe("22023");
   });
 
   it("publishes only complete acknowledged fields and changes the published version only on explicit save", async () => {
@@ -384,7 +395,11 @@ describe.skipIf(!localEnabled)("request storage interface", () => {
       expected_revision: 1,
       changes: { due_date: "2026-12-20" },
     });
-    const long = { ...fields, description: "x".repeat(24000) };
+    const tooLong = { ...fields, description: "x".repeat(3001) };
+    expect((await post(path + "/" + draft.id, { action: "save_draft", revision: 1, fields: tooLong })).status).toBe(
+      400,
+    );
+    const long = { ...fields, description: "x".repeat(3000) };
     expect((await post(path + "/" + draft.id, { action: "save_draft", revision: 1, fields: long })).status).toBe(200);
     expect((await post(path + "/" + draft.id, { action: "save_draft", revision: 1, fields })).status).toBe(409);
     expect(
