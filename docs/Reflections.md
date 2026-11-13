@@ -91,3 +91,46 @@ manual edits and an incomplete storage-cap calculation. Regressions reproduced
 both; explicit current-snapshot recovery and reserved/exact completion capacity
 resolved them. Unknown network outcomes are treated differently from a definitive
 failed turn. No measured token/cache or time-saving percentage is claimed.
+
+## What I thought writing the rules would do
+
+Early on I put a lot of effort into the workflow document. It says an
+independent code and architecture reviewer runs at every feature boundary, and
+that anything touching authentication, authorization, LLM input or output, or
+deployment permissions gets a security specialist in preflight mode first. I
+wrote it carefully, kept it short so an agent would actually read it, and I
+genuinely thought that was the job done. The rule was written, so the rule would
+happen.
+
+It didn't. The feature the Developer test plan
+generator, and it is also the clearest example of the rule being ignored. It
+sends ticket content to an LLM, takes the output back, and adds a new
+authorization surface deciding who can generate and who can only read. If
+anything in this codebase needed a security preflight, it was that. It got
+neither a preflight nor an independent review. I know this because I wrote it in
+my own session log at the time and then carried the same line forward into the
+next two logs: still owed, still not done.
+
+The bit that changed how I think was finding out *why* it kept not happening. We
+tested it across five runs and the reviewer was skipped in four of them. I had
+assumed that if the agent skipped a step it was because my instruction wasn't
+clear enough, so the fix would be better wording. It wasn't. The reviewer only
+existed as a Markdown brief, not as a registered subagent, and the tool's own
+default is not to spawn agents unless it's asked to — so the harness was quietly
+working against my instruction the whole time. On top of that, "at feature
+boundaries" is vague enough that almost any change can be argued down to
+routine. And nothing anywhere ever checked whether a review had happened.
+
+That's the lesson I'd take to the next project. An instruction the agent is
+allowed to decline, with nothing checking whether it was followed, isn't really a
+rule. It's a preference with good intentions attached, and it turns out I had
+written several of those and was counting them as controls.
+
+We then built the thing that fixes it: a hook that denies `git commit`
+whenever the current `src/` changes have no approved review, plus a check at the
+end of a turn that prompts once and then blocks outright once a session log has
+been written, since writing the log is the moment you're claiming the work is
+finished. The reviewer also became a properly registered read-only subagent that
+has to end with a verdict line, so there's something concrete to check for. It
+keys on a hash of the exact diff, which means if I edit anything after getting an
+
