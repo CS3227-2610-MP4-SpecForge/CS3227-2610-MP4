@@ -2269,3 +2269,64 @@ button:disabled {
 .overview-section > h2 {
   margin: 0;
 }
+
+/* Organisation AI usage: a white stat card, distinct from the filled Invite Member panel */
+.usage-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px rgb(32 35 54 / 6%);
+}
+.usage-stat-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.usage-stat-head h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.usage-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.usage-stat-period {
+  margin-left: auto;
+}
+.usage-stat-figures {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.usage-stat-figures p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.usage-stat-figures strong {
+  color: var(--ink);
+  font-size: 1.9rem;
+  line-height: 1;
+  margin-right: 2px;
+}
+.usage-stat .usage-track {
+  height: 10px;
+}
+.usage-stat-empty .usage-stat-figures strong {
+  color: var(--danger);
+}

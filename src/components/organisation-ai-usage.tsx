@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { Gauge } from "lucide-react";
 import { api } from "./http";
+import { Pill } from "./pill";
 import { UsageMeter } from "./usage-meter";
 
 type OrganisationUsage = { remaining: number; limit: number; resets_at: string };
@@ -41,8 +43,26 @@ export function OrganisationAiUsage({ organisationId }: { organisationId: string
   }, [read]);
   if (!usage || usage.organisationId !== organisationId) return null;
   return (
-    <section className="stack" aria-label="Organisation AI usage">
-      <h2>AI usage</h2>
+    <section
+      className={usage.remaining === 0 ? "usage-stat usage-stat-empty" : "usage-stat"}
+      aria-label="Organisation AI usage"
+    >
+      <div className="usage-stat-head">
+        <span className="usage-stat-icon" aria-hidden="true">
+          <Gauge className="ui-icon" />
+        </span>
+        <h2>AI usage</h2>
+        <span className="usage-stat-period">
+          <Pill>Today</Pill>
+        </span>
+      </div>
+      {/* The headline repeats the caption at a glance; the caption is what assistive technology reads. */}
+      <div className="usage-stat-figures" aria-hidden="true">
+        <p>
+          <strong>{usage.remaining}</strong> of {usage.limit} left
+        </p>
+        <p>{Math.max(0, usage.limit - usage.remaining)} used</p>
+      </div>
       <UsageMeter remaining={usage.remaining} limit={usage.limit} label="Organisation AI requests left today">
         AI today: {usage.remaining} of {usage.limit} left · resets at midnight Singapore time.
       </UsageMeter>

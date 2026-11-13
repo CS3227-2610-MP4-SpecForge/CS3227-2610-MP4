@@ -14,6 +14,9 @@
     Open, Overdue and Due in the next 7 days.
   - **Guides:** the User Guide, Developer Guide, Acceptance Index and the new
     screenshot are updated.
+  - **AI usage card:** the admin's organisation AI usage bar in Manage is now
+    a white stat card with a headline figure, separate from the Invite Member
+    panel. Its caption text and meter are unchanged.
 - Validation: `npm run verify` passed (313 unit and component tests, build), and
   `npm run test:integration` passed 104/104, including the new overview suite.
   The full `npm run test:e2e` run on port 3001 passed 58/58. After a final CSS
