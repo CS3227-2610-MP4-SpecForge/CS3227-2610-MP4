@@ -4,7 +4,7 @@ import { aiBrowserTimeoutMs } from "@/ai-diagnostics";
 import type { AiAnswer, AiUsage, AssistantIntent } from "@/assistance";
 import type { ChatTurn } from "@/chat";
 import type { RequestFields } from "@/requests";
-import { api, ApiError, ApiWaitTimeout, failureMessage } from "./http";
+import { aiLimitNotice, api, ApiError, ApiWaitTimeout, failureMessage } from "./http";
 import { useNotificationState } from "./ui";
 
 export type AssistantRequest = {
@@ -49,6 +49,8 @@ export function useAssistant({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useNotificationState(true);
+  // A shared AI limit is expected, so it is shown as a plain notice, not an error.
+  const [limitNotice, setLimitNotice] = useState("");
   const [replay, setReplay] = useState<AssistantRequest | null>(null);
   const [unresolved, setUnresolved] = useState(false);
   // The composer text lives here so a reconciled send can clear it.
@@ -114,18 +116,22 @@ export function useAssistant({
     }, 2000);
     return () => window.clearTimeout(timer);
   }, [turns, running, sync]);
-  // Re-read usage once the hourly window resets so a blocked panel recovers.
+  // Re-read usage once an exhausted hourly or daily window resets so a blocked panel recovers.
+  const exhaustedUntil =
+    usage?.daily?.remaining === 0 ? usage.daily.resets_at : usage?.remaining === 0 ? usage.resets_at : null;
   useEffect(() => {
-    if (usage?.remaining !== 0 || !usage.resets_at) return;
+    if (!exhaustedUntil) return;
     const timer = window.setTimeout(
       () => {
+        setLimitNotice("");
         void sync();
       },
-      Math.min(Math.max(0, Date.parse(usage.resets_at) - Date.now()) + 1000, 2147483647),
+      Math.min(Math.max(0, Date.parse(exhaustedUntil) - Date.now()) + 1000, 2147483647),
     );
     return () => window.clearTimeout(timer);
-  }, [usage, sync]);
-  const disabled = busy || running || loading || !canSend || unresolved || usage?.remaining === 0;
+  }, [exhaustedUntil, sync]);
+  const disabled =
+    busy || running || loading || !canSend || unresolved || usage?.remaining === 0 || usage?.daily?.remaining === 0;
   const canReplay = !busy && !running && !loading && canSend;
   // Returns true once the request is settled in the saved conversation.
   async function send(input: AssistantRequest) {
@@ -133,6 +139,7 @@ export function useAssistant({
     operation.current = true;
     setBusy(true);
     setError("");
+    setLimitNotice("");
     setReplay(null);
     setUnresolved(true);
     pending.current = input;
@@ -156,7 +163,9 @@ export function useAssistant({
         setUsage(usageFrom(failure.body) ?? usage);
         pending.current = null;
         setUnresolved(false);
-        setError(failure.message);
+        const notice = aiLimitNotice(failure);
+        if (notice) setLimitNotice(notice);
+        else setError(failure.message);
         return false;
       }
       const detail =
@@ -182,6 +191,7 @@ export function useAssistant({
     disabled,
     canReplay,
     error,
+    limitNotice,
     replay,
     message,
     setMessage,

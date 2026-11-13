@@ -7,6 +7,7 @@ import { sameFields, type RequestFields } from "@/requests";
 import { reviewStatus, summarizeChanges, ticketChanges } from "@/ticket-changes";
 import { tooLargeForAi, type Assistant } from "./use-assistant";
 import { Button, Notice, TextareaField } from "./ui";
+import { UsageMeter } from "./usage-meter";
 import { Markdown } from "./markdown";
 
 // Choices are indexes into the model's options plus two client-only choices,
@@ -113,30 +114,16 @@ function FailureNotice({
   );
 }
 
-function UsageMeter({ assistant }: { assistant: Assistant }) {
+function AssistantUsage({ assistant }: { assistant: Assistant }) {
   const usage = assistant.usage;
   if (!usage) return null;
-  const reset =
-    usage.resets_at && usage.remaining < 5
-      ? ` More at ${new Date(usage.resets_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`
-      : "";
-  const share = usage.limit > 0 ? Math.min(100, Math.max(0, (usage.remaining / usage.limit) * 100)) : 0;
+  const time = (value: string) => new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const reset = usage.resets_at && usage.remaining < 5 ? ` More at ${time(usage.resets_at)}.` : "";
   return (
-    <div className="assistant-usage">
-      <div
-        className={`usage-track ${usage.remaining === 0 ? "usage-empty" : ""}`}
-        role="meter"
-        aria-label="AI requests left this hour"
-        aria-valuemin={0}
-        aria-valuemax={usage.limit}
-        aria-valuenow={usage.remaining}
-      >
-        <span className="usage-fill" style={{ width: `${share}%` }} />
-      </div>
-      <p className="hint" aria-live="polite">
-        {usage.remaining}/{usage.limit} AI requests left this hour.{reset}
-      </p>
-    </div>
+    <UsageMeter remaining={usage.remaining} limit={usage.limit} label="AI requests left this hour">
+      {usage.remaining}/{usage.limit} AI requests left this hour.{reset}
+      {usage.daily && ` ${usage.daily.remaining} of ${usage.daily.limit} left today.`}
+    </UsageMeter>
   );
 }
 
@@ -388,6 +375,7 @@ export function ChatPanel({
             {footer}
             {!canSend && <span className="hint">Wait for autosave or resolve save errors before asking AI.</span>}
             {tooLarge && <Notice>This ticket is too long for AI. Shorten it or keep editing manually.</Notice>}
+            {assistant.limitNotice && <Notice>{assistant.limitNotice}</Notice>}
             {error && <Notice danger>{error}</Notice>}
             {replay && (
               <Button
@@ -399,7 +387,7 @@ export function ChatPanel({
                 Send again
               </Button>
             )}
-            <UsageMeter assistant={assistant} />
+            <AssistantUsage assistant={assistant} />
             <form className="stack" onSubmit={ask}>
               <TextareaField
                 id="chat-message"

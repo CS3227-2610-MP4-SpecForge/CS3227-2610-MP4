@@ -5,7 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { error, json, logFailure, readBody, serviceUnavailable } from "./http";
 import { taskFields } from "./requests";
-import { AiFailure, aiQuestion, questionLimits, type AiProvider, type AiReply } from "./soc";
+import { AiFailure, aiQuestion, pauseFor, questionLimits, type AiProvider, type AiReply } from "./soc";
+import { limitBlock, limitResponse, type AiLimits } from "./ai-limits";
 export type ChatDependencies = { worker(): SupabaseClient; provider: AiProvider };
 const intent = z.enum(assistantIntents);
 const nonblank = (max: number) => z.string().refine(value => [...value].length <= max && value.trim() !== "");
@@ -38,7 +39,10 @@ const usageSchema = z.object({
   remaining: z.number().int().min(0),
   limit: z.number().int().positive(),
   resets_at: z.string().nullable(),
+  daily_used: z.number().int().min(0),
+  daily_resets_at: z.string(),
 });
+const manual = "or keep editing manually.";
 // Provider output is rechecked here because the provider is injectable.
 const replySchema = z.object({
   reply: z.string().refine(value => value.trim() !== ""),
@@ -64,16 +68,30 @@ function failureResponse(request: Request, failure: { code?: string; message?: s
     return error(limits[failure.message ?? ""] ?? "AI is busy. Keep editing manually and try again later.", 429);
   return serviceUnavailable(request, failure, "AI is unavailable right now. Your ticket is unchanged.");
 }
-async function usageOf(client: SupabaseClient) {
+// The caller's own hourly and daily usage. The daily cap comes from server
+// configuration; without it the daily meter is omitted.
+async function usageOf(client: SupabaseClient, limits: AiLimits | null | undefined) {
   const { data } = await client.rpc("read_ai_usage");
   const parsed = usageSchema.safeParse(data);
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) return null;
+  const { daily_used, daily_resets_at, ...hourly } = parsed.data;
+  return limits
+    ? {
+        ...hourly,
+        daily: {
+          remaining: Math.max(0, limits.user_per_day - daily_used),
+          limit: limits.user_per_day,
+          resets_at: daily_resets_at,
+        },
+      }
+    : hourly;
 }
 export async function handleChat(
   request: Request,
   client: SupabaseClient,
   actorId: string,
   dependencies?: ChatDependencies,
+  limits?: AiLimits | null,
 ): Promise<Response | null> {
   const match = new URL(request.url).pathname.match(/^\/api\/organisations\/([^/]+)\/requests\/([^/]+)\/chat$/);
   if (!match) return null;
@@ -93,7 +111,7 @@ export async function handleChat(
               ? { ...turn, status: "failed", error_code: "interrupted" }
               : turn,
           ),
-          usage: await usageOf(client),
+          usage: await usageOf(client, limits),
         })
       : serviceUnavailable(request, parsed.error, "Chat service unavailable.");
   }
@@ -117,7 +135,8 @@ export async function handleChat(
     )
     .safeParse(await readBody(request, 262144));
   if (!input.success) return error("Enter a message of 1–4,000 characters and a valid current ticket.", 400);
-  if (!dependencies) return serviceUnavailable(request, undefined, "AI is not configured. Continue editing manually.");
+  if (!dependencies || !limits)
+    return serviceUnavailable(request, undefined, "AI is not configured. Continue editing manually.");
   // Gap-check and apply-answers turns carry fixed server messages. A draft
   // carries the PM's own rough idea when they typed one, else a fixed message.
   const message = input.data.answers
@@ -139,20 +158,25 @@ export async function handleChat(
     retry_failed: input.data.retry,
     p_intent: input.data.intent,
     p_answers: input.data.answers ?? null,
+    ai_limits: limits,
   });
+  const block = limitBlock(admissionError);
+  if (block) return limitResponse(block, manual, limits, { usage: await usageOf(client, limits) });
   const admissionFailure = failureResponse(request, admissionError);
   if (admissionFailure)
     return admissionFailure.status === 429
-      ? json({ ...(await admissionFailure.json()), usage: await usageOf(client) }, 429)
+      ? json({ ...(await admissionFailure.json()), usage: await usageOf(client, limits) }, 429)
       : admissionFailure;
   const parsed = turnSchema.safeParse(admission?.turn);
   if (!parsed.success || typeof admission.dispatch !== "boolean")
     return serviceUnavailable(request, parsed.error, "Chat service unavailable.");
   const turn = parsed.data;
-  if (!admission.dispatch) return json({ turn, usage: await usageOf(client) }, turn.status === "running" ? 202 : 200);
+  if (!admission.dispatch)
+    return json({ turn, usage: await usageOf(client, limits) }, turn.status === "running" ? 202 : 200);
   let result: AiReply | null = null;
   let code: string | null = null;
   let diagnostic: AiDiagnostic | null = null;
+  let pause: number | null = null;
   try {
     const recent = z
       .array(z.object({ message: z.string(), reply: z.string() }))
@@ -185,6 +209,7 @@ export async function handleChat(
       if (safe.success && safe.data.source === diagnosticSources[code]) diagnostic = safe.data;
       else code = "unavailable";
     }
+    pause = pauseFor(failure, diagnostic);
     logFailure(request, failure, { diagnostic });
   }
   const { data: completed, error: completionError } = await worker.rpc("finish_chat_turn", {
@@ -198,11 +223,12 @@ export async function handleChat(
     task_questions: result?.questions ?? null,
     failure_code: code,
     failure_diagnostic: diagnostic,
+    pause_seconds: pause,
   });
   const completionFailure = failureResponse(request, completionError);
   if (completionFailure) return completionFailure;
   const final = turnSchema.safeParse(completed);
   return final.success
-    ? json({ turn: final.data, usage: await usageOf(client) })
+    ? json({ turn: final.data, usage: await usageOf(client, limits) })
     : serviceUnavailable(request, final.error, "Chat service unavailable.");
 }

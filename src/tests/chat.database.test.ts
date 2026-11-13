@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AiFailure, createSocProvider } from "../server/soc";
 import { createApplication } from "../server/application";
-import { localEnabled, localFixture } from "./local.fixture";
+import { localEnabled, localFixture, resetLocalAiWindows, testAiLimits } from "./local.fixture";
 
 describe.skipIf(!localEnabled)("private AI conversation interface", () => {
   let fixture: ReturnType<typeof localFixture>;
+  beforeEach(() => resetLocalAiWindows());
   afterEach(async () => {
     await fixture?.cleanup();
   });
@@ -29,6 +30,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
       input_fields: { title: "Search", description: "Find tasks" },
       user_message: "Help clarify this",
       retry_failed: false,
+      ai_limits: testAiLimits,
     };
     expect((await pm.client.rpc("begin_chat_turn", args)).error).not.toBeNull();
     const admitted = await fixture.admin.rpc("begin_chat_turn", args);
@@ -79,7 +81,12 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
       },
     };
     const app = (actor: typeof pm) =>
-      createApplication({ origin: "http://localhost:3000", client: () => actor.client, chat: dependencies });
+      createApplication({
+        aiLimits: testAiLimits,
+        origin: "http://localhost:3000",
+        client: () => actor.client,
+        chat: dependencies,
+      });
     const path = `http://localhost:3000/api/organisations/${org}/requests/${task.id}/chat`;
     const body = {
       key: randomUUID(),
@@ -155,6 +162,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
       );
       const app = (actor: typeof pm) =>
         createApplication({
+          aiLimits: testAiLimits,
           origin: "http://localhost:3000",
           client: () => actor.client,
           chat: { worker: () => fixture.admin, provider },
@@ -209,6 +217,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     let fail = true;
     let calls = 0;
     const app = createApplication({
+      aiLimits: testAiLimits,
       origin: "http://localhost:3000",
       client: () => pm.client,
       chat: {
@@ -263,6 +272,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
       input_fields: { title: "", description: "" },
       user_message: "Clarify",
       retry_failed: false,
+      ai_limits: testAiLimits,
     };
     const turn = (await fixture.admin.rpc("begin_chat_turn", args)).data.turn;
     const completion = {
@@ -306,6 +316,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
       finish = resolve;
     });
     const app = createApplication({
+      aiLimits: testAiLimits,
       origin: "http://localhost:3000",
       client: () => pm.client,
       chat: {
@@ -354,6 +365,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
       input_fields: { title: "", description: "" },
       user_message: "Clarify",
       retry_failed: false,
+      ai_limits: testAiLimits,
     };
     for (let i = 0; i < 20; i++) {
       const admitted = await fixture.admin.rpc("begin_chat_turn", {
@@ -415,6 +427,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
           input_fields: { title: "", description: "" },
           user_message: "Clarify",
           retry_failed: false,
+          ai_limits: testAiLimits,
         })
       ).error?.code,
     ).toBe("PT429");
@@ -435,6 +448,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
         base_revision: 1,
         input_fields: { title: "", description: "" },
         user_message: "Clarify",
+        ai_limits: testAiLimits,
       })
     ).data.turn;
     const complete = (reply: string) =>
@@ -462,6 +476,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "AI diagnostics" })).data;
     const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     const app = createApplication({
+      aiLimits: testAiLimits,
       origin: "http://localhost:3000",
       client: () => pm.client,
       chat: {
@@ -511,6 +526,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
       base_revision: 1,
       input_fields: { title: "", description: "" },
       user_message: "Draft a ticket",
+      ai_limits: testAiLimits,
     };
     const turn = (await fixture.admin.rpc("begin_chat_turn", args)).data.turn;
     const complete = (code: string, diagnostic: unknown) =>
@@ -539,6 +555,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     expect((await complete("invalid_output", null)).error).toBeNull(); // Existing rows stay readable.
     expect((await pm.client.rpc("read_chat", { target_org: org, request_id: task.id })).data[0].diagnostic).toBeNull();
     const app = createApplication({
+      aiLimits: testAiLimits,
       origin: "http://localhost:3000",
       client: () => pm.client,
       chat: {
@@ -596,6 +613,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
       input_fields: { title: "", description: "" },
       user_message: "Clarify",
       retry_failed: false,
+      ai_limits: testAiLimits,
     };
     const turn = (await fixture.admin.rpc("begin_chat_turn", args)).data.turn;
     const complete = (diagnostic: unknown) =>

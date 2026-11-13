@@ -51,6 +51,12 @@ export function describeAiFailure(code: string | null, diagnostic?: AiDiagnostic
     const seconds = Math.round(Math.min(diagnostic.elapsed_ms, aiResponseTimeoutMs) / 1000);
     return `AI response timed out after ${seconds} seconds.`;
   }
+  if (
+    code === "upstream_http" &&
+    diagnostic?.source === "upstream_http" &&
+    (diagnostic.http_status === 429 || diagnostic.http_status === 503)
+  )
+    return "SoC is busy right now. Your message is saved; try again in a minute or two.";
   if (code === "upstream_http" && diagnostic?.source === "upstream_http")
     return `SoC returned HTTP ${diagnostic.http_status} after ${elapsed} s. An upstream HTTP error was received; this was not SpecForge's local deadline. Your message is saved.`;
   if (code === "network_error" && diagnostic?.source === "network")

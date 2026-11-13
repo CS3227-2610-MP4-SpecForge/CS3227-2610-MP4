@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api, failureMessage } from "./http";
 import { useConfirm, type ConfirmOptions } from "./confirm";
 import { Button, Field, Notice, Pill, useNotifications } from "./ui";
+import { OrganisationAiUsage } from "./organisation-ai-usage";
 
 type Invitation = {
   id: string;
@@ -158,6 +159,7 @@ export function Membership({
             <div className="stack">
               {isAdmin && (
                 <>
+                  <OrganisationAiUsage organisationId={selected.id} />
                   <section className="invite-member-panel stack" aria-label="Invite Member">
                     <h2>Invite Member</h2>
                     <form

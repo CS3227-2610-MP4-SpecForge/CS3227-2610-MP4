@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApplication } from "../server/application";
-import { localEnabled, localFixture } from "./local.fixture";
+import { localEnabled, localFixture, resetLocalAiWindows, testAiLimits } from "./local.fixture";
 import type { TestPlan } from "../test-plans";
 
 const samplePlan: TestPlan = {
@@ -24,6 +24,7 @@ const samplePlan: TestPlan = {
 
 describe.skipIf(!localEnabled)("developer test plan interface", () => {
   let fixture: ReturnType<typeof localFixture>;
+  beforeEach(() => resetLocalAiWindows());
   afterEach(async () => {
     await fixture?.cleanup();
   });
@@ -69,6 +70,7 @@ describe.skipIf(!localEnabled)("developer test plan interface", () => {
       input_fields: content,
       focus_note: null,
       retry_failed: false,
+      ai_limits: testAiLimits,
     };
 
     // A browser session cannot admit a turn even for itself.
@@ -144,6 +146,7 @@ describe.skipIf(!localEnabled)("developer test plan interface", () => {
           input_fields: content,
           focus_note: null,
           retry_failed: false,
+          ai_limits: testAiLimits,
         })
       ).data.turn;
     const finish = (
@@ -335,6 +338,7 @@ describe.skipIf(!localEnabled)("developer test plan interface", () => {
           input_fields: content,
           focus_note: null,
           retry_failed: false,
+          ai_limits: testAiLimits,
         })
       ).error?.code,
     ).toBe("42501");
@@ -348,7 +352,12 @@ describe.skipIf(!localEnabled)("developer test plan interface", () => {
       },
     };
     const app = (actor: typeof pm) =>
-      createApplication({ origin: "http://localhost:3000", client: () => actor.client, testPlans: dependencies });
+      createApplication({
+        aiLimits: testAiLimits,
+        origin: "http://localhost:3000",
+        client: () => actor.client,
+        testPlans: dependencies,
+      });
     const path = (id: string) => `http://localhost:3000/api/organisations/${org}/requests/${id}/test-plan`;
     const post = (id: string, body: unknown) =>
       new Request(path(id), {

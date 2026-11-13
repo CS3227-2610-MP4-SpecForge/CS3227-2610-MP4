@@ -10,7 +10,7 @@ import {
   type TestPlan,
   type TestPlanTurn,
 } from "@/test-plans";
-import { api, ApiWaitTimeout, failureMessage } from "./http";
+import { aiLimitNotice, api, ApiError, ApiWaitTimeout, failureMessage } from "./http";
 import { Button, Notice, Pill, TextareaField, type PillTone, useNotificationState } from "./ui";
 
 const tones: Record<string, PillTone> = { happy: "green", edge: "yellow", failure: "red" };
@@ -69,6 +69,22 @@ export function TestPlanPanel({
   const [, setError] = useNotificationState(true);
   const [, setMessage] = useNotificationState(false);
   const [discarded, setDiscarded] = useState<string[]>([]);
+  // A shared AI limit is expected, so it is a plain notice beside the button, not an error.
+  const [limitNotice, setLimitNotice] = useState("");
+  // After a personal daily-limit block, generating stays off until the reset.
+  // Seconds until the personal daily allowance resets, as the server reported.
+  const [blockedFor, setBlockedFor] = useState<number | null>(null);
+  useEffect(() => {
+    if (blockedFor === null) return;
+    const timer = window.setTimeout(
+      () => {
+        setBlockedFor(null);
+        setLimitNotice("");
+      },
+      Math.min(blockedFor * 1000, 2147483647),
+    );
+    return () => window.clearTimeout(timer);
+  }, [blockedFor]);
   // A failed read stays on screen with its retry, so the panel never claims
   // "no test plan" when it could not find out.
   const [loadError, setLoadError] = useState("");
@@ -113,7 +129,7 @@ export function TestPlanPanel({
   const latest = turns.filter(turn => turn.plan && !discarded.includes(turn.id)).at(-1) ?? null;
   const proposalCurrent =
     latest !== null && latest.base_revision === ticketRevision && sameFields(latest.input_fields, fields);
-  const disabled = busy || running || loading || !canGenerate;
+  const disabled = busy || running || loading || !canGenerate || blockedFor !== null;
 
   async function generate(retry?: TestPlanTurn) {
     if (operation.current || !canGenerate || running) return;
@@ -121,6 +137,7 @@ export function TestPlanPanel({
     setBusy(true);
     setError("");
     setMessage("");
+    setLimitNotice("");
     setOpen(true);
     const input = retry
       ? {
@@ -146,6 +163,13 @@ export function TestPlanPanel({
       );
       setDiscarded(previous => previous.filter(id => id !== result.turn.id));
     } catch (failure) {
+      const notice = aiLimitNotice(failure);
+      if (notice) {
+        setLimitNotice(notice);
+        const body = (failure as ApiError).body as { limit?: string; retryAfter?: number };
+        if (body.limit === "user_daily" && typeof body.retryAfter === "number") setBlockedFor(body.retryAfter);
+        return;
+      }
       const detail =
         failure instanceof ApiWaitTimeout
           ? `The browser stopped waiting for AI after ${failure.timeoutMs / 1000} seconds.`
@@ -333,6 +357,7 @@ export function TestPlanPanel({
             {[...focus].length > testPlanLimits.focus && (
               <Notice danger>The focus note is limited to {testPlanLimits.focus} characters.</Notice>
             )}
+            {limitNotice && <Notice>{limitNotice}</Notice>}
             <div className="actions">
               <Button
                 type="button"
