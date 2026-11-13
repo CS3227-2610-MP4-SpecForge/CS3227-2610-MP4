@@ -61,6 +61,8 @@ const result = spawnSync(
     : [
         "node_modules/vitest/vitest.mjs",
         "run",
+        // AI limits are shared site-wide, so database files must not overlap.
+        "--no-file-parallelism",
         ...(profile
           ? ["src/tests/profile.database.test.ts"]
           : ticketMigration
@@ -68,7 +70,11 @@ const result = spawnSync(
             : delivery
               ? ["src/tests/delivery.database.test.ts"]
               : chat
-                ? ["src/tests/chat.database.test.ts", "src/tests/assistant.database.test.ts"]
+                ? [
+                    "src/tests/chat.database.test.ts",
+                    "src/tests/assistant.database.test.ts",
+                    "src/tests/ai-limits.database.test.ts",
+                  ]
                 : testPlans
                   ? ["src/tests/test-plans.database.test.ts"]
                   : demoKits
@@ -83,6 +89,7 @@ const result = spawnSync(
                             "src/tests/requests.database.test.ts",
                             "src/tests/chat.database.test.ts",
                             "src/tests/assistant.database.test.ts",
+                            "src/tests/ai-limits.database.test.ts",
                             "src/tests/delivery.database.test.ts",
                             "src/tests/test-plans.database.test.ts",
                             "src/tests/demo-kits.database.test.ts",
@@ -95,6 +102,17 @@ const result = spawnSync(
       SPECFORGE_LOCAL_TESTS: "1",
       SPECFORGE_TICKET_MIGRATION_TEST: ticketMigration ? "1" : "0",
       SPECFORGE_LOCAL_AI_FAKE: browser ? "1" : "0",
+      // The browser app shares one database across journeys: use the maximum
+      // AI caps so only a journey that sets its own limit is ever limited.
+      ...(browser
+        ? {
+            AI_SITE_CONCURRENT: "8",
+            AI_SITE_PER_MINUTE: "60",
+            AI_SITE_PER_DAY: "1000",
+            AI_ORG_PER_DAY: "500",
+            AI_USER_PER_DAY: "200",
+          }
+        : {}),
       SUPABASE_SECRET_KEY: status.SERVICE_ROLE_KEY,
       SPECFORGE_MIGRATION_TEST: migration ? "1" : "0",
       APP_ORIGIN: browser ? (process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000") : "http://localhost:3000",

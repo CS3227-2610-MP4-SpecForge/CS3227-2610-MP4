@@ -1,5 +1,6 @@
 import { aiResponseTimeoutMs, type AiDiagnostic, type InvalidOutputReason } from "../ai-diagnostics";
 import { z } from "zod";
+import { socPauseSeconds } from "./ai-limits";
 import { taskFields } from "./requests";
 import { sameFields, type RequestFields } from "../requests";
 import type { AiAnswer, AiQuestion, AssistantIntent as AiIntent } from "../assistance";
@@ -26,9 +27,20 @@ export class AiFailure extends Error {
   constructor(
     readonly code: AiFailureCode,
     readonly diagnostic?: AiDiagnostic,
+    /** Bounded seconds to pause all dispatches, set only when SoC answered 429 or 503. */
+    readonly pauseSeconds?: number,
   ) {
     super("AI request could not be completed.");
   }
+}
+/** Pause seconds to record: only when the kept diagnostic is a SoC 429/503. */
+export function pauseFor(failure: unknown, diagnostic: AiDiagnostic | null): number | null {
+  return failure instanceof AiFailure &&
+    failure.pauseSeconds !== undefined &&
+    diagnostic?.source === "upstream_http" &&
+    (diagnostic.http_status === 429 || diagnostic.http_status === 503)
+    ? failure.pauseSeconds
+    : null;
 }
 export function invalidOutput(reason: InvalidOutputReason) {
   return new AiFailure("invalid_output", { source: "invalid_output", reason });
@@ -225,11 +237,13 @@ export function requestSocJson(
         cache: "no-store",
       });
       if (!response.ok)
-        throw new AiFailure("upstream_http", {
-          source: "upstream_http",
-          http_status: response.status,
-          elapsed_ms: elapsed(),
-        });
+        throw new AiFailure(
+          "upstream_http",
+          { source: "upstream_http", http_status: response.status, elapsed_ms: elapsed() },
+          response.status === 429 || response.status === 503
+            ? socPauseSeconds(response.headers.get("retry-after"))
+            : undefined,
+        );
       if (!response.body) throw invalidOutput("missing_content");
       const reader = response.body.getReader();
       const chunks: Uint8Array[] = [];

@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
-import { localEnabled, localFixture } from "./local.fixture";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { localEnabled, localFixture, resetLocalAiWindows, testAiLimits } from "./local.fixture";
 
 // PM assistant redesign: intents, visible usage with refunds, dedupe and the
 // bounded history the worker receives. Seam: worker/session RPCs.
 describe.skipIf(!localEnabled)("PM assistant usage and context", () => {
   let fixture: ReturnType<typeof localFixture>;
+  beforeEach(() => resetLocalAiWindows());
   afterEach(async () => {
     await fixture?.cleanup();
   });
@@ -25,6 +26,7 @@ describe.skipIf(!localEnabled)("PM assistant usage and context", () => {
         input_fields: fields,
         user_message: "Clarify",
         retry_failed: false,
+        ai_limits: testAiLimits,
         ...extra,
       });
     const finish = (turn: { id: string; generation: number }, extra: Record<string, unknown> = {}) =>
@@ -46,7 +48,7 @@ describe.skipIf(!localEnabled)("PM assistant usage and context", () => {
 
   it("shows full usage before any request and charges an admitted request", async () => {
     const { begin, finish, usage } = await setup();
-    expect(await usage()).toEqual({ remaining: 20, limit: 20, resets_at: null });
+    expect(await usage()).toMatchObject({ remaining: 20, limit: 20, resets_at: null, daily_used: 0 });
     const turn = (await begin()).data.turn;
     expect((await usage()).remaining).toBe(19);
     expect((await finish(turn)).error).toBeNull();
@@ -179,6 +181,7 @@ describe.skipIf(!localEnabled)("PM assistant usage and context", () => {
 
 describe.skipIf(!localEnabled)("PM assistant HTTP interface", () => {
   let fixture: ReturnType<typeof localFixture>;
+  beforeEach(() => resetLocalAiWindows());
   afterEach(async () => {
     await fixture?.cleanup();
   });
@@ -192,6 +195,7 @@ describe.skipIf(!localEnabled)("PM assistant HTTP interface", () => {
     const seen: unknown[] = [];
     let reply: Record<string, unknown> = { reply: "Draft ready.", proposal: { title: "T", description: "D" } };
     const app = createApplication({
+      aiLimits: testAiLimits,
       origin: "http://localhost:3000",
       client: () => pm.client,
       chat: {
@@ -287,6 +291,7 @@ describe.skipIf(!localEnabled)("PM assistant HTTP interface", () => {
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "Assistant limits" })).data;
     const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     const app = createApplication({
+      aiLimits: testAiLimits,
       origin: "http://localhost:3000",
       client: () => pm.client,
       chat: { worker: () => fixture.admin, provider: async () => ({ reply: "Ok.", proposal: null }) },
@@ -333,6 +338,7 @@ describe.skipIf(!localEnabled)("PM assistant HTTP interface", () => {
 
 describe.skipIf(!localEnabled)("PM assistant retry refunds", () => {
   let fixture: ReturnType<typeof localFixture>;
+  beforeEach(() => resetLocalAiWindows());
   afterEach(async () => {
     await fixture?.cleanup();
   });
@@ -350,6 +356,7 @@ describe.skipIf(!localEnabled)("PM assistant retry refunds", () => {
       input_fields: { title: "", description: "" },
       user_message: "Clarify",
       retry_failed: false,
+      ai_limits: testAiLimits,
     };
     const usage = async () => (await pm.client.rpc("read_ai_usage")).data.remaining;
     const fail = (turn: { id: string; generation: number }) =>

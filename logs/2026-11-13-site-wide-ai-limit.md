@@ -1,0 +1,34 @@
+# 2026-11-13: Site-wide, organisation and daily AI limits
+
+- Changes:
+  - Followed an AI security audit, which found that both AI features shared one SoC key with only per-account hourly limits.
+  - Implemented the approved [spec](../workflow/specs/2026-11-13-site-wide-ai-limit.md) in one migration and a new `src/server/ai-limits.ts`:
+    - database-owned site concurrency, per-minute and per-day caps;
+    - an organisation daily cap;
+    - a per-user daily cap, refunded on failure;
+    - a site-wide pause after SoC 429/503, honouring a bounded `Retry-After`;
+    - calm 429 notices;
+    - a PM daily meter and an admin-only organisation meter.
+  - Caps come from five optional settings. `render.yaml` sets lower development values, and 0 switches AI off.
+  - Database test files now run serially, because the windows are site-wide.
+  - Peer MP3 projects (ConnectTalent, Homebrew, HelpiNUS) informed the default numbers.
+  - SoC's real quotas remain undocumented: the public SoCLaaS guide lists none, and the fuller guide is reachable only from the NUS network.
+- Validation:
+  - `npm run verify` passed.
+  - `npm run test:integration` passed: 101 tests, including 13 new limit tests (rerun after the review fixes). The race test passed three consecutive runs.
+  - `npm run test:e2e` on port 3001 passed: 57 journeys. One earlier run failed the two sign-up journeys because the local auth email rate limit was exhausted; restarting the local stack cleared it.
+  - No hosted or live SoC check was made.
+- Review:
+  - The security preflight added catalog tests (no old function overloads, no browser grants), a lock-order rule (the advisory lock is taken last), strict `Retry-After` parsing and a concurrency race test. All are implemented.
+  - Post-change security review: approved, with low notes; also revoked `service_role` from the two read functions.
+  - Code review: needs-fixes, all applied:
+    - a stale "not counted" User Guide line;
+    - Generate now stays disabled after a personal daily-limit block;
+    - the clock is re-read after the lock;
+    - the lock-order comment is corrected;
+    - a stale-response guard on the organisation meter;
+    - the kill switch is no longer logged.
+  - The re-review of the fixed diff approved it with no blocking findings. Optional: a fake-timer test for Generate re-enabling at the reset.
+- Open:
+  - SoC's real limits are unverified; confirm them with course staff or the NUS-network guide, then tune the caps.
+  - Accepted residual risk: a few accounts can hold all concurrency slots for up to one 120-second lease each.

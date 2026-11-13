@@ -216,3 +216,39 @@ test("unknown email invites persist and creation/withdrawal banners float withou
     await fixture.cleanup();
   }
 });
+
+test("only an organisation admin sees the organisation's AI usage today", async ({ page, browser }) => {
+  const fixture = localFixture();
+  const admin = await fixture.actor("PM");
+  const member = await fixture.actor("Developer");
+  const context = await browser.newContext();
+  const memberPage = await context.newPage();
+  const login = async (target: typeof page, actor: typeof admin) => {
+    await target.goto(origin + "/sign-in");
+    await target.getByLabel("Email address").fill(actor.email);
+    await target.getByLabel("Password", { exact: true }).fill(actor.password);
+    await target.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(target).toHaveURL(/\/workspace$/);
+  };
+  try {
+    const org = (await admin.client.rpc("create_organisation", { organisation_name: "AI usage journey" })).data;
+    await admin.client.rpc("invite_member", { target_org: org, target_email: member.email });
+    const invitation = (await member.client.rpc("list_invitations")).data[0].id;
+    await member.client.rpc("respond_invitation", { invitation_id: invitation, decision: "accept" });
+
+    await login(page, admin);
+    await page.getByRole("button", { name: "Manage AI usage journey", exact: true }).click();
+    const usage = page.getByRole("region", { name: "Organisation AI usage", exact: true });
+    await expect(usage.getByText("AI today: 500 of 500 left · resets at midnight Singapore time.")).toBeVisible();
+    await expect(usage.getByRole("meter", { name: "Organisation AI requests left today" })).toBeVisible();
+    await expectAccessible(page);
+
+    await login(memberPage, member);
+    await memberPage.getByRole("button", { name: "Manage AI usage journey", exact: true }).click();
+    await expect(memberPage.getByRole("dialog", { name: "Manage AI usage journey", exact: true })).toBeVisible();
+    await expect(memberPage.getByRole("region", { name: "Organisation AI usage", exact: true })).toHaveCount(0);
+  } finally {
+    await context.close();
+    await fixture.cleanup();
+  }
+});

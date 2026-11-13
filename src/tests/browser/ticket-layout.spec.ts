@@ -83,7 +83,9 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
       await expect(panel.getByRole("button", { name, exact: true })).toHaveCount(0);
     }
     await expect(panel.getByRole("button", { name: "Check for gaps", exact: true })).toBeVisible();
-    await expect(panel.getByText("20/20 AI requests left this hour.", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByText("20/20 AI requests left this hour. 200 of 200 left today.", { exact: true }),
+    ).toBeVisible();
     const title = (await page.getByLabel("Title", { exact: true }).boundingBox())!;
     const due = (await page.getByLabel("Due date", { exact: true }).boundingBox())!;
     const description = (await page.getByLabel("Description", { exact: true }).boundingBox())!;

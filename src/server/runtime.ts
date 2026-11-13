@@ -9,6 +9,7 @@ import { createTestPlanProvider } from "./test-plan-ai";
 import { logFailure } from "./http";
 import { createDatabaseProbe, healthResponse } from "./health";
 import { createDemoKitAdmission, databaseReservation, demoKitCaps } from "./demo-kits";
+import { aiLimits } from "./ai-limits";
 const admitAuth = createAuthAdmission();
 const admitDemoKit = createDemoKitAdmission();
 
@@ -91,6 +92,7 @@ export async function handleRequest(request: Request) {
     admitAuth,
     health,
     demoKits,
+    aiLimits: aiLimits(process.env),
     chat: {
       worker,
       async provider(input) {

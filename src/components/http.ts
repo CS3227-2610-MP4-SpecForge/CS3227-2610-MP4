@@ -31,6 +31,12 @@ export class ApiWaitTimeout extends Error {
     );
   }
 }
+/** The notice text for a shared AI limit (a 429 naming its `limit`), or null for any other failure. */
+export function aiLimitNotice(failure: unknown): string | null {
+  if (!(failure instanceof ApiError) || failure.status !== 429) return null;
+  const body = failure.body as { limit?: unknown } | undefined;
+  return typeof body?.limit === "string" ? failure.message : null;
+}
 export class ApiError extends Error {
   constructor(
     message: string,

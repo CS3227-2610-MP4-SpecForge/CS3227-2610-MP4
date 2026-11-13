@@ -6,7 +6,7 @@ import {
   answerConfirmation,
 } from "./ui.fixture";
 import { test, expect, type Page } from "@playwright/test";
-import { localFixture } from "../local.fixture";
+import { localFixture, testAiLimits } from "../local.fixture";
 const origin = process.env.SPECFORGE_BROWSER_ORIGIN ?? "http://localhost:3000";
 async function login(page: Page, actor: { email: string; password: string }) {
   await page.goto("/sign-in");
@@ -473,6 +473,7 @@ test("an unadmitted send can use the current task after reconciliation without l
           input_fields: input.fields,
           user_message: "A turn from another session",
           retry_failed: false,
+          ai_limits: testAiLimits,
         });
         expect(admitted.error).toBeNull();
         otherTurn = admitted.data.turn;
@@ -537,7 +538,9 @@ test("AI failures read as one plain sentence with diagnostics behind Details", a
       await expect(latest.getByText(expected)).toBeVisible();
       await expect(latest.getByRole("button", { name: "Try again", exact: true })).toBeEnabled();
     }
-    await expect(panel.getByText("20/20 AI requests left this hour.", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByText("20/20 AI requests left this hour. 200 of 200 left today.", { exact: true }),
+    ).toBeVisible();
     await page.reload();
     await openAi(page);
     await latest.getByText("Details", { exact: true }).click();
@@ -558,20 +561,26 @@ test("the usage meter shows what is left and blocks requests at the limit", asyn
     await page.getByLabel("Description", { exact: true }).fill("Rough notes");
     await expect(saved(page)).toBeVisible();
     await askAi(page, "Clarify this feature");
-    await expect(panel.getByText("19/20 AI requests left this hour.", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByText("19/20 AI requests left this hour. 199 of 200 left today.", { exact: true }),
+    ).toBeVisible();
     await expect(panel.getByRole("meter", { name: "AI requests left this hour", exact: true })).toHaveAttribute(
       "aria-valuenow",
       "19",
     );
     await askAi(page, "Explain the edge cases");
-    await expect(panel.getByText("18/20 AI requests left this hour.", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByText("18/20 AI requests left this hour. 198 of 200 left today.", { exact: true }),
+    ).toBeVisible();
     // Repeating an earlier request reuses that saved answer without a new turn.
     await askAi(page, "Clarify this feature");
     await expect(panel.getByLabel("Ask AI to change or explain this ticket", { exact: true })).toHaveValue("");
     await expect(
       panel.getByRole("list", { name: "Conversation", exact: true }).getByText("Clarify this feature", { exact: true }),
     ).toHaveCount(1);
-    await expect(panel.getByText("18/20 AI requests left this hour.", { exact: true })).toBeVisible();
+    await expect(
+      panel.getByText("18/20 AI requests left this hour. 198 of 200 left today.", { exact: true }),
+    ).toBeVisible();
     const target = { target_org: org, request_id: id, actor_id: pm.id };
     const current = (await pm.client.rpc("read_request", { target_org: org, request_id: id })).data;
     for (let i = 0; i < 18; i++) {
@@ -582,6 +591,7 @@ test("the usage meter shows what is left and blocks requests at the limit", asyn
         input_fields: current.fields,
         user_message: `Seeded ${i}`,
         retry_failed: false,
+        ai_limits: testAiLimits,
       });
       expect(admitted.error).toBeNull();
       expect(
@@ -599,7 +609,9 @@ test("the usage meter shows what is left and blocks requests at the limit", asyn
     }
     await page.reload();
     await openAi(page);
-    await expect(panel.getByText(/^0\/20 AI requests left this hour\. More at .+\.$/)).toBeVisible();
+    await expect(
+      panel.getByText(/^0\/20 AI requests left this hour\. More at .+\. 180 of 200 left today\.$/),
+    ).toBeVisible();
     await panel.getByLabel("Ask AI to change or explain this ticket", { exact: true }).fill("One more");
     await expect(panel.getByRole("button", { name: "Ask AI", exact: true })).toBeDisabled();
     await expect(panel.getByRole("button", { name: "Check for gaps", exact: true })).toBeDisabled();

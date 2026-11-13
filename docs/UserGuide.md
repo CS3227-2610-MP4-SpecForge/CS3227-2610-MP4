@@ -94,7 +94,8 @@ window, so each account stays signed in.
    ![Reviewing one proposed title change](images/change-review.png)
 
    If a request does not go through, the reply says your ticket is unchanged and
-   the request was not counted. Open **Details** to see why, then **Try again**.
+   the request is given back to your own allowance. Open **Details** to see why,
+   then **Try again**.
 
    ![A failed AI request with its Details open](images/ai-failure-details.png)
 
@@ -130,6 +131,11 @@ can **Promote admin**, **Demote admin** or **Remove member**. Any member can
 last admin must promote someone else first. Admin status is separate from your
 PM or Developer role. Someone who leaves or is removed needs a new invitation to
 return.
+
+**AI usage.** In **Manage**, admins also see how many AI requests the
+organisation has left today, for example "AI today: 52 of 80 left · resets at
+midnight Singapore time". It counts every member's PM assistant and test-plan
+requests together. Other members don't see this bar.
 
 ## Tickets
 
@@ -206,11 +212,19 @@ marked as outdated and the rest stay usable. Always read the suggestions before
 accepting or publishing.
 
 **If a request does not go through,** your ticket is unchanged and the request is
-not counted. Open **Details** to see why, then choose **Try again**.
+given back to your own hourly and daily counts. It still counts toward your
+organisation's and SpecForge's limits below. Open **Details** to see why, then
+choose **Try again**.
 
 **Usage.** The bar above the instruction box shows how many AI requests you have
-left this hour (20 per hour). When you run low it also shows when the count
-resets. You can always keep editing by hand.
+left this hour (20 per hour) and today (40 per day, shared with test plans).
+When you run low it also shows when the hourly count resets. You can always keep
+editing by hand.
+
+**Shared limits.** Your organisation can make 80 AI requests per day in total,
+across all members and both AI features. SpecForge also limits total AI use
+across the site and pauses briefly when the SoC service is busy. Days reset at
+midnight Singapore time. See [AI limit messages](#ai-limit-messages).
 
 Use **Hide AI assistant** and **Show AI assistant** to make more room; your
 conversation is kept. On phones the assistant appears below the ticket.
@@ -231,7 +245,8 @@ organisation. Open the ticket and choose **Show test plan**.
 Every member of the organisation can see the saved plan, along with who saved it
 and when. If the ticket changes after a plan was generated, SpecForge asks you to
 generate a fresh one so the plan always matches the ticket. Each Developer can
-generate up to 20 plans per hour.
+generate up to 20 plans per hour. Plans also count toward your 40 AI requests
+per day and your organisation's shared limits (see [AI assistant](#ai-assistant)).
 
 Product Managers see saved plans but do not generate them.
 
@@ -262,3 +277,18 @@ including on existing tickets.
   has changed. Ask an admin.
 - **An AI request or test plan didn't go through:** nothing changed. Choose **Try
   again** or **Retry generation**.
+
+### AI limit messages
+
+These are expected limits, not errors. Your ticket and test plan are unchanged.
+
+| Message starts with | Why | What to do |
+| --- | --- | --- |
+| "SpecForge's AI is at capacity right now" | Too many AI requests across SpecForge at once, or SoC asked us to slow down. | Wait the minutes shown, then try again. |
+| "SpecForge's AI has reached today's limit" | SpecForge's daily AI total is used up. | Try again after midnight Singapore time. |
+| "Your organisation has used today's AI allowance" | Your organisation's 80 requests for today are used. | Try again after midnight Singapore time. An admin can see the count in **Manage**. |
+| "You have used today's 40 AI requests" | Your own daily allowance is used. **Ask AI** or **Generate test cases** stays disabled until it resets. | Try again after midnight Singapore time. |
+| "SoC is busy right now" (in **Details**) | The SoC AI service turned the request away. | Try again in a minute or two. |
+
+In every case you can keep editing or planning by hand.
+

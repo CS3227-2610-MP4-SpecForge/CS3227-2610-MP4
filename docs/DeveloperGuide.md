@@ -161,6 +161,7 @@ failed SoC call is not a 503: it comes back as a failed, refunded turn.
 | GET | `/organisations/[org]/ticket-members` | Member | 200, 400 |
 | GET, POST | `/organisations/[org]/requests/[id]/chat` | The ticket's PM author | 200, 202 (running), 400, 403, 409, 429 |
 | GET, POST, PUT | `/organisations/[org]/requests/[id]/test-plan` | Developers generate and save; members read the saved plan | 200, 202 (running), 400, 403, 409, 429 |
+| GET | `/organisations/[org]/ai-usage` | Organisation admins | 200, 403, 404, 503 |
 
 The sections below give each group's request and response shapes.
 
@@ -200,6 +201,9 @@ adds:
 - `GET /api/invitations`; `POST /api/invitations/[id]` with `action`
   accept/decline.
 - `GET /api/organisations/[id]/members` (admins only).
+- `GET /api/organisations/[id]/ai-usage` (admins only): `{remaining, limit,
+  resets_at}` for the organisation's AI requests today; see
+  [Shared AI limits](#shared-ai-limits).
 - `GET/POST /api/organisations/[id]/invitations`; POST accepts `email`.
 - `POST /api/organisations/[id]/invitations/[invitationId]` with cancel/resend.
 - `POST /api/organisations/[id]/members/[userId]` with remove/promote/demote/leave.
@@ -655,8 +659,10 @@ per account per hour. Every failed turn is refunded once, only within the window
 that charged it; attempts are never refunded, so the attempt cap bounds SoC
 spend. An identical completed request on the current ticket returns the saved
 turn with no call or charge. `read_ai_usage()` returns the signed-in account's
-`{remaining, limit, resets_at}`; GET and POST chat responses include it, and 429
-responses name the limit. 120-second leases and generation checks reject late
+`{remaining, limit, resets_at}` plus its own `daily_used` and `daily_resets_at`;
+GET and POST chat responses include it, with the daily cap added as `daily`, and
+429 responses name the limit. The [shared AI limits](#shared-ai-limits) apply on
+top of these per-account limits. 120-second leases and generation checks reject late
 workers; expired turns are retried only on explicit action, never
 automatically. Completion rechecks access, so output after removal is neither
 stored nor returned. Conversation rows cap at 1 MiB, with completion capacity
@@ -760,6 +766,47 @@ text, never as Markdown or HTML.
 **Staleness.** `save_test_plan` compares the submitted ticket revision with the
 locked row and refuses a mismatch, and compares the expected plan revision with
 the stored one so two developers saving at once cannot silently clobber.
+
+### Shared AI limits
+
+[Spec](../workflow/specs/2026-11-13-site-wide-ai-limit.md). Both AI features
+share one SoC key, so they also share these limits, all counted in the database
+(`private.ai_usage_windows`) and checked under one advisory lock inside
+`begin_chat_turn` and `begin_test_plan_turn`, after the per-account limits and
+before the per-account charge:
+
+| Setting | Default | Maximum | Development (`render.yaml`) | What it counts |
+| --- | --- | --- | --- | --- |
+| `AI_SITE_CONCURRENT` | 4 | 8 | 2 | SoC requests running at once (unexpired leases) |
+| `AI_SITE_PER_MINUTE` | 20 | 60 | 10 | Dispatches per clock minute |
+| `AI_SITE_PER_DAY` | 200 | 1000 | 60 | Dispatches per Singapore day |
+| `AI_ORG_PER_DAY` | 80 | 500, and at most the site day | 40 | One organisation's dispatches per Singapore day |
+| `AI_USER_PER_DAY` | 40 | 200, and at most the organisation day | 20 | One account's dispatches per Singapore day |
+
+- **Configuration.** `aiLimits` in `src/server/ai-limits.ts` parses the
+  settings. A missing setting takes its default. An empty, non-integer or
+  oversized value, a broken user ≤ organisation ≤ site order, or **0 (the kill
+  switch)** turns both AI features off with 503 "AI is not configured". The
+  RPCs check the same bounds again (`private.valid_ai_limits`).
+- **Refunds.** A failed dispatch is refunded to the account's hourly and daily
+  counts (the daily only on the same Singapore day), but never to the site or
+  organisation windows, so an outage cannot become unlimited retries. Replays and
+  identical completed requests are not counted.
+- **SoC pause.** When SoC answers 429 or 503, `requestSocJson` reads
+  `Retry-After` (whole seconds, bounded to 5–600; anything else is 60) and the
+  finish RPC records a site-wide pause (`private.ai_soc_pause`) that only ever
+  extends. Paused dispatches get the `site` notice; the failed turn shows "SoC
+  is busy right now…".
+- **Responses.** A block returns 429 with `Retry-After` and
+  `{error, limit, retryAfter}`; `limit` is `site`, `site_daily`, `organisation`
+  or `user_daily`. Blocks are expected and never logged.
+- **Reads.** Browsers can read only their own daily count (`read_ai_usage`) and,
+  for organisation admins, their organisation's daily total
+  (`read_organisation_ai_usage`, which checks `private.is_admin` itself and
+  refuses everyone else with the same 42501). Site counts and the pause are not
+  readable from a browser.
+- **Unverified.** SoC's real quotas are undocumented in the public SoCLaaS guide.
+  These numbers are app choices; the pause is what adapts them to SoC's real limit.
 
 ### Observed provider behaviour
 
@@ -879,7 +926,8 @@ Browser runs are designed to be repeatable:
 
 `node src/tooling/test-local.mjs <mode>` runs one slice against the local stack:
 
-- Database: `profile`, `requests`, `chat`, `delivery`, `test-plans`,
+- Database: `profile`, `requests`, `chat` (including the shared AI limits),
+  `delivery`, `test-plans`,
   `demo-kits` (which empties the local demo-kit counters first, through the local
   database container).
 - Browser: `requests-browser`, `delivery-browser`, `layout-browser`, each with an
@@ -991,7 +1039,10 @@ Application runtime configuration — `APP_ORIGIN`, `NEXT_PUBLIC_SUPABASE_URL`,
 `SOCLAAS_API_KEY`, `SOCLAAS_CHAT_MODEL` — is set in each Render service's
 Environment tab, pointing each environment at its own Supabase project.
 `DEMO_KITS_PER_10_MINUTES` and `DEMO_KITS_PER_DAY` are optional and only lower
-the demo-kit caps (defaults 5 and 30); see [Security](#security).
+the demo-kit caps (defaults 5 and 30); see [Security](#security). The five
+`AI_*` limit settings are optional too; `render.yaml` sets lower development
+values and production uses the defaults. Set one to 0 to switch AI off; see
+[Shared AI limits](#shared-ai-limits).
 
 **Removing demo kits.** From a maintainer machine, with that environment's
 `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SECRET_KEY` exported (never committed):

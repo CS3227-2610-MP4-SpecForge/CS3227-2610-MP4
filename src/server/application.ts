@@ -9,6 +9,7 @@ import { organisationRoutes } from "./organisations";
 import { handleRequests } from "./requests";
 import { matchRoute, type Route, type SessionContext } from "./routes";
 import { handleTestPlans, type TestPlanDependencies } from "./test-plans";
+import { handleOrganisationAiUsage, type AiLimits } from "./ai-limits";
 
 export { createAuthAdmission } from "./auth";
 
@@ -18,6 +19,8 @@ type Options = {
   admitAuth?: () => boolean;
   chat?: ChatDependencies;
   testPlans?: TestPlanDependencies;
+  /** Shared AI caps; null when configuration turns AI off. */
+  aiLimits?: AiLimits | null;
   health?: () => Promise<Response>;
   demoKits?: DemoKitDependencies;
 };
@@ -66,8 +69,9 @@ export function createApplication(options: Options) {
         if (!data.user.email_confirmed_at) return error("Verify your email to continue.", 403);
         const user = data.user;
         const handled =
-          (await handleChat(request, client, user.id, options.chat)) ??
-          (await handleTestPlans(request, client, user.id, options.testPlans)) ??
+          (await handleChat(request, client, user.id, options.chat, options.aiLimits)) ??
+          (await handleTestPlans(request, client, user.id, options.testPlans, options.aiLimits)) ??
+          (await handleOrganisationAiUsage(request, client, options.aiLimits)) ??
           (await handleDelivery(request, client)) ??
           (await handleRequests(request, client));
         if (handled) return handled;

@@ -5,7 +5,8 @@ import { z } from "zod";
 import { error, json, logFailure, readBody, serviceUnavailable } from "./http";
 import { taskFields } from "./requests";
 import { testCaseKinds, testPlanLimits } from "../test-plans";
-import { AiFailure } from "./soc";
+import { AiFailure, pauseFor } from "./soc";
+import { limitBlock, limitResponse, type AiLimits } from "./ai-limits";
 import { validateTestPlanReply, type TestPlanProvider } from "./test-plan-ai";
 
 export type TestPlanDependencies = { worker(): SupabaseClient; provider: TestPlanProvider };
@@ -71,6 +72,7 @@ export async function handleTestPlans(
   client: SupabaseClient,
   actorId: string,
   dependencies?: TestPlanDependencies,
+  limits?: AiLimits | null,
 ): Promise<Response | null> {
   const match = new URL(request.url).pathname.match(/^\/api\/organisations\/([^/]+)\/requests\/([^/]+)\/test-plan$/);
   if (!match) return null;
@@ -127,7 +129,7 @@ export async function handleTestPlans(
       `Enter an optional focus note of up to ${testPlanLimits.focus} characters and a valid current ticket.`,
       400,
     );
-  if (!dependencies) return serviceUnavailable(request, undefined, "AI is not configured. Plan manually.");
+  if (!dependencies || !limits) return serviceUnavailable(request, undefined, "AI is not configured. Plan manually.");
   const worker = dependencies.worker();
   const { data: admission, error: admissionError } = await worker.rpc("begin_test_plan_turn", {
     target_org: org,
@@ -138,7 +140,10 @@ export async function handleTestPlans(
     input_fields: input.data.fields,
     focus_note: input.data.focus,
     retry_failed: input.data.retry,
+    ai_limits: limits,
   });
+  const block = limitBlock(admissionError);
+  if (block) return limitResponse(block, "or plan manually.", limits);
   const admissionFailure = failureResponse(request, admissionError);
   if (admissionFailure) return admissionFailure;
   const parsed = turnSchema.safeParse(admission?.turn);
@@ -150,6 +155,7 @@ export async function handleTestPlans(
   let result: ReturnType<typeof validateTestPlanReply> | null = null;
   let code: string | null = null;
   let diagnostic: AiDiagnostic | null = null;
+  let pause: number | null = null;
   try {
     result = validateTestPlanReply(await dependencies.provider({ fields: turn.input_fields, focus: turn.focus }));
   } catch (failure) {
@@ -162,6 +168,7 @@ export async function handleTestPlans(
       if (safe.success && safe.data.source === diagnosticSources[code]) diagnostic = safe.data;
       else code = "unavailable";
     }
+    pause = pauseFor(failure, diagnostic);
     logFailure(request, failure, { diagnostic });
   }
   const { data: completed, error: completionError } = await worker.rpc("finish_test_plan_turn", {
@@ -174,6 +181,7 @@ export async function handleTestPlans(
     generated_plan: result?.plan ?? null,
     failure_code: code,
     failure_diagnostic: diagnostic,
+    pause_seconds: pause,
   });
   const completionFailure = failureResponse(request, completionError);
   if (completionFailure) return completionFailure;

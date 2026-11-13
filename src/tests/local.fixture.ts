@@ -14,6 +14,21 @@ export function resetLocalDemoKitWindows() {
     { stdio: ["ignore", "ignore", "pipe"] },
   );
 }
+/** Runs one read-only or reset statement on the disposable local stack only. */
+export function localSql(statement: string) {
+  if (process.env.LOCAL_SUPABASE_URL !== "http://127.0.0.1:55321")
+    throw new Error("Only disposable local Supabase is allowed.");
+  return execFileSync("docker", ["exec", "supabase_db_specforge", "psql", "-U", "postgres", "-qtAc", statement], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+}
+/** Empties the shared AI windows and the SoC pause; no API can do this. */
+export function resetLocalAiWindows() {
+  localSql("truncate private.ai_usage_windows, private.ai_soc_pause");
+}
+/** Caps for local database tests: the maximums, so only a test that lowers one is limited by it. */
+export const testAiLimits = { concurrent: 8, per_minute: 60, site_per_day: 1000, org_per_day: 500, user_per_day: 200 };
 export function localFixture() {
   const url = process.env.LOCAL_SUPABASE_URL;
   if (url !== "http://127.0.0.1:55321") throw new Error("Only disposable local Supabase is allowed.");
