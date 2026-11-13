@@ -1,5 +1,5 @@
 import type { AiDiagnostic } from "./ai-diagnostics";
-import type { AiAnswer, AiQuestion, AssistantIntent } from "./assistance";
+import type { AssistantIntent } from "./assistance";
 import type { RequestFields } from "./requests";
 export type ChatTurn = {
   id: string;
@@ -16,6 +16,4 @@ export type ChatTurn = {
   diagnostic?: AiDiagnostic | null;
   created_at: string;
   intent: AssistantIntent;
-  questions: AiQuestion[] | null;
-  answers: AiAnswer[] | null;
 };

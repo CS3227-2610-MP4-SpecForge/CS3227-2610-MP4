@@ -1,7 +1,7 @@
 import type { Delivery } from "./delivery";
 export const requestFields = [
   { key: "title", label: "Title", max: 160 },
-  { key: "description", label: "Description", max: 24000 },
+  { key: "description", label: "Description", max: 3000 },
 ] as const;
 export type RequestFields = Record<(typeof requestFields)[number]["key"], string>;
 export type FeatureRequest = Delivery & {

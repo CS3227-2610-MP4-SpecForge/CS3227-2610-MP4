@@ -30,8 +30,6 @@ function turn(input: RequestFields, proposal: RequestFields): ChatTurn {
     error_code: null,
     created_at: "2026-11-12T00:00:00Z",
     intent: "edit" as ChatTurn["intent"],
-    questions: null,
-    answers: null,
   };
 }
 

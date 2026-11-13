@@ -14,8 +14,10 @@ import { TicketVisibility } from "./ticket-visibility";
 import { TicketActivity } from "./ticket-activity";
 import { TestPlanPanel } from "./test-plan-panel";
 import { useConfirm } from "./confirm";
-import { BackLink, Button, Field, Notice, useNotificationState, useNotifications } from "./ui";
+import { BackLink, Button, CharacterCount, Field, Notice, useNotificationState, useNotifications } from "./ui";
 import { useUnsavedChanges } from "./use-unsaved-changes";
+
+const limitOf = (key: keyof RequestFields) => requestFields.find(field => field.key === key)!.max;
 
 type Problem = { kind: "conflict" | "ambiguous" | "retry" | "denied"; message: string };
 type Action = "save_draft" | "submit" | "save_published" | "delete_draft";
@@ -529,7 +531,8 @@ function RequestEditor({
             label="Title"
             form="request-content"
             required
-            maxLength={320}
+            maxLength={limitOf("title") * 2}
+            limit={limitOf("title")}
             value={fields.title}
             readOnly={aiWorking}
             hint={aiWorking ? "AI is responding. Title and Description unlock when it replies." : undefined}
@@ -566,8 +569,8 @@ function RequestEditor({
           )}
           {!withinLimits && (
             <Notice danger>
-              Title is limited to 160 characters and description to 24,000. Your local edits are preserved; shorten it
-              before saving.
+              Title is limited to {limitOf("title")} characters and description to{" "}
+              {limitOf("description").toLocaleString("en")}. Your local edits are preserved; shorten it before saving.
             </Notice>
           )}
           <form
@@ -648,18 +651,25 @@ function RequestEditor({
                 aria-labelledby="description-write-tab"
                 hidden={descriptionMode !== "write"}
               >
-                <textarea
-                  id="request-description"
-                  rows={4}
-                  required={descriptionMode === "write"}
-                  maxLength={48000}
-                  value={fields.description}
-                  readOnly={aiWorking}
-                  aria-describedby={aiWorking ? "request-title-hint" : undefined}
-                  placeholder={`Fill in the rough details, then use "Draft with AI" to polish.`}
-                  disabled={busy === "explicit"}
-                  onChange={event => edit("description", event.target.value)}
-                />
+                <div className="counted-input">
+                  <textarea
+                    id="request-description"
+                    rows={4}
+                    required={descriptionMode === "write"}
+                    maxLength={limitOf("description") * 2}
+                    value={fields.description}
+                    readOnly={aiWorking}
+                    aria-describedby={`request-description-count${aiWorking ? " request-title-hint" : ""}`}
+                    placeholder={`Fill in the rough details, then use "Draft with AI" to polish.`}
+                    disabled={busy === "explicit"}
+                    onChange={event => edit("description", event.target.value)}
+                  />
+                  <CharacterCount
+                    id="request-description-count"
+                    value={fields.description}
+                    limit={limitOf("description")}
+                  />
+                </div>
               </div>
               <div
                 id="description-preview-panel"

@@ -110,11 +110,9 @@ describe.skipIf(!localEnabled)("PM assistant usage and context", () => {
 
   it("returns an identical completed request without dispatching or charging", async () => {
     const { begin, finish, usage, pm, org, task } = await setup();
-    const first = (await begin({ p_intent: "gaps", user_message: "Check for gaps" })).data.turn;
-    expect(
-      (await finish(first, { task_questions: [{ prompt: "Which lists?", options: ["One", "All"] }] })).error,
-    ).toBeNull();
-    const again = await begin({ p_intent: "gaps", user_message: "Check for gaps" });
+    const first = (await begin({ user_message: "Which lists keep filters?" })).data.turn;
+    expect((await finish(first)).error).toBeNull();
+    const again = await begin({ user_message: "Which lists keep filters?" });
     expect(again.error).toBeNull();
     expect(again.data.dispatch).toBe(false);
     expect(again.data.turn.id).toBe(first.id);
@@ -125,33 +123,15 @@ describe.skipIf(!localEnabled)("PM assistant usage and context", () => {
     expect((await begin({ user_message: "Retry me" })).data.dispatch).toBe(true);
   });
 
-  it("validates intents, gap questions and structured answers", async () => {
+  it("validates intents and refuses gap checks and answers", async () => {
     const { begin, finish } = await setup();
     expect((await begin({ p_intent: "publish" })).error?.code).toBe("22023");
-    expect((await begin({ p_intent: "gaps", p_answers: [{ question: "Q?", answer: "A" }] })).error?.code).toBe("22023");
-    for (const answers of [
-      [],
-      [{ question: "Q?", answer: "A", extra: 1 }],
-      [{ question: " ", answer: null }],
-      [{ question: "Q?", answer: "x".repeat(501) }],
-    ]) {
-      expect((await begin({ p_answers: answers })).error?.code).toBe("22023");
-    }
-    const edit = (await begin({ p_answers: [{ question: "Which lists?", answer: null }] })).data.turn;
-    expect(edit).toMatchObject({ intent: "edit", answers: [{ question: "Which lists?", answer: null }] });
+    // Check for gaps was removed: the table refuses its turns and answers.
+    expect((await begin({ p_intent: "gaps" })).error?.code).toBe("23514");
+    expect((await begin({ p_answers: [{ question: "Which lists?", answer: null }] })).error?.code).toBe("23514");
+    const edit = (await begin()).data.turn;
     expect((await finish(edit, { task_questions: [{ prompt: "Q?", options: ["A", "B"] }] })).error?.code).toBe("22023");
-    await finish(edit);
-    const gaps = (await begin({ p_intent: "gaps" })).data.turn;
-    expect((await finish(gaps, { task_proposal: { title: "T", description: "D" } })).error?.code).toBe("22023");
-    for (const questions of [
-      [],
-      [{ prompt: "Q?", options: ["A"] }],
-      [{ prompt: "Q?", options: ["A", "B"], x: 1 }],
-      Array.from({ length: 6 }, () => ({ prompt: "Q?", options: ["A", "B"] })),
-    ]) {
-      expect((await finish(gaps, { task_questions: questions })).error?.code).toBe("22023");
-    }
-    expect((await finish(gaps, { task_questions: [{ prompt: "Q?", options: ["A", "B"] }] })).error).toBeNull();
+    expect((await finish(edit)).error).toBeNull();
   });
 
   it("gives the worker at most three recent completed turns without proposals", async () => {
@@ -193,7 +173,7 @@ describe.skipIf(!localEnabled)("PM assistant HTTP interface", () => {
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "Assistant HTTP" })).data;
     const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
     const seen: unknown[] = [];
-    let reply: Record<string, unknown> = { reply: "Draft ready.", proposal: { title: "T", description: "D" } };
+    const reply: Record<string, unknown> = { reply: "Draft ready.", proposal: { title: "T", description: "D" } };
     const app = createApplication({
       aiLimits: testAiLimits,
       origin: "http://localhost:3000",
@@ -231,7 +211,6 @@ describe.skipIf(!localEnabled)("PM assistant HTTP interface", () => {
       fields: { title: "", description: "Idea" },
       message: assistanceMessages.draft,
       recent: [],
-      answers: null,
     });
     // A rough idea typed into the instruction box drafts with the PM's own words.
     expect(
@@ -250,35 +229,9 @@ describe.skipIf(!localEnabled)("PM assistant HTTP interface", () => {
       message: "Help me write a ticket: rename levels",
       fields: { title: "", description: "" },
     });
-    reply = {
-      reply: "Two gaps.",
-      proposal: { title: "T", description: "D" },
-      questions: [{ prompt: "Q?", options: ["A", "B"] }],
-    };
-    expect((await (await post({ intent: "gaps" })).json()).turn).toMatchObject({
-      status: "failed",
-      error_code: "invalid_output",
-      diagnostic: { reason: "invalid_schema" },
-    });
-    reply = { reply: "Recorded." };
-    const answered = await (
-      await post({ intent: "edit", answers: [{ question: "Which lists?", answer: null }] })
-    ).json();
-    expect(answered.turn).toMatchObject({
-      intent: "edit",
-      message: assistanceMessages.answers,
-      answers: [{ question: "Which lists?", answer: null }],
-    });
-    expect(seen.at(-1)).toMatchObject({
-      recent: [
-        { message: assistanceMessages.draft, reply: "Draft ready." },
-        { message: "Help me write a ticket: rename levels", reply: "Draft ready." },
-      ],
-      answers: [{ question: "Which lists?", answer: null }],
-    });
-    expect(answered.usage.remaining).toBe(17);
     for (const invalid of [
-      { intent: "gaps", answers: [{ question: "Q?", answer: "A" }] },
+      { intent: "gaps" },
+      { intent: "edit", message: "x", answers: [{ question: "Q?", answer: "A" }] },
       { intent: "edit" },
       { intent: "publish", message: "x" },
     ])

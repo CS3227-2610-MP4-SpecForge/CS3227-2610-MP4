@@ -401,16 +401,17 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
     const pm = await fixture.actor("PM");
     const org = (await pm.client.rpc("create_organisation", { organisation_name: "Conversation capacity" })).data;
     const task = (await pm.client.rpc("create_request", { target_org: org, creation_key: randomUUID() })).data;
-    const seed = Array.from({ length: 16 }, () => ({
+    // About 14 KB each at the 3,000-character description limit: 64 leave too little room.
+    const seed = Array.from({ length: 64 }, () => ({
       request_id: task.id,
       organisation_id: org,
       author_id: pm.id,
       turn_key: randomUUID(),
       base_revision: 1,
-      input_fields: { title: "X", description: "x".repeat(24000) },
+      input_fields: { title: "X", description: "x".repeat(3000) },
       message: "x".repeat(4000),
       reply: "x".repeat(4000),
-      proposal: { title: "X", description: "x".repeat(24000) },
+      proposal: { title: "X", description: "x".repeat(3000) },
       status: "completed",
       generation: 1,
       lease_until: "2020-01-01T00:00:00Z",
@@ -431,7 +432,7 @@ describe.skipIf(!localEnabled)("private AI conversation interface", () => {
         })
       ).error?.code,
     ).toBe("PT429");
-    expect((await pm.client.rpc("read_chat", { target_org: org, request_id: task.id })).data).toHaveLength(16);
+    expect((await pm.client.rpc("read_chat", { target_org: org, request_id: task.id })).data).toHaveLength(64);
   });
 
   it("rejects blank replies and completions exceeding aggregate conversation capacity", async () => {

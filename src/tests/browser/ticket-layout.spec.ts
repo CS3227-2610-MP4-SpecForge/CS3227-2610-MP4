@@ -78,11 +78,12 @@ test("ticket fields follow the title while every AI tool stays in a persistent r
       "Add acceptance criteria",
       "Find missing details",
       "Leave undecided",
+      "Check for gaps",
+      "Apply answers",
       "Start manually",
     ]) {
       await expect(panel.getByRole("button", { name, exact: true })).toHaveCount(0);
     }
-    await expect(panel.getByRole("button", { name: "Check for gaps", exact: true })).toBeVisible();
     await expect(
       panel.getByText("20/20 AI requests left this hour. 200 of 200 left today.", { exact: true }),
     ).toBeVisible();

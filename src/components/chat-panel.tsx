@@ -1,7 +1,7 @@
 "use client";
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { describeAiFailure } from "@/ai-diagnostics";
-import { answerLimit, assistanceMessages, type AiAnswer } from "@/assistance";
+import { assistanceMessages, messageLimit } from "@/assistance";
 import type { ChatTurn } from "@/chat";
 import { sameFields, type RequestFields } from "@/requests";
 import { reviewStatus, summarizeChanges, ticketChanges } from "@/ticket-changes";
@@ -9,75 +9,6 @@ import { tooLargeForAi, type Assistant } from "./use-assistant";
 import { Button, Notice, TextareaField } from "./ui";
 import { UsageMeter } from "./usage-meter";
 import { Markdown } from "./markdown";
-
-// Choices are indexes into the model's options plus two client-only choices,
-// so option text can never be mistaken for either.
-const undecided = "undecided";
-const own = "own";
-// Gap questions and options are model output: rendered as plain text only.
-// "Leave undecided" and "Your own answer" are added here, never by the model.
-function GapsChecklist({
-  turn,
-  disabled,
-  onApply,
-}: {
-  turn: ChatTurn;
-  disabled: boolean;
-  onApply(answers: AiAnswer[]): void;
-}) {
-  const [choices, setChoices] = useState<Record<number, string>>({});
-  const [typed, setTyped] = useState<Record<number, string>>({});
-  const questions = turn.questions ?? [];
-  const answers = questions.flatMap((question, index): AiAnswer[] => {
-    const choice = choices[index];
-    if (choice === undefined) return [];
-    if (choice === undecided) return [{ question: question.prompt, answer: null }];
-    if (choice === own) return typed[index]?.trim() ? [{ question: question.prompt, answer: typed[index].trim() }] : [];
-    const option = question.options[Number(choice.slice("option-".length))];
-    return option === undefined ? [] : [{ question: question.prompt, answer: option }];
-  });
-  return (
-    <section className="stack gaps-checklist" aria-label="Open questions">
-      <p className="muted">Answer what you can. Unanswered questions are left out.</p>
-      {questions.map((question, index) => (
-        <fieldset key={index} className="stack gap-question">
-          <legend>{question.prompt}</legend>
-          {[
-            ...question.options.map((option, at) => ({ value: `option-${at}`, label: option })),
-            { value: undecided, label: "Leave undecided" },
-            { value: own, label: "Your own answer" },
-          ].map(choice => (
-            <label key={choice.value} className="gap-option">
-              <input
-                type="radio"
-                name={`gap-${turn.id}-${index}`}
-                value={choice.value}
-                checked={choices[index] === choice.value}
-                onChange={() => setChoices(current => ({ ...current, [index]: choice.value }))}
-              />
-              {choice.label}
-            </label>
-          ))}
-          {choices[index] === own && (
-            <TextareaField
-              id={`gap-${turn.id}-${index}-own`}
-              label="Your answer"
-              rows={2}
-              maxLength={answerLimit}
-              value={typed[index] ?? ""}
-              onChange={event => setTyped(current => ({ ...current, [index]: event.target.value }))}
-            />
-          )}
-        </fieldset>
-      ))}
-      <div className="actions">
-        <Button type="button" disabled={disabled || answers.length === 0} onClick={() => onApply(answers)}>
-          Apply answers
-        </Button>
-      </div>
-    </section>
-  );
-}
 
 function FailureNotice({
   turn,
@@ -156,17 +87,6 @@ function ChangeCard({
   );
 }
 
-// Read-only questions from an earlier or superseded gaps check.
-function PastQuestions({ turn }: { turn: ChatTurn }) {
-  return (
-    <ul className="past-questions">
-      {(turn.questions ?? []).map((question, index) => (
-        <li key={index}>{question.prompt}</li>
-      ))}
-    </ul>
-  );
-}
-
 const noRejections: ReadonlySet<string> = new Set();
 
 export function ChatPanel({
@@ -195,9 +115,6 @@ export function ChatPanel({
   const tooLarge = tooLargeForAi(fields, message);
   const blocked = disabled || tooLarge;
   const isCurrent = (turn: ChatTurn) => turn.base_revision === revision && sameFields(turn.input_fields, fields);
-  // Only the newest gaps check that has not been answered since can be answered.
-  const lastGaps = turns.findLastIndex(turn => turn.status === "completed" && turn.questions);
-  const answerable = lastGaps >= 0 && !turns.slice(lastGaps + 1).some(turn => turn.answers) ? turns[lastGaps] : null;
   const transcript = useRef<HTMLOListElement>(null);
   const following = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
@@ -224,7 +141,7 @@ export function ChatPanel({
   async function ask(event: React.FormEvent) {
     event.preventDefault();
     const text = message.trim();
-    if (!text || [...text].length > 4000) return;
+    if (!text || [...text].length > messageLimit) return;
     // On an empty ticket the instruction is a rough idea, so it drafts the ticket.
     const empty = !fields.title.trim() && !fields.description.trim();
     following.current = true;
@@ -245,7 +162,7 @@ export function ChatPanel({
       revision: turn.base_revision,
       fields: turn.input_fields,
       intent: turn.intent,
-      ...(turn.answers ? { answers: turn.answers } : typed ? { message: turn.message } : {}),
+      ...(typed ? { message: turn.message } : {}),
       retry: true,
     });
   }
@@ -293,9 +210,7 @@ export function ChatPanel({
                 </li>
               )}
               {!loading && turns.length === 0 && (
-                <li className="hint chat-empty">
-                  Ask for a change, or use Check for gaps to find what the ticket is missing.
-                </li>
+                <li className="hint chat-empty">Ask for a change, or ask what the ticket is missing.</li>
               )}
               {turns.map(turn => (
                 <li className="chat-turn" key={turn.id}>
@@ -308,7 +223,7 @@ export function ChatPanel({
                       <strong>AI</strong>
                       {turn.reply && <Markdown text={turn.reply} />}
                       {/* A reply can claim a change it never made, so say plainly when there is none. */}
-                      {turn.status === "completed" && !turn.proposal && turn.intent !== "gaps" && (
+                      {turn.status === "completed" && !turn.proposal && (
                         <p className="hint">No ticket changes suggested.</p>
                       )}
                       {turn.status === "completed" && turn.proposal && (
@@ -318,33 +233,6 @@ export function ChatPanel({
                           rejected={rejections[turn.id] ?? noRejections}
                           onReview={() => onReview(turn)}
                         />
-                      )}
-                      {turn.status === "completed" &&
-                        turn.questions &&
-                        (turn === answerable ? (
-                          <GapsChecklist
-                            key={turn.id}
-                            turn={turn}
-                            disabled={blocked || !isCurrent(turn)}
-                            onApply={answers => {
-                              following.current = true;
-                              void assistant.send({
-                                key: crypto.randomUUID(),
-                                revision,
-                                fields: { ...fields },
-                                intent: "edit",
-                                answers,
-                                retry: false,
-                              });
-                            }}
-                          />
-                        ) : (
-                          <PastQuestions turn={turn} />
-                        ))}
-                      {turn === answerable && !isCurrent(turn) && (
-                        <p className="hint">
-                          The ticket changed. Check for gaps again to answer against the current ticket.
-                        </p>
                       )}
                       {turn.status === "failed" &&
                         (turn === latest ? (
@@ -397,32 +285,18 @@ export function ChatPanel({
                 id="chat-message"
                 label="Ask AI to change or explain this ticket"
                 rows={3}
+                limit={messageLimit}
                 maxLength={8000}
                 placeholder="Make this shorter, or explain the edge cases…"
                 value={message}
                 disabled={busy}
                 onChange={event => setMessage(event.target.value)}
               />
-              {[...message].length > 4000 && <Notice danger>AI requests are limited to 4,000 characters.</Notice>}
+              {[...message].length > messageLimit && (
+                <Notice danger>AI requests are limited to 4,000 characters.</Notice>
+              )}
               <div className="actions">
-                <Button disabled={blocked || !message.trim() || [...message].length > 4000}>Ask AI</Button>
-                <Button
-                  type="button"
-                  className="secondary"
-                  disabled={blocked || !fields.description.trim()}
-                  onClick={() => {
-                    following.current = true;
-                    void assistant.send({
-                      key: crypto.randomUUID(),
-                      revision,
-                      fields: { ...fields },
-                      intent: "gaps",
-                      retry: false,
-                    });
-                  }}
-                >
-                  Check for gaps
-                </Button>
+                <Button disabled={blocked || !message.trim() || [...message].length > messageLimit}>Ask AI</Button>
               </div>
             </form>
           </div>
